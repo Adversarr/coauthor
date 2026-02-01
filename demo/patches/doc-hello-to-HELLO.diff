@@ -1,0 +1,10 @@
+--- a/demo/doc.tex
++++ b/demo/doc.tex
+@@ -1,5 +1,5 @@
+ \documentclass{article}
+ \begin{document}
+-hello
++HELLO
+ world
+ \end{document}
+

@@ -16,7 +16,7 @@ describe('TUI', () => {
     const { lastFrame } = render(<MainTui app={app} />)
 
     await new Promise((r) => setTimeout(r, 20))
-    expect(lastFrame()).toMatch(/Tasks:/)
+    expect(lastFrame()).toMatch(/Tasks/)
     expect(lastFrame()).toMatch(/hello/)
   })
 })

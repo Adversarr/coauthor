@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import type { App } from '../app/createApp.js'
-import { createTask, listTasks, openThread } from '../core/operations.js'
+import { createTask, listTasks, openThread, replayEvents } from '../core/operations.js'
 
 type Props = {
   app: App
@@ -38,7 +38,7 @@ export function MainTui(props: Props) {
 
       const commandLine = trimmed.slice(1)
       if (commandLine === 'help') {
-        setStatus('commands: /task create <title>, /task list, /thread open <taskId>, /log replay <taskId?>, /exit')
+        setStatus('commands: /task create <title>, /task list, /thread open <taskId>, /log replay [taskId], /exit')
         return
       }
 
@@ -68,6 +68,17 @@ export function MainTui(props: Props) {
         return
       }
 
+      if (commandLine === 'log replay' || commandLine.startsWith('log replay ')) {
+        const rest = commandLine.slice('log replay'.length).trim()
+        const streamId = rest ? rest : undefined
+        const events = replayEvents(app.store, streamId)
+        for (const e of events) {
+          console.log(`${e.id} ${e.streamId}#${e.seq} ${e.type} ${JSON.stringify(e.payload)}`)
+        }
+        setStatus(streamId ? `replayed ${events.length} events for ${streamId}` : `replayed ${events.length} events`)
+        return
+      }
+
       setStatus(`unknown: /${commandLine}`)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
@@ -88,7 +99,9 @@ export function MainTui(props: Props) {
     <Box flexDirection="column" paddingX={1} paddingY={1}>
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>{header}</Text>
-        <Text dimColor>Commands: /task create &lt;title&gt; · /task list · /thread open &lt;taskId&gt; · /log replay · /exit</Text>
+        <Text dimColor>
+          Commands: /task create &lt;title&gt; · /task list · /thread open &lt;taskId&gt; · /log replay [taskId] · /exit
+        </Text>
       </Box>
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>Tasks</Text>
