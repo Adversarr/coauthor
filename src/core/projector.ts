@@ -1,5 +1,5 @@
-import type { StoredEvent } from './domain.js'
-import type { EventStore } from './eventStore.js'
+import type { StoredEvent } from '../domain/events.js'
+import type { EventStore } from '../domain/ports/eventStore.js'
 
 export type ProjectionReducer<TState> = (state: TState, event: StoredEvent) => TState
 

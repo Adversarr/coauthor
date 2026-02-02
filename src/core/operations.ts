@@ -1,13 +1,31 @@
+/**
+ * @deprecated This file is deprecated. Use Application layer services instead:
+ * - TaskService for createTask, listTasks, openThread
+ * - PatchService for proposePatch, acceptPatch
+ * - EventService for replayEvents
+ * 
+ * This file is kept for backward compatibility reference.
+ */
 import { nanoid } from 'nanoid'
 import { applyUnifiedPatchToFile } from '../patch/applyUnifiedPatch.js'
-import type { EventStore } from './eventStore.js'
-import type { DomainEvent, StoredEvent } from './domain.js'
+import type { EventStore } from '../domain/ports/eventStore.js'
+import type { DomainEvent, StoredEvent } from '../domain/events.js'
 import { defaultTasksProjectionState, defaultThreadProjectionState, reduceTasksProjection, reduceThreadProjection } from './projections.js'
 import { runProjection } from './projector.js'
+import { DEFAULT_USER_ACTOR_ID } from '../domain/actor.js'
 
 export async function createTask(store: EventStore, title: string): Promise<{ taskId: string }> {
   const taskId = nanoid()
-  store.append(taskId, [{ type: 'TaskCreated', payload: { taskId, title } }])
+  store.append(taskId, [{ 
+    type: 'TaskCreated', 
+    payload: { 
+      taskId, 
+      title,
+      intent: '',
+      priority: 'foreground' as const,
+      authorActorId: DEFAULT_USER_ACTOR_ID
+    } 
+  }])
   return { taskId }
 }
 
@@ -21,7 +39,10 @@ export async function listTasks(store: EventStore) {
 }
 
 export async function openThread(store: EventStore, taskId: string) {
-  store.append(taskId, [{ type: 'ThreadOpened', payload: { taskId } }])
+  store.append(taskId, [{ 
+    type: 'ThreadOpened', 
+    payload: { taskId, authorActorId: DEFAULT_USER_ACTOR_ID } 
+  }])
   return runProjection({
     store,
     name: 'threads',
@@ -35,7 +56,7 @@ export async function proposePatch(store: EventStore, taskId: string, targetPath
   store.append(taskId, [
     {
       type: 'PatchProposed',
-      payload: { taskId, proposalId, targetPath, patchText }
+      payload: { taskId, proposalId, targetPath, patchText, authorActorId: DEFAULT_USER_ACTOR_ID }
     }
   ])
   return { proposalId }
@@ -72,7 +93,8 @@ export async function acceptPatch(opts: {
         proposalId: proposal.payload.proposalId,
         targetPath: proposal.payload.targetPath,
         patchText: proposal.payload.patchText,
-        appliedAt: new Date().toISOString()
+        appliedAt: new Date().toISOString(),
+        authorActorId: DEFAULT_USER_ACTOR_ID
       }
     }
   ])

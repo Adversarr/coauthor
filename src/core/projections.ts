@@ -1,4 +1,4 @@
-import type { StoredEvent } from './domain.js'
+import type { StoredEvent } from '../domain/events.js'
 
 export type TasksProjectionState = {
   tasks: Array<{

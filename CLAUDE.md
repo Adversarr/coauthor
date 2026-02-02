@@ -69,19 +69,37 @@ node dist/index.js task list
 ### Architecture Pattern
 **Hexagonal Architecture (Ports and Adapters)** with **Event Sourcing** and **CQRS**.
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture design.
+See [docs/DOMAIN.md](docs/DOMAIN.md) for domain model specification.
+See [docs/MILESTONES.md](docs/MILESTONES.md) for milestone planning.
+
 ### Directory Structure
 ```
 src/
 ├── index.ts              # CLI entry point
 ├── app/
-│   └── createApp.ts      # App initialization with EventStore
-├── core/                 # Domain layer (pure logic, no external deps)
-│   ├── domain.ts         # Domain entities, events schema (Zod)
-│   ├── eventStore.ts     # SQLite-based event store
-│   ├── operations.ts     # Use cases (createTask, acceptPatch, etc.)
+│   └── createApp.ts      # App initialization with services
+├── domain/               # Domain layer (types, schemas)
+│   ├── actor.ts          # Actor types (User, Agent, System)
+│   ├── task.ts           # Task, ArtifactRef types
+│   ├── artifact.ts       # Artifact types (Figure, Table, etc.)
+│   ├── events.ts         # Domain events (18 event types, Zod schemas)
+│   ├── index.ts          # Domain exports
+│   └── ports/            # Port interfaces
+│       ├── eventStore.ts # EventStore interface
+│       └── index.ts
+├── application/          # Application services
+│   ├── taskService.ts    # Task use cases
+│   ├── patchService.ts   # Patch use cases
+│   ├── eventService.ts   # Event replay use cases
+│   └── index.ts
+├── core/                 # Projections and projector
+│   ├── operations.ts     # [DEPRECATED] Use application services
 │   ├── projector.ts      # Projection runner with checkpoint
 │   └── projections.ts    # Projection reducers for read models
-├── infra/                # Infrastructure layer
+├── infra/                # Infrastructure adapters
+│   ├── jsonlEventStore.ts # JSONL-based event store
+│   ├── sqliteEventStore.ts # SQLite-based event store
 │   ├── sqlite.ts         # SQLite database helper
 │   └── logger.ts         # Pino logger
 ├── cli/                  # CLI interface
@@ -94,22 +112,32 @@ src/
     └── applyUnifiedPatch.ts  # Unified diff patch application
 
 tests/                    # Test files (vitest)
+docs/                     # Documentation
+├── ARCHITECTURE.md       # Architecture design
+├── DOMAIN.md             # Domain model spec
+└── MILESTONES.md         # Milestone planning
 .coauthor/                # Database directory
-└── coauthor.db          # SQLite event store
+└── events.jsonl          # Event store (or coauthor.db for SQLite)
 ```
 
 ### Core Concepts
 
+**Actor Model:**
+- All actions are attributed to an Actor (`authorActorId`)
+- Actor types: `user`, `agent`, `system`
+- Well-known IDs: `system`, `default-user`, `default-agent`
+
 **Event Sourcing:**
 - All state changes are captured as events in an append-only log
-- Events are stored in SQLite (`events` table with `streamId`, `seq`, `type`, `payload`, `createdAt`)
+- Events can be stored in JSONL or SQLite
+- Events have `streamId`, `seq`, `type`, `payload`, `createdAt`
 - Read models are built via projections that fold events into state
 
-**Domain Events:**
-- `TaskCreated` - New task created
-- `ThreadOpened` - Thread opened for task
-- `PatchProposed` - Patch proposed for review
-- `PatchApplied` - Patch accepted and applied
+**Domain Events (18 types):**
+- Task lifecycle: `TaskCreated`, `TaskRouted`, `TaskClaimed`, `TaskStarted`, `TaskCompleted`, `TaskFailed`, `TaskCanceled`, `TaskBlocked`
+- Plan & Patch: `AgentPlanPosted`, `PatchProposed`, `PatchAccepted`, `PatchRejected`, `PatchApplied`
+- Feedback & Interaction: `UserFeedbackPosted`, `ThreadOpened`
+- Artifact & File: `ArtifactChanged`, `TaskNeedsRebase`, `TaskRebased`
 
 **Projections:**
 - `tasks` projection - Lists all tasks with metadata
@@ -117,9 +145,9 @@ tests/                    # Test files (vitest)
 - Projections maintain cursor positions for incremental updates
 
 **Hexagonal Architecture Layers:**
-1. **Domain** (`src/core/`): Pure TypeScript, no external dependencies. Domain entities, events, projections.
-2. **Application** (`src/app/`): Use cases, app initialization.
-3. **Infrastructure** (`src/infra/`): SQLite event store, logger.
+1. **Domain** (`src/domain/`): Types, event schemas, port interfaces. No external dependencies.
+2. **Application** (`src/application/`): Use case services (TaskService, PatchService, EventService).
+3. **Infrastructure** (`src/infra/`): EventStore adapters (JSONL, SQLite), logger.
 4. **Interface** (`src/cli/`, `src/tui/`): CLI and TUI adapters.
 
 ## Important Patterns
@@ -149,9 +177,16 @@ When making changes:
 4. Build with `npm run build` before using CLI
 
 When adding new domain events:
-1. Add event schema to `src/core/domain.ts`
+1. Add event payload schema to `src/domain/events.ts`
 2. Add to `EventTypeSchema` enum
-3. Update `DomainEventSchema` discriminated union
-4. Add projection reducers if needed in `src/core/projections.ts`
-5. Add operation function in `src/core/operations.ts`
-6. Add CLI command in `src/cli/run.ts` if user-facing
+3. Add to `DomainEventSchema` discriminated union
+4. Add to `DomainEvent` union type
+5. Update projection reducers if needed in `src/core/projections.ts`
+6. Add service method in appropriate `src/application/*.ts`
+7. Add CLI command in `src/cli/run.ts` if user-facing
+
+When adding new use cases:
+1. Add method to appropriate service in `src/application/`
+2. Services take `EventStore` and `currentActorId` in constructor
+3. All events must include `authorActorId` field
+4. Add CLI command in `src/cli/run.ts`

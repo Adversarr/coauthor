@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import type { App } from '../app/createApp.js'
-import { createTask, listTasks, openThread, replayEvents } from '../core/operations.js'
 
 type Props = {
   app: App
@@ -16,9 +15,9 @@ export function MainTui(props: Props) {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
 
   const refresh = async () => {
-    const state = await listTasks(app.store)
-    setTasks(state.tasks.map((t) => ({ taskId: t.taskId, title: t.title })))
-    setCurrentTaskId(state.currentTaskId)
+    const result = await app.taskService.listTasks()
+    setTasks(result.tasks.map((t) => ({ taskId: t.taskId, title: t.title })))
+    setCurrentTaskId(result.currentTaskId)
   }
 
   useEffect(() => {
@@ -54,7 +53,7 @@ export function MainTui(props: Props) {
 
       if (commandLine.startsWith('task create ')) {
         const title = commandLine.slice('task create '.length).trim()
-        await createTask(app.store, title)
+        await app.taskService.createTask(title)
         await refresh()
         setStatus('')
         return
@@ -62,7 +61,7 @@ export function MainTui(props: Props) {
 
       if (commandLine.startsWith('thread open ')) {
         const taskId = commandLine.slice('thread open '.length).trim()
-        await openThread(app.store, taskId)
+        await app.taskService.openThread(taskId)
         await refresh()
         setStatus(`opened ${taskId}`)
         return
@@ -71,7 +70,7 @@ export function MainTui(props: Props) {
       if (commandLine === 'log replay' || commandLine.startsWith('log replay ')) {
         const rest = commandLine.slice('log replay'.length).trim()
         const streamId = rest ? rest : undefined
-        const events = replayEvents(app.store, streamId)
+        const events = app.eventService.replayEvents(streamId)
         for (const e of events) {
           console.log(`${e.id} ${e.streamId}#${e.seq} ${e.type} ${JSON.stringify(e.payload)}`)
         }
@@ -92,8 +91,8 @@ export function MainTui(props: Props) {
   })
 
   const header = useMemo(() => {
-    return `coauthor (db: ${app.dbPath})`
-  }, [app.dbPath])
+    return `coauthor (store: ${app.storePath})`
+  }, [app.storePath])
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>

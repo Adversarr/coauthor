@@ -1,6 +1,5 @@
 import yargs, { type Argv, type Arguments } from 'yargs'
 import { createApp } from '../app/createApp.js'
-import { acceptPatch, createTask, listTasks, openThread, proposePatch, replayEvents } from '../core/operations.js'
 import type { IO } from './io.js'
 
 export async function runCli(opts: {
@@ -24,13 +23,13 @@ export async function runCli(opts: {
         const action = String(args.action)
         if (action === 'create') {
           const title = ((args.args as unknown as string[] | undefined) ?? []).join(' ').trim()
-          const { taskId } = await createTask(app.store, title)
+          const { taskId } = app.taskService.createTask(title)
           io.stdout(`${taskId}\n`)
           return
         }
 
         if (action === 'list') {
-          const state = await listTasks(app.store)
+          const state = app.taskService.listTasks()
           for (const t of state.tasks) {
             const current = t.taskId === state.currentTaskId ? '*' : ' '
             io.stdout(`${current} ${t.taskId} ${t.title}\n`)
@@ -48,7 +47,7 @@ export async function runCli(opts: {
           .positional('taskId', { type: 'string', demandOption: true }),
       async (args: Arguments) => {
         const taskId = String(args.taskId)
-        await openThread(app.store, taskId)
+        app.taskService.openThread(taskId)
         io.stdout(`opened ${taskId}\n`)
       }
     )
@@ -70,14 +69,14 @@ export async function runCli(opts: {
           if (!targetPath) throw new Error('patch propose 需要提供 targetPath')
           const patchText = (await io.readStdin()).trimEnd()
           if (!patchText) throw new Error('未从 stdin 读取到 patch 文本')
-          const { proposalId } = await proposePatch(app.store, taskId, targetPath, patchText)
+          const { proposalId } = app.patchService.proposePatch(taskId, targetPath, patchText)
           io.stdout(`${proposalId}\n`)
           return
         }
 
         if (action === 'accept') {
           const proposalIdOrLatest = String(args.arg1 ?? 'latest')
-          const res = await acceptPatch({ store: app.store, baseDir: app.baseDir, taskId, proposalIdOrLatest })
+          const res = await app.patchService.acceptAndApplyPatch(taskId, proposalIdOrLatest)
           io.stdout(`applied ${res.proposalId} -> ${res.targetPath}\n`)
           return
         }
@@ -92,7 +91,7 @@ export async function runCli(opts: {
           .positional('streamId', { type: 'string' }),
       async (args: Arguments) => {
         const streamId = args.streamId ? String(args.streamId) : undefined
-        const events = replayEvents(app.store, streamId)
+        const events = app.eventService.replayEvents(streamId)
         for (const e of events) {
           io.stdout(`${e.id} ${e.streamId}#${e.seq} ${e.type} ${JSON.stringify(e.payload)}\n`)
         }
