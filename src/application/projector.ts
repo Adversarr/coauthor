@@ -5,12 +5,12 @@ import type { EventStore } from '../domain/ports/eventStore.js'
 export type ProjectionReducer<TState> = (state: TState, event: StoredEvent) => TState
 
 // Run projection: load cursor → read events → fold → save cursor
-export async function runProjection<TState>(opts: {
+export function runProjection<TState>(opts: {
   store: EventStore
   name: string
   defaultState: TState
   reduce: ProjectionReducer<TState>
-}): Promise<TState> {
+}): TState {
   const { store, name, defaultState, reduce } = opts
   const { cursorEventId, state } = store.getProjection(name, defaultState)
   const events = store.readAll(cursorEventId)
@@ -26,4 +26,3 @@ export async function runProjection<TState>(opts: {
   store.saveProjection(name, lastEventId, nextState)
   return nextState
 }
-

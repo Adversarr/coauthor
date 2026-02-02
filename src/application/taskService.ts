@@ -4,6 +4,7 @@
 import { nanoid } from 'nanoid'
 import type { EventStore, StoredEvent, TaskPriority, ArtifactRef } from '../domain/index.js'
 import { DEFAULT_USER_ACTOR_ID } from '../domain/actor.js'
+import { runProjection } from './projector.js'
 
 // ============================================================================
 // Projection Types
@@ -71,14 +72,12 @@ export class TaskService {
 
   // Build tasks projection from events
   listTasks(): TasksProjectionState {
-    const { state } = this.#store.getProjection<TasksProjectionState>('tasks', {
-      tasks: [],
-      currentTaskId: null
+    return runProjection<TasksProjectionState>({
+      store: this.#store,
+      name: 'tasks',
+      defaultState: { tasks: [], currentTaskId: null },
+      reduce: (state, event) => this.#reduceTasksProjection(state, event)
     })
-
-    // Rebuild from events if needed
-    const events = this.#store.readAll(0)
-    return this.#buildTasksProjection(events, state)
   }
 
   // Get task by ID from projection
@@ -137,132 +136,128 @@ export class TaskService {
   // Private Methods
   // ============================================================================
 
-  #buildTasksProjection(events: StoredEvent[], _initialState: TasksProjectionState): TasksProjectionState {
-    const tasksMap = new Map<string, TaskView>()
-    let currentTaskId: string | null = null
+  #reduceTasksProjection(state: TasksProjectionState, event: StoredEvent): TasksProjectionState {
+    const tasks = state.tasks
 
-    for (const event of events) {
-      switch (event.type) {
-        case 'TaskCreated': {
-          const p = event.payload
-          tasksMap.set(p.taskId, {
-            taskId: p.taskId,
-            title: p.title,
-            intent: p.intent ?? '',
-            createdBy: p.authorActorId,
-            priority: p.priority ?? 'foreground',
-            status: 'open',
-            artifactRefs: p.artifactRefs,
-            pendingProposals: [],
-            appliedProposals: [],
-            createdAt: event.createdAt,
-            updatedAt: event.createdAt
-          })
-          break
-        }
-        case 'ThreadOpened': {
-          currentTaskId = event.payload.taskId
-          break
-        }
-        case 'TaskClaimed': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'claimed'
-            task.assignedTo = event.payload.claimedBy
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'TaskStarted': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'in_progress'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'AgentPlanPosted': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.currentPlanId = event.payload.planId
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'PatchProposed': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.pendingProposals.push(event.payload.proposalId)
-            task.status = 'awaiting_review'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'PatchAccepted':
-        case 'PatchApplied': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            const idx = task.pendingProposals.indexOf(event.payload.proposalId)
-            if (idx !== -1) {
-              task.pendingProposals.splice(idx, 1)
-            }
-            if (event.type === 'PatchApplied') {
-              task.appliedProposals.push(event.payload.proposalId)
-            }
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'PatchRejected': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            const idx = task.pendingProposals.indexOf(event.payload.proposalId)
-            if (idx !== -1) {
-              task.pendingProposals.splice(idx, 1)
-            }
-            task.status = 'in_progress'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'TaskCompleted': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'done'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'TaskFailed': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'done' // or could use a 'failed' status
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'TaskCanceled': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'canceled'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
-        case 'TaskBlocked': {
-          const task = tasksMap.get(event.payload.taskId)
-          if (task) {
-            task.status = 'blocked'
-            task.updatedAt = event.createdAt
-          }
-          break
-        }
+    const findTaskIndex = (taskId: string): number => tasks.findIndex((t) => t.taskId === taskId)
+
+    switch (event.type) {
+      case 'TaskCreated': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx !== -1) return state
+
+        tasks.push({
+          taskId: event.payload.taskId,
+          title: event.payload.title,
+          intent: event.payload.intent ?? '',
+          createdBy: event.payload.authorActorId,
+          priority: event.payload.priority ?? 'foreground',
+          status: 'open',
+          artifactRefs: event.payload.artifactRefs,
+          pendingProposals: [],
+          appliedProposals: [],
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt
+        })
+        return state
       }
-    }
-
-    return {
-      tasks: Array.from(tasksMap.values()),
-      currentTaskId
+      case 'ThreadOpened': {
+        state.currentTaskId = event.payload.taskId
+        return state
+      }
+      case 'TaskClaimed': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'claimed'
+        task.assignedTo = event.payload.claimedBy
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'TaskStarted': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'in_progress'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'AgentPlanPosted': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.currentPlanId = event.payload.planId
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'PatchProposed': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        if (!task.pendingProposals.includes(event.payload.proposalId)) {
+          task.pendingProposals.push(event.payload.proposalId)
+        }
+        task.status = 'awaiting_review'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'PatchAccepted':
+      case 'PatchApplied': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        const pendingIdx = task.pendingProposals.indexOf(event.payload.proposalId)
+        if (pendingIdx !== -1) task.pendingProposals.splice(pendingIdx, 1)
+        if (event.type === 'PatchApplied' && !task.appliedProposals.includes(event.payload.proposalId)) {
+          task.appliedProposals.push(event.payload.proposalId)
+        }
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'PatchRejected': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        const pendingIdx = task.pendingProposals.indexOf(event.payload.proposalId)
+        if (pendingIdx !== -1) task.pendingProposals.splice(pendingIdx, 1)
+        task.status = 'in_progress'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'TaskCompleted': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'done'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'TaskFailed': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'done'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'TaskCanceled': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'canceled'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      case 'TaskBlocked': {
+        const idx = findTaskIndex(event.payload.taskId)
+        if (idx === -1) return state
+        const task = tasks[idx]!
+        task.status = 'blocked'
+        task.updatedAt = event.createdAt
+        return state
+      }
+      default:
+        return state
     }
   }
 }

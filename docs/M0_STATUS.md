@@ -761,3 +761,235 @@ M0 的基础对于实现 roadmap 中的完整愿景至关重要：
   - 易于测试
   - 满足核心开发者需求
 - **权衡：** 用户体验不如 GUI，但符合 V0 定位
+
+---
+
+## M1 任务规划
+
+### M1 目标：LLM 集成基础
+
+基于 M0 已完成的架构，M1 的核心任务是**添加 LLM 抽象层和基础 Agent 运行时**，为 M2 端到端 Workflow 做准备。
+
+### M1 与 M0 的关系
+
+**M0 超预期完成项（原计划在 M1）：**
+- ✅ Domain 层完整（Actor, Task, Artifact, Events 含 authorActorId）
+- ✅ Application 层完整（TaskService, PatchService, EventService）
+- ✅ 六边形架构（Port-Adapter）
+
+**M1 实际需要做的工作：**
+- ❌ LLMClient 端口与适配器（核心）
+- ❌ AgentRuntime 基础框架
+- ❌ ContextBuilder 服务
+- ⚠️ 投影 Checkpoint 优化（解决 TD-3）
+
+### M1 详细任务分解
+
+#### 任务 1：定义 LLMClient 端口（1-2h）
+
+**目标：** 创建 LLM 抽象层，支持多模型切换
+
+**产出：**
+```typescript
+// src/domain/ports/llmClient.ts
+export type LLMProfile = 'fast' | 'writer' | 'reasoning'
+
+export interface LLMClient {
+  generate(context: string, profile: LLMProfile): Promise<string>
+  stream(context: string, profile: LLMProfile): Observable<string>
+}
+```
+
+**设计决策：**
+- 使用 profile 而非直接模型名，便于切换底层模型
+- 支持同步（generate）和流式（stream）两种模式
+- context 是纯文本，由 ContextBuilder 负责构建
+
+#### 任务 2：实现 Anthropic 适配器（2-3h）
+
+**目标：** 实现 Claude API 集成
+
+**产出：**
+```typescript
+// src/infra/anthropicLLMClient.ts
+export class AnthropicLLMClient implements LLMClient {
+  private modelMap = {
+    fast: 'claude-3-5-haiku-20241022',
+    writer: 'claude-3-5-sonnet-20241022',
+    reasoning: 'claude-3-7-sonnet-20250219'
+  }
+  
+  async generate(context: string, profile: LLMProfile): Promise<string>
+  // stream() 可选实现
+}
+```
+
+**技术选择：**
+- 使用官方 `@anthropic-ai/sdk`
+- 初期只实现 generate()，stream() 留给 M2
+- API Key 通过环境变量 `ANTHROPIC_API_KEY` 传入
+
+#### 任务 3：实现 ContextBuilder（2-3h）
+
+**目标：** 构建任务上下文字符串，供 LLM 使用
+
+**产出：**
+```typescript
+// src/application/contextBuilder.ts
+export class ContextBuilder {
+  buildTaskContext(task: TaskView): string {
+    // 1. 任务描述
+    // 2. 相关文件片段（基于 artifactRefs）
+    // 3. TODO: OUTLINE.md 注入（M4）
+  }
+  
+  private readArtifact(ref: ArtifactRef): string
+}
+```
+
+**实现要点：**
+- 读取 `task.artifactRefs` 指定的文件
+- M1 暂不支持 range 裁剪（读整个文件）
+- M1 暂不注入 OUTLINE.md（留给 M4）
+
+#### 任务 4：实现基础 AgentRuntime（3-4h）
+
+**目标：** Agent 生命周期管理 + 手动任务处理
+
+**产出：**
+```typescript
+// src/agents/runtime.ts
+export class AgentRuntime {
+  start(): void  // 启动 Agent（M1 仅打印日志）
+  stop(): void   // 停止 Agent
+  
+  // 手动处理任务（M1 测试用）
+  async handleTask(task: TaskView): Promise<void> {
+    // 1. 调用 ContextBuilder
+    // 2. 调用 LLMClient.generate()
+    // 3. 打印结果（不写事件）
+  }
+}
+```
+
+**M1 限制：**
+- 不实现自动任务订阅（M2 增加）
+- 不写 `AgentPlanPosted` 事件（M2 增加）
+- 只验证 LLM 调用链路通畅
+
+#### 任务 5：投影 Checkpoint 优化（2-3h）
+
+**目标：** 解决 TD-3，提升投影性能
+
+**改动：**
+```typescript
+// 修改 src/application/projector.ts
+export async function projectWithCheckpoint<S>(
+  store: EventStore,
+  projectionName: string,
+  initialState: S,
+  reducer: (state: S, event: StoredEvent) => S
+): Promise<S> {
+  // 1. 从 .coauthor/projections.jsonl 读取 checkpoint
+  // 2. 只处理 checkpoint 之后的新事件
+  // 3. 保存新 checkpoint
+}
+```
+
+**持久化方案：**
+- 复用 JsonlEventStore 的 projection 存储
+- 格式：`{ name, cursorEventId, stateJson }`
+- 每次投影更新后保存
+
+#### 任务 6：新增事件类型（1h）
+
+**新增事件：**
+1. `AgentPlanPosted`：Agent 发布执行计划
+2. `UserFeedbackPosted`：用户对计划/补丁的反馈
+
+**用途：**
+- M1 定义 schema，M2 开始使用
+- 为完整 Workflow 做准备
+
+#### 任务 7：测试（2-3h）
+
+**新增测试：**
+- `tests/llmClient.test.ts`：Mock LLMClient 测试
+- `tests/contextBuilder.test.ts`：上下文构建测试
+- `tests/agentRuntime.test.ts`：Agent 生命周期测试
+- 更新 `tests/projector.test.ts`：测试 checkpoint 机制
+
+### M1 验收标准
+
+✅ **通过以下测试即认为 M1 完成：**
+
+```bash
+# 1. 启动 Agent（手动模式）
+npm run dev -- agent start
+# 输出：[Agent default-agent] Started
+
+# 2. 创建任务
+npm run dev -- task create "改进导论第一段" --file chapters/01_intro.tex
+# 输出：taskId=xyz
+
+# 3. 手动触发 Agent
+npm run dev -- agent handle xyz
+# 输出：
+#   [Agent] Handling task xyz
+#   [Agent] Generated plan:
+#   1. 分析当前段落结构
+#   2. 识别需要改进的点
+#   3. 生成改进建议
+
+# 4. 验证性能优化
+npm run dev -- task list
+# 使用 checkpoint，事件量大时性能明显提升
+
+# 5. 所有测试通过
+npm test
+```
+
+### M1 与 M2 的分界线
+
+| 功能 | M1 状态 | M2 目标 |
+|------|---------|--------|
+| LLM 调用 | ✅ 可用 | 增强（流式输出） |
+| Agent 任务处理 | ✅ 手动触发 | 自动订阅 |
+| Plan 生成 | ✅ 打印到控制台 | 写入 `AgentPlanPosted` 事件 |
+| Patch 生成 | ❌ 无 | 完整实现 |
+| 用户确认流程 | ❌ 无 | `/accept` `/reject` 命令 |
+| 文件更新 | ❌ 无 | 自动 apply patch |
+
+**关键设计原则：**
+- M1 验证基础设施可用性（LLM + Context + Agent 框架）
+- M2 实现完整业务流程（Task → Plan → Patch → Review → Apply）
+
+### 实施建议
+
+1. **先做 Task 1-3**（LLMClient + ContextBuilder）
+   - 这是最核心的基础设施
+   - 完成后可以单独测试 LLM 调用
+
+2. **再做 Task 4**（AgentRuntime）
+   - 整合前面的组件
+   - 验证端到端链路
+
+3. **最后做 Task 5-7**（优化 + 补充）
+   - Checkpoint 可以解决性能问题
+   - 新增事件为 M2 做准备
+   - 测试保证质量
+
+**预估总工时：** 13-19 小时（约 2-3 个工作日）
+
+### 风险评估
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| Anthropic API 不稳定 | M1 进度受阻 | 使用 Mock LLMClient 开发 |
+| Context 构建复杂 | ContextBuilder 实现耗时 | M1 只读整个文件，不做裁剪 |
+| Checkpoint 实现困难 | 性能优化失败 | 可延后到 M2，不影响核心功能 |
+
+---
+
+*文档版本: 2026-02-02*  
+*相关文档: ARCHITECTURE.md, DOMAIN.md, MILESTONES.md*

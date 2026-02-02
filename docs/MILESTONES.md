@@ -43,73 +43,88 @@ M0 ────→ M1 ────→ M2
 
 ```
 src/
-├── core/
-│   ├── domain.ts          # Event schema（需扩展）
-│   ├── eventStore.ts      # EventStore 接口
-│   ├── operations.ts      # 临时的操作函数（待重构）
-│   ├── projections.ts     # Projection reducers
-│   └── projector.ts       # Projection runner
+├── domain/
+│   ├── actor.ts           # Actor, ActorKind, ActorCapability ✅
+│   ├── task.ts            # Task 类型定义 ✅
+│   ├── artifact.ts        # Artifact 类型定义 ✅
+│   ├── events.ts          # 完整 Event schema（含 authorActorId）✅
+│   ├── index.ts
+│   └── ports/
+│       └── eventStore.ts  # EventStore 接口 ✅
+├── application/
+│   ├── taskService.ts     # Task 用例封装 ✅
+│   ├── patchService.ts    # Patch 用例封装 ✅
+│   ├── eventService.ts    # Event 回放服务 ✅
+│   ├── projector.ts       # Projection runner ✅
+│   └── threadProjection.ts # Thread 投影 ✅
 ├── infra/
-│   ├── jsonlEventStore.ts
-│   └── (其他适配器)
+│   └── jsonlEventStore.ts # JSONL 实现 ✅
 ├── cli/
-│   ├── run.ts
-│   └── io.ts
+│   ├── run.ts             # CLI 入口 ✅
+│   └── io.ts              # I/O 工具 ✅
+├── tui/
+│   ├── main.tsx           # TUI 组件（可选）✅
+│   └── run.ts
 └── patch/
-    └── applyUnifiedPatch.ts
+    └── applyUnifiedPatch.ts # 补丁引擎 ✅
 ```
 
-### 遗留问题（M1 解决）
+### 架构完成度超预期
 
-| 问题 | 影响 |
-|------|------|
-| 缺少 `authorActorId` | 事件不知道谁触发的 |
-| 缺少 Application 层 | CLI 直接调用 core，难以复用 |
-| Event 类型不完整 | 与 DOMAIN.md 规范有差距 |
+M0 实际完成的内容超出了原计划，已包含：
+- ✅ 完整的 Domain 层（Actor, Task, Artifact, Events）
+- ✅ 完整的 Application 层（Services + Projections）
+- ✅ 所有事件已包含 `authorActorId`
+- ✅ 六边形架构（Port-Adapter）完整实现
+
+### M1 需要补全的组件
+
+| 组件 | 状态 | 说明 |
+|------|------|------|
+| LLMClient 接口 | ❌ 无 | M1 核心目标 |
+| AgentRuntime | ❌ 无 | M1 核心目标 |
+| ContextBuilder | ❌ 无 | M1 核心目标 |
+| 投影 Checkpoint | ⚠️ 待优化 | TD-3 技术债务 |
 
 ---
 
-## M1：架构规范化 + Application 层 🚧 当前目标
+## M1：LLM 集成基础 🚧 当前目标
 
-> **目标**：对齐 ARCHITECTURE.md 和 DOMAIN.md 规范，为 LLM 集成做准备
+> **目标**：添加 LLM 抽象层和基础 Agent 运行时，为 M2 端到端 Workflow 做准备
 
 ### 完成标准
 
-- [ ] **扩展 Event Schema**
-  - 增加 `authorActorId` 到所有现有事件
-  - 新增必需事件：`TaskClaimed`, `AgentPlanPosted`, `PatchAccepted`, `UserFeedbackPosted`
+- [ ] **LLMClient 端口定义**
+  - 创建 `src/domain/ports/llmClient.ts`
+  - 定义 `LLMClient` 接口（generate, stream 方法）
+  - 支持 fast/writer/reasoning profiles
   
-- [ ] **添加 Actor 类型**
-  - 创建 `src/domain/actor.ts`
-  - 定义 Actor, ActorKind, ActorCapability
+- [ ] **LLM 适配器实现**
+  - 创建 `src/infra/anthropicLLMClient.ts`（Claude）
+  - 可选：`src/infra/openaiLLMClient.ts`（OpenAI）
   
-- [ ] **提取 Application 层**
-  - 创建 `src/application/` 目录
-  - 迁移 operations.ts 到 UseCases
-  - 创建 `TaskService`, `PatchService` 封装
+- [ ] **基础 AgentRuntime**
+  - 创建 `src/agents/runtime.ts`
+  - 实现 Agent 生命周期管理（start/stop）
+  - 实现任务订阅机制
 
-- [ ] **重构目录结构**
-  ```
-  src/
-  ├── domain/
-  │   ├── actor.ts
-  │   ├── task.ts
-  │   ├── artifact.ts
-  │   ├── events.ts        # 从 core/domain.ts 迁移
-  │   └── ports/
-  │       └── eventStore.ts
-  ├── application/
-  │   ├── taskService.ts
-  │   ├── patchService.ts
-  │   └── services/
-  │       └── contextBuilder.ts
-  ├── infrastructure/      # 从 infra/ 重命名
-  └── interfaces/          # 从 cli/ 和 tui/ 合并
-  ```
+- [ ] **ContextBuilder 服务**
+  - 创建 `src/application/contextBuilder.ts`
+  - 实现文件内容读取
+  - 实现 prompt 上下文构建
+
+- [ ] **投影优化（TD-3）**
+  - 实现投影 checkpoint 持久化
+  - 实现增量更新机制
+
+- [ ] **新增必需事件**
+  - `AgentPlanPosted`: Agent 发布执行计划
+  - `UserFeedbackPosted`: 用户对计划/补丁的反馈
 
 - [ ] **更新测试**
-  - 测试新的 Event schema
-  - 测试 Application 层 UseCases
+  - 测试 LLMClient 接口（使用 mock）
+  - 测试 ContextBuilder
+  - 测试 AgentRuntime 基础功能
 
 ### 验收测试
 
@@ -294,58 +309,246 @@ npm run dev -- task create "展开第二章"
 
 ## 附录：M1 详细任务分解
 
-### 1. 扩展 Event Schema（2-4h）
+> **说明**：M0 已完成架构规范化（Domain/Application 层），M1 聚焦 LLM 集成
+
+### 1. 定义 LLMClient 端口（1-2h）
 
 ```typescript
-// 修改 domain/events.ts
-// 1. 给所有 payload 增加 authorActorId
-// 2. 新增事件类型
-// 3. 更新 DomainEventSchema union
+// 创建 src/domain/ports/llmClient.ts
+export type LLMProfile = 'fast' | 'writer' | 'reasoning'
+
+export interface LLMClient {
+  // 同步生成（等待完整响应）
+  generate(
+    context: string,
+    profile: LLMProfile,
+    opts?: GenerateOptions
+  ): Promise<string>
+  
+  // 流式生成（逐 token 返回）
+  stream(
+    context: string,
+    profile: LLMProfile,
+    opts?: GenerateOptions
+  ): Observable<string>
+}
+
+export type GenerateOptions = {
+  maxTokens?: number
+  temperature?: number
+  stopSequences?: string[]
+}
 ```
 
-### 2. 添加 Actor 类型（1h）
+### 2. 实现 Anthropic LLM 适配器（2-3h）
 
 ```typescript
-// 创建 domain/actor.ts
-// 定义 Actor, ActorKind, ActorCapability
-// 导出 Zod schema
-```
+// 创建 src/infra/anthropicLLMClient.ts
+import Anthropic from '@anthropic-ai/sdk'
 
-### 3. 创建 Application 层（3-4h）
-
-```typescript
-// 创建 application/taskService.ts
-export class TaskService {
+export class AnthropicLLMClient implements LLMClient {
   constructor(
-    private store: EventStore,
-    private currentActorId: string
+    private apiKey: string,
+    private modelMap: Record<LLMProfile, string> = {
+      fast: 'claude-3-5-haiku-20241022',
+      writer: 'claude-3-5-sonnet-20241022',
+      reasoning: 'claude-3-7-sonnet-20250219'
+    }
   ) {}
   
-  createTask(title: string, opts?: CreateTaskOptions): Task
-  listTasks(): TaskView[]
-  claimTask(taskId: string): void
-}
-
-// 创建 application/patchService.ts
-export class PatchService {
-  proposePatch(taskId: string, targetPath: string, patchText: string): PatchProposal
-  acceptPatch(taskId: string, proposalId: string): void
-  applyPatch(taskId: string, proposalId: string): void
+  async generate(context: string, profile: LLMProfile): Promise<string> {
+    const client = new Anthropic({ apiKey: this.apiKey })
+    const response = await client.messages.create({
+      model: this.modelMap[profile],
+      messages: [{ role: 'user', content: context }],
+      max_tokens: 4096
+    })
+    return response.content[0].text
+  }
+  
+  // TODO: 实现 stream()
 }
 ```
 
-### 4. 更新 CLI（1-2h）
+### 3. 实现 ContextBuilder 服务（2-3h）
 
 ```typescript
-// 修改 cli/run.ts
-// 改为调用 Application 层的 Service
-// 不再直接调用 core/operations.ts
+// 创建 src/application/contextBuilder.ts
+import { readFileSync } from 'node:fs'
+import type { ArtifactRef } from '../domain/index.js'
+
+export class ContextBuilder {
+  constructor(private baseDir: string) {}
+  
+  // 构建任务上下文
+  buildTaskContext(task: TaskView): string {
+    const parts: string[] = []
+    
+    // 1. 任务描述
+    parts.push(`# Task: ${task.title}\n${task.intent}\n`)
+    
+    // 2. 读取相关文件片段
+    if (task.artifactRefs) {
+      for (const ref of task.artifactRefs) {
+        const content = this.readArtifact(ref)
+        parts.push(`## File: ${ref.path}\n\`\`\`\n${content}\n\`\`\`\n`)
+      }
+    }
+    
+    return parts.join('\n')
+  }
+  
+  private readArtifact(ref: ArtifactRef): string {
+    const fullPath = path.join(this.baseDir, ref.path)
+    const content = readFileSync(fullPath, 'utf-8')
+    
+    // TODO: 支持 range 裁剪
+    return content
+  }
+}
 ```
 
-### 5. 更新测试（1-2h）
+### 4. 实现基础 AgentRuntime（3-4h）
 
 ```typescript
-// 更新 tests/eventStore.test.ts
-// 更新 tests/projector.test.ts
-// 新增 tests/taskService.test.ts
+// 创建 src/agents/runtime.ts
+import type { EventStore, LLMClient } from '../domain/ports/index.js'
+import type { TaskView } from '../application/taskService.js'
+
+export class AgentRuntime {
+  private isRunning = false
+  
+  constructor(
+    private store: EventStore,
+    private llm: LLMClient,
+    private agentId: string
+  ) {}
+  
+  // 启动 Agent
+  start(): void {
+    this.isRunning = true
+    console.log(`[Agent ${this.agentId}] Started`)
+    // M1: 暂不实现自动订阅，等 M2
+  }
+  
+  // 停止 Agent
+  stop(): void {
+    this.isRunning = false
+    console.log(`[Agent ${this.agentId}] Stopped`)
+  }
+  
+  // 手动处理任务（M1 测试用）
+  async handleTask(task: TaskView): Promise<void> {
+    console.log(`[Agent] Handling task ${task.taskId}`)
+    
+    // 1. 构建上下文
+    const contextBuilder = new ContextBuilder(process.cwd())
+    const context = contextBuilder.buildTaskContext(task)
+    
+    // 2. 调用 LLM 生成计划
+    const plan = await this.llm.generate(
+      `${context}\n\nGenerate an execution plan for this task.`,
+      'fast'
+    )
+    
+    console.log(`[Agent] Generated plan:\n${plan}`)
+    
+    // M1: 只打印，不写事件（M2 实现完整 workflow）
+  }
+}
+```
+
+### 5. 投影 Checkpoint 优化（2-3h）
+
+```typescript
+// 修改 src/application/projector.ts
+// 1. 持久化 checkpoint 到 .coauthor/projections.jsonl
+// 2. 从 checkpoint 恢复，只处理新事件
+// 3. 定期保存 checkpoint（每 100 事件）
+
+export async function projectWithCheckpoint<S>(
+  store: EventStore,
+  projectionName: string,
+  initialState: S,
+  reducer: (state: S, event: StoredEvent) => S
+): Promise<S> {
+  // 1. 读取 checkpoint
+  const checkpoint = await store.loadProjection(projectionName)
+  let state = checkpoint?.stateJson ? JSON.parse(checkpoint.stateJson) : initialState
+  const fromEventId = checkpoint?.cursorEventId ?? 0
+  
+  // 2. 只处理新事件
+  const events = await store.readAll({ fromId: fromEventId + 1 })
+  for (const evt of events) {
+    state = reducer(state, evt)
+  }
+  
+  // 3. 保存新 checkpoint
+  await store.saveProjection({
+    name: projectionName,
+    cursorEventId: events[events.length - 1]?.id ?? fromEventId,
+    stateJson: JSON.stringify(state)
+  })
+  
+  return state
+}
+```
+
+### 6. 新增事件类型（1h）
+
+```typescript
+// 修改 src/domain/events.ts
+// 新增 AgentPlanPosted 事件
+export const AgentPlanPostedPayloadSchema = z.object({
+  authorActorId: z.string().min(1),
+  taskId: z.string().min(1),
+  planId: z.string().min(1),
+  planText: z.string().min(1),
+  estimatedSteps: z.number().int().optional()
+})
+
+// 新增 UserFeedbackPosted 事件
+export const UserFeedbackPostedPayloadSchema = z.object({
+  authorActorId: z.string().min(1),
+  taskId: z.string().min(1),
+  targetId: z.string().min(1),  // planId or proposalId
+  targetType: z.enum(['plan', 'patch']),
+  feedbackText: z.string().min(1),
+  sentiment: z.enum(['accept', 'reject', 'request_changes']).optional()
+})
+
+// 更新 DomainEventSchema union
+```
+
+### 7. 更新测试（2-3h）
+
+```typescript
+// 新增 tests/llmClient.test.ts（使用 mock）
+// 新增 tests/contextBuilder.test.ts
+// 新增 tests/agentRuntime.test.ts
+// 更新 tests/projector.test.ts（测试 checkpoint）
+```
+
+---
+
+### M1 验收测试
+
+```bash
+# 1. 启动 Agent Runtime（手动模式）
+npm run dev -- agent start
+
+# 2. 创建任务
+npm run dev -- task create "改进导论" --file chapters/01_intro.tex
+
+# 3. 手动触发 Agent 处理
+npm run dev -- agent handle <taskId>
+# 预期：Agent 调用 LLM，输出计划（暂不写事件）
+
+# 4. 验证投影 checkpoint
+npm run dev -- task list
+# 预期：使用缓存的投影，性能提升
+
+# 5. 验证事件日志
+npm run dev -- log replay
+# 预期：无新事件（M1 只测试基础设施）
 ```

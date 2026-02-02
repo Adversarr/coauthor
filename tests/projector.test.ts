@@ -60,7 +60,7 @@ describe('Projection', () => {
       payload: { taskId: 't2', title: 'T2', intent: '', priority: 'foreground' as const, authorActorId: DEFAULT_USER_ACTOR_ID } 
     }])
 
-    const s1 = await runProjection({
+    const s1 = runProjection({
       store,
       name: 'tasks',
       defaultState: defaultTasksProjectionState,
@@ -68,7 +68,7 @@ describe('Projection', () => {
     })
     expect(s1.tasks.map((t) => t.taskId).sort()).toEqual(['t1', 't2'])
 
-    const s2 = await runProjection({
+    const s2 = runProjection({
       store,
       name: 'tasks',
       defaultState: defaultTasksProjectionState,

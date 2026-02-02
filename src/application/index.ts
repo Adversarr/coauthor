@@ -7,3 +7,4 @@
 export * from './taskService.js'
 export * from './patchService.js'
 export * from './eventService.js'
+export * from './contextBuilder.js'

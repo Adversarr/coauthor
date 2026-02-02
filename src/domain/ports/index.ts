@@ -5,3 +5,4 @@
  */
 
 export * from './eventStore.js'
+export * from './llmClient.js'

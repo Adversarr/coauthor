@@ -2,9 +2,24 @@
 // Handles unified diff application with base revision checking
 
 import { nanoid } from 'nanoid'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { EventStore } from '../domain/index.js'
 import { DEFAULT_USER_ACTOR_ID } from '../domain/actor.js'
 import { applyUnifiedPatchToFile } from '../patch/applyUnifiedPatch.js'
+
+function computeRevision(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16)
+}
+
+function tryReadText(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
 
 // ============================================================================
 // Types
@@ -41,6 +56,12 @@ export class PatchService {
    */
   proposePatch(taskId: string, targetPath: string, patchText: string, baseRevision?: string): { proposalId: string } {
     const proposalId = `patch_${nanoid(12)}`
+    const inferredBaseRevision =
+      baseRevision ??
+      (() => {
+        const text = tryReadText(resolve(this.#baseDir, targetPath))
+        return text === null ? undefined : computeRevision(text)
+      })()
     this.#store.append(taskId, [
       {
         type: 'PatchProposed',
@@ -49,7 +70,7 @@ export class PatchService {
           proposalId,
           targetPath,
           patchText,
-          baseRevision,
+          baseRevision: inferredBaseRevision,
           authorActorId: this.#currentActorId
         }
       }
@@ -108,15 +129,36 @@ export class PatchService {
       throw new Error(`未找到 patch proposal：${proposalIdOrLatest}`)
     }
 
-    // Accept the patch
+    if (proposal.baseRevision) {
+      const currentText = tryReadText(resolve(this.#baseDir, proposal.targetPath))
+      const currentRevision = currentText === null ? undefined : computeRevision(currentText)
+      if (currentRevision !== proposal.baseRevision) {
+        const reason = `baseRevision 不匹配：expected=${proposal.baseRevision} actual=${currentRevision ?? 'missing'}`
+        this.rejectPatch(taskId, proposal.proposalId, reason)
+        this.#store.append(taskId, [
+          {
+            type: 'TaskNeedsRebase',
+            payload: {
+              taskId,
+              affectedPaths: [proposal.targetPath],
+              reason,
+              authorActorId: this.#currentActorId
+            }
+          }
+        ])
+        throw new Error(reason)
+      }
+    }
+
     this.acceptPatch(taskId, proposal.proposalId)
 
     // Apply the patch to file
-    const { absolutePath } = await applyUnifiedPatchToFile({
+    const { absolutePath, updatedText } = await applyUnifiedPatchToFile({
       baseDir: this.#baseDir,
       targetPath: proposal.targetPath,
       patchText: proposal.patchText
     })
+    const newRevision = computeRevision(updatedText)
 
     // Record the application
     this.#store.append(taskId, [
@@ -128,6 +170,7 @@ export class PatchService {
           targetPath: proposal.targetPath,
           patchText: proposal.patchText,
           appliedAt: new Date().toISOString(),
+          newRevision,
           authorActorId: this.#currentActorId
         }
       }

@@ -98,6 +98,34 @@ export async function runCli(opts: {
         }
       }
     )
+    .command(
+      'agent <action> [taskId]',
+      'Agent 相关操作',
+      (y: Argv) =>
+        y
+          .positional('action', { type: 'string', choices: ['start', 'stop', 'handle'] as const, demandOption: true })
+          .positional('taskId', { type: 'string' }),
+      async (args: Arguments) => {
+        const action = String(args.action)
+        if (action === 'start') {
+          app.agentRuntime.start()
+          io.stdout('agent started\n')
+          return
+        }
+        if (action === 'stop') {
+          app.agentRuntime.stop()
+          io.stdout('agent stopped\n')
+          return
+        }
+        if (action === 'handle') {
+          const taskId = String(args.taskId ?? '')
+          if (!taskId) throw new Error('agent handle 需要提供 taskId')
+          const res = await app.agentRuntime.handleTask(taskId)
+          io.stdout(`${res.planId}\n`)
+          io.stdout(`${JSON.stringify(res.plan, null, 2)}\n`)
+        }
+      }
+    )
     .command('ui', '启动 Ink UI', () => {}, async () => {
       const { runMainTui } = await import('../tui/run.js')
       await runMainTui(app)
