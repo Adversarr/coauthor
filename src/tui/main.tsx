@@ -13,6 +13,7 @@ export function MainTui(props: Props) {
   const [status, setStatus] = useState<string>('')
   const [tasks, setTasks] = useState<Array<{ taskId: string; title: string }>>([])
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const [replayOutput, setReplayOutput] = useState<string[]>([])
 
   const refresh = async () => {
     const result = await app.taskService.listTasks()
@@ -71,9 +72,7 @@ export function MainTui(props: Props) {
         const rest = commandLine.slice('log replay'.length).trim()
         const streamId = rest ? rest : undefined
         const events = app.eventService.replayEvents(streamId)
-        for (const e of events) {
-          console.log(`${e.id} ${e.streamId}#${e.seq} ${e.type} ${JSON.stringify(e.payload)}`)
-        }
+        setReplayOutput(events.map((e) => `${e.id} ${e.streamId}#${e.seq} ${e.type} ${JSON.stringify(e.payload)}`))
         setStatus(streamId ? `replayed ${events.length} events for ${streamId}` : `replayed ${events.length} events`)
         return
       }
@@ -115,6 +114,15 @@ export function MainTui(props: Props) {
           </Box>
         ))}
       </Box>
+      {replayOutput.length > 0 ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold>Event Log</Text>
+          {replayOutput.slice(-10).map((line, i) => (
+            <Text key={i} dimColor>{line}</Text>
+          ))}
+          {replayOutput.length > 10 ? <Text dimColor>... ({replayOutput.length - 10} more)</Text> : null}
+        </Box>
+      ) : null}
       {status ? (
         <Box marginBottom={1}>
           <Text color="yellow">{status}</Text>

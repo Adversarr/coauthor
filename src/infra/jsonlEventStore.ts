@@ -13,6 +13,19 @@ type JsonlEventRow = {
   createdAt: string
 }
 
+// Type-safe helper to construct StoredEvent from DomainEvent
+// This avoids `as any` by using type intersection properly
+function toStoredEvent(
+  meta: { id: number; streamId: string; seq: number; createdAt: string },
+  evt: DomainEvent
+): StoredEvent {
+  return {
+    ...meta,
+    type: evt.type,
+    payload: evt.payload
+  } as StoredEvent
+}
+
 // JSONL row format for projections
 type JsonlProjectionRow = {
   name: string
@@ -61,14 +74,12 @@ export class JsonlEventStore implements EventStore {
         createdAt: now
       }
       appendFileSync(this.#eventsPath, `${JSON.stringify(row)}\n`)
-      stored.push({
-        id: row.id,
-        streamId: row.streamId,
-        seq: row.seq,
-        type: evt.type,
-        payload: evt.payload as any,
-        createdAt: row.createdAt
-      })
+      stored.push(
+        toStoredEvent(
+          { id: row.id, streamId: row.streamId, seq: row.seq, createdAt: row.createdAt },
+          evt
+        )
+      )
     }
 
     return stored
@@ -138,13 +149,9 @@ export class JsonlEventStore implements EventStore {
 
   #rowToStoredEvent(row: JsonlEventRow): StoredEvent {
     const parsed = parseDomainEvent({ type: row.type, payload: row.payload })
-    return {
-      id: row.id,
-      streamId: row.streamId,
-      seq: row.seq,
-      type: parsed.type,
-      payload: parsed.payload as any,
-      createdAt: row.createdAt
-    }
+    return toStoredEvent(
+      { id: row.id, streamId: row.streamId, seq: row.seq, createdAt: row.createdAt },
+      parsed
+    )
   }
 }

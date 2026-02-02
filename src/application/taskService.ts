@@ -71,7 +71,7 @@ export class TaskService {
 
   // Build tasks projection from events
   listTasks(): TasksProjectionState {
-    const { state } = this.#store.getProjection<TasksProjectionState>('tasks_v2', {
+    const { state } = this.#store.getProjection<TasksProjectionState>('tasks', {
       tasks: [],
       currentTaskId: null
     })

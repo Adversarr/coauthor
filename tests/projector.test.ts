@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 import { JsonlEventStore } from '../src/infra/jsonlEventStore.js'
 import { runProjection } from '../src/application/projector.js'
 import { DEFAULT_USER_ACTOR_ID } from '../src/domain/actor.js'
+import type { StoredEvent } from '../src/domain/events.js'
 
 // Use TaskService's projection instead of the deprecated one
 type DeprecatedTasksProjectionState = {
@@ -21,7 +22,7 @@ const defaultTasksProjectionState: DeprecatedTasksProjectionState = {
   currentTaskId: null
 }
 
-function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: any): DeprecatedTasksProjectionState {
+function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: StoredEvent): DeprecatedTasksProjectionState {
   switch (event.type) {
     case 'TaskCreated': {
       if (state.tasks.some((t) => t.taskId === event.payload.taskId)) return state
