@@ -11,7 +11,7 @@
 |------|------|
 | **测试通过率** | 7/7 (100%) ✅ |
 | **TypeScript 编译** | 0 错误 ✅ |
-| **ESLint** | 0 错误，6 警告 ⚠️ |
+| **ESLint** | 0 错误，2 警告 ⚠️ |
 | **代码行数** | ~1200 行 TypeScript |
 | **架构合规性** | 高 ✅ |
 | **文档一致性** | 完全一致 ✅ |
@@ -26,6 +26,9 @@
 | 未使用的 `StoredEvent` import | src/application/patchService.ts | ✅ 已移除 |
 | `core/` 目录 (旧代码) | 已迁移到 domain/application | ✅ 已完成 |
 | `operations.ts` (deprecated) | 已迁移到 services | ✅ 已完成 |
+| `sqliteEventStore.ts` | src/infra/ | ✅ 已移除 (Node 不稳定) |
+| `sqlite.ts` | src/infra/ | ✅ 已移除 |
+| SQLite 相关引用 | src/app/createApp.ts | ✅ 已清理 |
 
 ---
 
@@ -35,7 +38,7 @@
 
 | # | 问题 | 影响 | 位置 | 修复方案 |
 |---|------|------|------|---------|
-| TD-1 | `as any` 类型逃逸 | 类型安全 | infra/*.ts (6处) | 创建专用类型 |
+| TD-1 | `as any` 类型逃逸 | 类型安全 | infra/jsonlEventStore.ts (2处) | 创建专用类型 |
 | TD-2 | TUI 使用 console.log | 输出混乱 | src/tui/main.tsx:75 | 用状态展示替换 |
 
 ### 中优先级 (P1) - V1 期间解决
@@ -44,7 +47,7 @@
 |---|------|------|------|---------|
 | TD-3 | 投影每次全量重建 | 性能（>10k事件时） | taskService.ts:80 | 使用 checkpoint |
 | TD-4 | 缺少并发控制 | 多进程竞争 | EventStore | 添加乐观锁 |
-| TD-5 | SQLite 实验性警告 | 兼容性 | node:sqlite | 监控 Node.js 稳定化 |
+| TD-5 | node:sqlite 实验性警告 | ✅ 已解决 | （已移除） | 已移除 SQLite 后端 |
 
 ### 低优先级 (P2) - 技术改进
 
@@ -60,15 +63,10 @@
 ```
 src/infra/jsonlEventStore.ts:69   - payload: evt.payload as any
 src/infra/jsonlEventStore.ts:146  - payload: parsed.payload as any
-src/infra/sqliteEventStore.ts:56  - (readSeqStmt.get(streamId) as any)?.max_seq
-src/infra/sqliteEventStore.ts:62  - insertStmt.get(...) as any
-src/infra/sqliteEventStore.ts:69  - payload: evt.payload as any
-src/infra/sqliteEventStore.ts:122 - payload: parsed.payload as any
 ```
 
 **根因分析：** 
 - `DomainEvent` 是 discriminated union，但在构造 `StoredEvent` 时 TypeScript 无法推断具体类型
-- Node.js `DatabaseSync` 的 `get()` 返回 `unknown`，需要类型断言
 
 **建议修复（V1）：**
 ```typescript
@@ -76,10 +74,6 @@ src/infra/sqliteEventStore.ts:122 - payload: parsed.payload as any
 function asStoredEvent(base: { id: number; streamId: string; seq: number; createdAt: string }, evt: DomainEvent): StoredEvent {
   return { ...base, type: evt.type, payload: evt.payload } as StoredEvent
 }
-
-// 方案2: 定义 SQLite 行类型
-type MaxSeqRow = { max_seq: number }
-const currentSeq = (readSeqStmt.get(streamId) as MaxSeqRow | undefined)?.max_seq ?? 0
 ```
 
 ---
@@ -200,7 +194,13 @@ function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: Sto
 
 ## 📝 审计记录
 
-### 2026-02-02 审计
+### 2026-02-02 审计（更新）
+
+**SQLite 移除：**
+- 移除 `sqliteEventStore.ts` 和 `sqlite.ts`（Node 中不稳定）✅
+- 清理 `createApp.ts` 中的 SQLite 引用 ✅
+- 修复 ESLint `prefer-const` 错误 ✅
+- 所有测试通过 ✅
 
 **验证结果：**
 - ARCHITECTURE.md 已包含 `claim_task` capability ✅
@@ -210,10 +210,11 @@ function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: Sto
 
 **清理的代码：**
 - 移除 3 个 deprecated legacy types
-- 修复 1 个未使用 import
+- 移除 SQLite EventStore 实现
+- 修复 2 个 ESLint 错误（prefer-const）
 
 **确认的技术债务：**
-- 6 处 `as any` 类型逃逸（ESLint 警告）
+- 2 处 `as any` 类型逃逸（ESLint 警告，已从 6 处减少）
 - 1 处 TUI console.log 问题
 - 1 处测试文件 any 类型
 - 投影全量重建性能问题

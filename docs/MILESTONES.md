@@ -32,7 +32,6 @@ M0 ────→ M1 ────→ M2
 ### 完成标准
 
 - [x] EventStore 接口定义（Port）
-- [x] SqliteEventStore 实现
 - [x] JsonlEventStore 实现
 - [x] 基本 Projection（TasksProjection, ThreadProjection）
 - [x] Projector 增量更新机制
@@ -51,9 +50,8 @@ src/
 │   ├── projections.ts     # Projection reducers
 │   └── projector.ts       # Projection runner
 ├── infra/
-│   ├── sqliteEventStore.ts
 │   ├── jsonlEventStore.ts
-│   └── sqlite.ts
+│   └── (其他适配器)
 ├── cli/
 │   ├── run.ts
 │   └── io.ts

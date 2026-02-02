@@ -21,9 +21,8 @@
 **状态：** 完成
 
 #### 事件存储实现
-- **架构：** 接口化设计（Port-Adapter），支持多后端。
-- **默认实现：** [src/infra/jsonlEventStore.ts](src/infra/jsonlEventStore.ts) 使用 JSONL 格式，便于开发过程中的人工查阅。
-- **可选实现：** [src/infra/sqliteEventStore.ts](src/infra/sqliteEventStore.ts) 使用 Node.js 原生 `DatabaseSync`。
+- **架构：** 接口化设计（Port-Adapter），后端可替换。
+- **当前实现：** [src/infra/jsonlEventStore.ts](src/infra/jsonlEventStore.ts) 使用 JSONL 格式，便于开发过程中的人工查阅。
 - **模式：**
   - `events`：包含 `id`, `streamId`, `seq`, `type`, `payload`, `createdAt`。
   - `projections`：包含 `name`, `cursorEventId`, `stateJson`。
@@ -132,7 +131,6 @@ graph TB
     subgraph Infrastructure["基础设施层 (Infrastructure)"]
         Store["EventStore Interface<br/>(src/domain/ports/eventStore.ts)"]
         JSONL["JSONL Adapter<br/>(infra/jsonlEventStore.ts)"]
-        SQL["SQLite Adapter<br/>(infra/sqliteEventStore.ts)"]
         Patch["补丁引擎<br/>(src/patch/applyUnifiedPatch.ts)"]
         FS["文件系统 I/O"]
     end
@@ -143,14 +141,12 @@ graph TB
     UC --> Proj
     UC --> Store
     Store -.-> JSONL
-    Store -.-> SQL
     UC --> Patch
     Projector --> Events
     Projector --> Store
     Proj --> Events
     Patch --> FS
     JSONL --> FS
-    SQL --> FS
 ```
 
 #### 各层职责与实现映射
@@ -171,7 +167,7 @@ graph TB
     - `TaskService`, `PatchService`, `EventService`: 业务用例封装
     - `projector.ts`: 投影运行器
 - **关键特性：**
-  - 持久化保证（SQLite 版支持 ACID 事务；JSONL 版支持原子追加）
+  - 持久化保证（JSONL 版支持原子追加；后端可替换以获得更强事务/并发能力）
   - 不包含 UI 逻辑或基础设施细节
 
 **3. 领域层 (Domain)**
@@ -194,7 +190,6 @@ graph TB
 - **职责：** 提供具体的技术实现，对核心层屏蔽外部依赖。
 - **实现：**
   - `src/infra/jsonlEventStore.ts`: 默认的持久化实现，易于本地调试。
-  - `src/infra/sqliteEventStore.ts`: 生产级的同步 SQLite 实现。
   - `src/patch/applyUnifiedPatch.ts`: 基于 `diff` 库的文本补丁逻辑。
 - **关键特性：**
   - 核心逻辑完全解耦驱动细节。
@@ -222,7 +217,7 @@ M0 实现了 Billboard 的核心组件：
 ```mermaid
 graph LR
     A[命令输入] --> B[EventStore.append]
-    B --> C[SQLite 事件日志]
+    B --> C[JSONL 事件日志]
     C --> D[Projector]
     D --> E[TasksProjection]
     D --> F[ThreadProjection]
@@ -292,7 +287,7 @@ overleafWebhook.on('comment', (comment) => {
 
 **基础设施层可替换：**
 ```typescript
-// 当前: 使用 JsonlEventStore (默认) 或 SqliteEventStore
+// 当前: 使用 JsonlEventStore
 const store = application.store;
 
 // 未来: PostgreSQL EventStore
@@ -351,8 +346,8 @@ sequenceDiagram
 ### 关键设计决策与权衡
 
 #### 1. 同步 vs 异步
-**M0 选择：** 同步 SQLite + 同步文件 I/O
-- **理由：** 简化实现，保证事务一致性
+**M0 选择：** 同步 JSONL + 同步文件 I/O
+- **理由：** 简化实现；追加写入具备足够的原子性与可回放性
 - **权衡：** 不支持高并发（M0 单用户 CLI 无需考虑）
 - **未来：** M1+ 引入 RxJS 流支持异步 Agent 运行时
 
@@ -524,13 +519,13 @@ M0 的基础对于实现 roadmap 中的完整愿景至关重要：
 
 ## 附录：架构决策记录 (ADR)
 
-### ADR-001: 选择 SQLite 作为事件存储
-- **决策：** 使用 Node.js 原生 `DatabaseSync` (SQLite)
+### ADR-001: 选择 JSONL 作为事件存储（当前实现）
+- **决策：** 使用 JSONL 作为追加式事件日志与投影 checkpoint 存储（`.coauthor/events.jsonl` / `.coauthor/projections.jsonl`）。
 - **理由：** 
-  - 零配置部署
-  - ACID 事务保证
-  - 足够性能（单用户 < 100k 事件）
-- **权衡：** 不支持分布式，但 M0 不需要
+  - 零配置部署，便于调试与回放
+  - 满足 M0 单用户事件溯源的可靠性需求
+  - 避免依赖 Node.js 原生 `node:sqlite` 的实验性特性带来的兼容风险
+- **权衡：** 不提供数据库级事务与并发隔离；如需更强一致性与多进程并发，后续可在 EventStore 端口下替换为稳定数据库后端
 
 ### ADR-002: 事件即审计日志，不做软删除
 - **决策：** 事件永不删除，只追加
@@ -563,4 +558,3 @@ M0 的基础对于实现 roadmap 中的完整愿景至关重要：
   - 易于测试
   - 满足核心开发者需求
 - **权衡：** 用户体验不如 GUI，但符合 V0 定位
-

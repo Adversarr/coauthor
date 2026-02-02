@@ -119,8 +119,7 @@ User 与 LLM Agent 都是 **Actor**。区别仅在于：
 │  │                  Infrastructure Layer                    │   │
 │  │                                                          │   │
 │  │  EventStore Implementations:                             │   │
-│  │  - SqliteEventStore: 生产级 SQLite 实现                  │
-│  │  - JsonlEventStore: 开发/调试用 JSONL 实现               │
+│  │  - JsonlEventStore: 当前默认的 JSONL 实现                │
 │  │                                                          │   │
 │  │  Other Adapters:                                         │
 │  │  - FileWatcher: 文件变更监控                             │
@@ -385,7 +384,6 @@ src/
 │       └── driftDetector.ts
 │
 ├── infrastructure/          # 基础设施层
-│   ├── sqliteEventStore.ts
 │   ├── jsonlEventStore.ts
 │   ├── fileWatcher.ts
 │   ├── patchEngine.ts
@@ -435,7 +433,7 @@ Interfaces → Application → Domain ← Infrastructure
 | Language | TypeScript 5.x (Strict) |
 | Schema Validation | Zod |
 | Reactive Streams | RxJS 7.x |
-| Event Store | SQLite (better-sqlite3 or node:sqlite) / JSONL |
+| Event Store | JSONL（当前实现） |
 | CLI | Yargs + Ink (可选) |
 | DI | 手动注入 / tsyringe (可选) |
 | Testing | Vitest |

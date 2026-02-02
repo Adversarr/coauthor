@@ -1,8 +1,6 @@
 import { join } from 'node:path'
 import type { EventStore } from '../domain/ports/eventStore.js'
 import { JsonlEventStore } from '../infra/jsonlEventStore.js'
-import { openSqliteDb } from '../infra/sqlite.js'
-import { SqliteEventStore } from '../infra/sqliteEventStore.js'
 import { TaskService, PatchService, EventService } from '../application/index.js'
 import { DEFAULT_USER_ACTOR_ID } from '../domain/actor.js'
 
@@ -20,27 +18,16 @@ export type App = {
 // Create app: initialize EventStore + wire up services
 export function createApp(opts: {
   baseDir: string
-  dbPath?: string
   eventsPath?: string
   projectionsPath?: string
-  store?: 'jsonl' | 'sqlite'
   currentActorId?: string
 }): App {
   const baseDir = opts.baseDir
   const currentActorId = opts.currentActorId ?? DEFAULT_USER_ACTOR_ID
 
-  let store: EventStore
-  let storePath: string
-
-  if (opts.store === 'sqlite') {
-    const dbPath = opts.dbPath ?? join(baseDir, '.coauthor', 'coauthor.db')
-    store = new SqliteEventStore(openSqliteDb(dbPath))
-    storePath = dbPath
-  } else {
-    const eventsPath = opts.eventsPath ?? join(baseDir, '.coauthor', 'events.jsonl')
-    store = new JsonlEventStore({ eventsPath })
-    storePath = eventsPath
-  }
+  const eventsPath = opts.eventsPath ?? join(baseDir, '.coauthor', 'events.jsonl')
+  const store = new JsonlEventStore({ eventsPath, projectionsPath: opts.projectionsPath })
+  const storePath = eventsPath
 
   store.ensureSchema()
 
@@ -51,4 +38,3 @@ export function createApp(opts: {
 
   return { baseDir, storePath, store, taskService, patchService, eventService }
 }
-

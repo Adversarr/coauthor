@@ -2,7 +2,7 @@
  * Domain Layer - Ports
  *
  * This module defines the EventStore port interface.
- * Infrastructure layer provides implementations (SqliteEventStore, JsonlEventStore).
+ * Infrastructure layer provides implementations.
  */
 
 import type { DomainEvent, StoredEvent } from '../events.js'
@@ -11,7 +11,7 @@ import type { DomainEvent, StoredEvent } from '../events.js'
  * EventStore port interface.
  *
  * All event storage implementations must implement this interface.
- * This allows swapping between SQLite, JSONL, or other backends.
+ * This allows swapping between different backends.
  */
 export interface EventStore {
   /**

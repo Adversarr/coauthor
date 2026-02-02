@@ -1,5 +1,7 @@
 # Claude Code设计架构
 
+> 注：本文为早期草案，包含 SQLite 等设想；当前仓库已移除 `node:sqlite` / SQLite 后端，事件存储落地为 JSONL。
+
 ## 🧑‍💻 User
 
 vibe coding (例如cursor、claude code）一般的实现架构是什么样的。

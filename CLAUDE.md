@@ -99,8 +99,6 @@ src/
 │   └── projections.ts    # Projection reducers for read models
 ├── infra/                # Infrastructure adapters
 │   ├── jsonlEventStore.ts # JSONL-based event store
-│   ├── sqliteEventStore.ts # SQLite-based event store
-│   ├── sqlite.ts         # SQLite database helper
 │   └── logger.ts         # Pino logger
 ├── cli/                  # CLI interface
 │   ├── run.ts            # CLI command parser (yargs)
@@ -117,7 +115,7 @@ docs/                     # Documentation
 ├── DOMAIN.md             # Domain model spec
 └── MILESTONES.md         # Milestone planning
 .coauthor/                # Database directory
-└── events.jsonl          # Event store (or coauthor.db for SQLite)
+└── events.jsonl          # Event store
 ```
 
 ### Core Concepts
@@ -129,7 +127,7 @@ docs/                     # Documentation
 
 **Event Sourcing:**
 - All state changes are captured as events in an append-only log
-- Events can be stored in JSONL or SQLite
+- Events are stored in JSONL
 - Events have `streamId`, `seq`, `type`, `payload`, `createdAt`
 - Read models are built via projections that fold events into state
 
@@ -147,7 +145,7 @@ docs/                     # Documentation
 **Hexagonal Architecture Layers:**
 1. **Domain** (`src/domain/`): Types, event schemas, port interfaces. No external dependencies.
 2. **Application** (`src/application/`): Use case services (TaskService, PatchService, EventService).
-3. **Infrastructure** (`src/infra/`): EventStore adapters (JSONL, SQLite), logger.
+3. **Infrastructure** (`src/infra/`): EventStore adapter (JSONL), logger.
 4. **Interface** (`src/cli/`, `src/tui/`): CLI and TUI adapters.
 
 ## Important Patterns
@@ -164,9 +162,9 @@ docs/                     # Documentation
 - Applied patches append `PatchApplied` event
 
 **Database:**
-- SQLite stored in `.coauthor/coauthor.db`
-- Schema auto-created via `ensureSchema()`
-- Events table is append-only
+- JSONL stored in `.coauthor/events.jsonl` (and projections in `.coauthor/projections.jsonl`)
+- Files auto-created via `ensureSchema()`
+- Event log is append-only
 
 ## Development Workflow
 

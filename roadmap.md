@@ -281,7 +281,8 @@ my-thesis/
 ├── bib/
 │   └── refs.bib
 └── .coauthor/              # CoAuthor 工作目录
-    ├── coauthor.db         # Event Store
+    ├── events.jsonl        # Event Store
+    ├── projections.jsonl   # Projection checkpoints
     └── patches/            # Patch 历史
 ```
 
