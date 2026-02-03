@@ -20,14 +20,14 @@ describe('EventStore', () => {
       payload: { taskId: 't1', title: 'hello', intent: '', priority: 'foreground' as const, agentId: DEFAULT_AGENT_ACTOR_ID, authorActorId: DEFAULT_USER_ACTOR_ID } 
     }])
     store.append('t1', [{ 
-      type: 'ThreadOpened', 
-      payload: { taskId: 't1', authorActorId: DEFAULT_USER_ACTOR_ID } 
+      type: 'UserFeedbackPosted', 
+      payload: { taskId: 't1', feedback: 'looks good', authorActorId: DEFAULT_USER_ACTOR_ID } 
     }])
 
     const events = store.readStream('t1', 1)
     expect(events.map((e) => e.seq)).toEqual([1, 2])
     expect(events[0]?.type).toBe('TaskCreated')
-    expect(events[1]?.type).toBe('ThreadOpened')
+    expect(events[1]?.type).toBe('UserFeedbackPosted')
 
     rmSync(dir, { recursive: true, force: true })
   })

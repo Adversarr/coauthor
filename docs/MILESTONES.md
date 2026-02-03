@@ -33,9 +33,9 @@ M0 ────→ M1 ────→ M2
 
 - [x] EventStore 接口定义（Port）
 - [x] JsonlEventStore 实现
-- [x] 基本 Projection（TasksProjection, ThreadProjection）
+- [x] 基本 Projection（TasksProjection）
 - [x] Projector 增量更新机制
-- [x] CLI 基础命令：task create/list, thread open, patch propose/accept
+- [x] CLI 基础命令：task create/list, patch propose/accept
 - [x] Patch 应用到文件（applyUnifiedPatch）
 - [x] 日志回放（log replay）
 
@@ -56,7 +56,6 @@ src/
 │   ├── patchService.ts    # Patch 用例封装 ✅
 │   ├── eventService.ts    # Event 回放服务 ✅
 │   ├── projector.ts       # Projection runner ✅
-│   └── threadProjection.ts # Thread 投影 ✅
 ├── infra/
 │   └── jsonlEventStore.ts # JSONL 实现 ✅
 ├── cli/
@@ -181,38 +180,31 @@ npm run dev -- patch accept <taskId> latest
 
 ---
 
-## M3：Drift 检测与 Rebase
+## M3：冲突检测与处理（已简化）
 
 > **目标**：用户在 Agent 工作期间手动改文件，系统不会盲目覆盖
 
-### 完成标准
+### V0 设计决策
 
-- [ ] **FileWatcher 实现**
-  - 监控 `*.tex`, `OUTLINE.md`, `assets/`
-  - 产生 `ArtifactChanged` 事件
+采用 Claude Code 风格的 **JIT 校验模式**：
 
-- [ ] **DriftDetector 服务**
-  - 对比 `task.baseRevisions` 与当前文件版本
-  - 检测到 drift 时标记任务
+- ✅ **Apply 时校验**：`patch apply` 检查 `baseRevision` 是否匹配当前文件
+- ✅ **失败时发出 `PatchConflicted`**：提示用户文件已变更，需重新生成 patch
+- ❌ **不使用 FileWatcher**：无后台文件监控
+- ❌ **不使用 DriftDetector**：无提前预警机制
 
-- [ ] **Rebase 机制**
-  - 产生 `TaskNeedsRebase` 事件
-  - Agent 自动 rebase（重新读取文件，重新生成 patch）
-  - 在 plan 中说明发生了 drift
+### 已完成（在 M1 中）
 
-- [ ] **Patch Apply 校验**
-  - Apply 前检查 baseRevision 是否匹配
-  - 不匹配则拒绝并提示
+- [x] **baseRevision 校验**：`PatchService.acceptAndApplyPatch()` 实现
+- [x] **PatchConflicted 事件**：版本不匹配时发出
+- [x] **验证**：`tests/patchConcurrency.test.ts`
 
-### 验收测试
+### V1+ 可选增强
 
-```bash
-# 创建任务
-npm run dev -- task create "改进这段" --file test.tex
-# 手动修改 test.tex
-# Agent 检测到 drift，重新生成 patch
-# Patch 基于最新版本
-```
+如需"提前预警"功能，可在 V1 中作为 feature flag 实现：
+- 后台 FileWatcher（chokidar）
+- 在 Agent 工作前对比 revision
+- 但不承担一致性职责，只做"早停/省 token"优化
 
 ---
 

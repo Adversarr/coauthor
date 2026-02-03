@@ -27,9 +27,10 @@ M1 阶段的目标是“不引入外部 LLM API 依赖，补齐系统底座”�
 **状态：** 完成  
 **实现：**
 - **Optimistic Locking**：`patch propose` 自动捕获 `baseRevision`。
-- **Rebase Policy**：`patch apply` 时严格校验文件版本。若版本不匹配（用户中途改了文件），拒绝 Apply 并抛出 `PatchRejected` / `TaskNeedsRebase`。
-- **Persistent Revision**：`FileWatcher` 实现了文件快照的持久化（`.coauthor/file-snapshot.json`），确保重启后不会误判文件漂移。
-- **验证**：`tests/patchConcurrency.test.ts` 和 `tests/fileWatcher.test.ts`。
+- **JIT 校验**：`patch apply` 时严格校验文件版本。若版本不匹配（用户中途改了文件），拒绝 Apply 并发出 `PatchConflicted` 事件。
+- **验证**：`tests/patchConcurrency.test.ts`。
+
+> **V0 简化说明**：移除了 FileWatcher 和 DriftDetector，采用 Claude Code 风格的"apply 时校验"模式。冲突检测在 apply 时 JIT 进行，失败时提示用户重试。
 
 ### ✅ 3) LLMClient 端口与 FakeLLM
 
@@ -64,8 +65,9 @@ M1 阶段的目标是“不引入外部 LLM API 依赖，补齐系统底座”�
     - 明确分离了 `AgentRuntime`（基础设施/调度器）与 `Agent`（业务逻辑）。
     - Runtime 只负责“怎么跑”，Agent 只负责“跑什么”。
 
-3.  **持久化增强**：
-    - 解决了 `FileWatcher` 在重启丢失基准版本的问题。
+3.  **V0 简化**：
+    - 移除 FileWatcher 和 DriftDetector（V1 可选功能）。
+    - 冲突检测简化为 JIT baseRevision 校验。
     - 优化了 Projections 的存储格式。
 
 ---

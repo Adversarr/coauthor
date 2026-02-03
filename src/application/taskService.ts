@@ -18,7 +18,7 @@ export type TaskView = {
   createdBy: string
   agentId: string
   priority: TaskPriority
-  status: 'open' | 'in_progress' | 'awaiting_review' | 'done' | 'blocked' | 'canceled'
+  status: 'open' | 'in_progress' | 'awaiting_review' | 'done' | 'canceled'
   artifactRefs?: ArtifactRef[]
   currentPlanId?: string
   pendingProposals: string[]
@@ -29,7 +29,6 @@ export type TaskView = {
 
 export type TasksProjectionState = {
   tasks: TaskView[]
-  currentTaskId: string | null
 }
 
 // ============================================================================
@@ -78,7 +77,7 @@ export class TaskService {
     return runProjection<TasksProjectionState>({
       store: this.#store,
       name: 'tasks',
-      defaultState: { tasks: [], currentTaskId: null },
+      defaultState: { tasks: [] },
       reduce: (state, event) => this.#reduceTasksProjection(state, event)
     })
   }
@@ -87,19 +86,6 @@ export class TaskService {
   getTask(taskId: string): TaskView | null {
     const state = this.listTasks()
     return state.tasks.find(t => t.taskId === taskId) ?? null
-  }
-
-  // Set current task (open thread)
-  openThread(taskId: string): void {
-    this.#store.append(taskId, [
-      {
-        type: 'ThreadOpened',
-        payload: {
-          taskId,
-          authorActorId: this.#currentActorId
-        }
-      }
-    ])
   }
 
   /**
@@ -163,10 +149,6 @@ export class TaskService {
           createdAt: event.createdAt,
           updatedAt: event.createdAt
         })
-        return state
-      }
-      case 'ThreadOpened': {
-        state.currentTaskId = event.payload.taskId
         return state
       }
       case 'TaskStarted': {
@@ -240,14 +222,6 @@ export class TaskService {
         if (idx === -1) return state
         const task = tasks[idx]!
         task.status = 'canceled'
-        task.updatedAt = event.createdAt
-        return state
-      }
-      case 'TaskBlocked': {
-        const idx = findTaskIndex(event.payload.taskId)
-        if (idx === -1) return state
-        const task = tasks[idx]!
-        task.status = 'blocked'
         task.updatedAt = event.createdAt
         return state
       }

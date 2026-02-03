@@ -55,24 +55,10 @@ export async function runCli(opts: {
         if (action === 'list') {
           const state = app.taskService.listTasks()
           for (const t of state.tasks) {
-            const current = t.taskId === state.currentTaskId ? '*' : ' '
-            io.stdout(`${current} ${t.taskId} ${t.title}\n`)
+            io.stdout(`  ${t.taskId} ${t.title}\n`)
           }
           return
         }
-      }
-    )
-    .command(
-      'thread <action> <taskId>',
-      'thread 相关操作',
-      (y: Argv) =>
-        y
-          .positional('action', { type: 'string', choices: ['open'] as const, demandOption: true })
-          .positional('taskId', { type: 'string', demandOption: true }),
-      async (args: Arguments) => {
-        const taskId = String(args.taskId)
-        app.taskService.openThread(taskId)
-        io.stdout(`opened ${taskId}\n`)
       }
     )
     .command(
@@ -169,19 +155,6 @@ export async function runCli(opts: {
         const proposal = args.proposal ? String(args.proposal) : undefined
         app.taskService.postFeedback(taskId, text, proposal)
         io.stdout('posted\n')
-      }
-    )
-    .command(
-      'watch <action>',
-      '文件监听相关操作（轮询）',
-      (y: Argv) => y.positional('action', { type: 'string', choices: ['poll'] as const, demandOption: true }),
-      async (args: Arguments) => {
-        const action = String(args.action)
-        if (action === 'poll') {
-          const res = app.fileWatcher.pollOnce()
-          const drift = app.driftDetector.processNewEvents()
-          io.stdout(`changed=${res.changed} emitted=${drift.emitted}\n`)
-        }
       }
     )
     .command('ui', '启动 Ink UI', () => {}, async () => {

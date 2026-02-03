@@ -26,6 +26,7 @@ export const TaskCreatedPayloadSchema = z.object({
 
 export const TaskStartedPayloadSchema = z.object({
   taskId: z.string().min(1),
+  agentId: z.string().min(1),
   ...withAuthor
 })
 
@@ -44,13 +45,6 @@ export const TaskFailedPayloadSchema = z.object({
 export const TaskCanceledPayloadSchema = z.object({
   taskId: z.string().min(1),
   reason: z.string().optional(),
-  ...withAuthor
-})
-
-export const TaskBlockedPayloadSchema = z.object({
-  taskId: z.string().min(1),
-  reason: z.string().min(1),
-  questions: z.array(z.string()).optional(),
   ...withAuthor
 })
 
@@ -117,34 +111,15 @@ export const UserFeedbackPostedPayloadSchema = z.object({
   ...withAuthor
 })
 
-export const ThreadOpenedPayloadSchema = z.object({
-  taskId: z.string().min(1),
-  ...withAuthor
-})
-
 // ============================================================================
-// Artifact & File Events
+// Conflict Events
 // ============================================================================
 
-export const ArtifactChangedPayloadSchema = z.object({
-  path: z.string().min(1),
-  oldRevision: z.string().optional(),
-  newRevision: z.string().min(1),
-  changeKind: z.enum(['created', 'modified', 'deleted']),
-  ...withAuthor
-})
-
-export const TaskNeedsRebasePayloadSchema = z.object({
+export const PatchConflictedPayloadSchema = z.object({
   taskId: z.string().min(1),
-  affectedPaths: z.array(z.string().min(1)),
+  proposalId: z.string().min(1),
+  targetPath: z.string().min(1),
   reason: z.string().min(1),
-  ...withAuthor
-})
-
-export const TaskRebasedPayloadSchema = z.object({
-  taskId: z.string().min(1),
-  oldBaseRevisions: z.record(z.string()),
-  newBaseRevisions: z.record(z.string()),
   ...withAuthor
 })
 
@@ -159,20 +134,16 @@ export const EventTypeSchema = z.enum([
   'TaskCompleted',
   'TaskFailed',
   'TaskCanceled',
-  'TaskBlocked',
   // Plan & Patch
   'AgentPlanPosted',
   'PatchProposed',
   'PatchAccepted',
   'PatchRejected',
   'PatchApplied',
-  // Feedback & Interaction
+  // Feedback
   'UserFeedbackPosted',
-  'ThreadOpened',
-  // Artifact & File
-  'ArtifactChanged',
-  'TaskNeedsRebase',
-  'TaskRebased'
+  // Conflict
+  'PatchConflicted'
 ])
 
 export type EventType = z.infer<typeof EventTypeSchema>
@@ -186,21 +157,17 @@ export type TaskStartedPayload = z.infer<typeof TaskStartedPayloadSchema>
 export type TaskCompletedPayload = z.infer<typeof TaskCompletedPayloadSchema>
 export type TaskFailedPayload = z.infer<typeof TaskFailedPayloadSchema>
 export type TaskCanceledPayload = z.infer<typeof TaskCanceledPayloadSchema>
-export type TaskBlockedPayload = z.infer<typeof TaskBlockedPayloadSchema>
 export type AgentPlanPostedPayload = z.infer<typeof AgentPlanPostedPayloadSchema>
 export type PatchProposedPayload = z.infer<typeof PatchProposedPayloadSchema>
 export type PatchAcceptedPayload = z.infer<typeof PatchAcceptedPayloadSchema>
 export type PatchRejectedPayload = z.infer<typeof PatchRejectedPayloadSchema>
 export type PatchAppliedPayload = z.infer<typeof PatchAppliedPayloadSchema>
 export type UserFeedbackPostedPayload = z.infer<typeof UserFeedbackPostedPayloadSchema>
-export type ThreadOpenedPayload = z.infer<typeof ThreadOpenedPayloadSchema>
-export type ArtifactChangedPayload = z.infer<typeof ArtifactChangedPayloadSchema>
-export type TaskNeedsRebasePayload = z.infer<typeof TaskNeedsRebasePayloadSchema>
-export type TaskRebasedPayload = z.infer<typeof TaskRebasedPayloadSchema>
+export type PatchConflictedPayload = z.infer<typeof PatchConflictedPayloadSchema>
 export type Plan = z.infer<typeof PlanSchema>
 
 // ============================================================================
-// Domain Event Union - 17 event types (V0: no TaskRouted)
+// Domain Event Union - 12 event types (V0)
 // ============================================================================
 
 // Complete event union: all state transitions in the system
@@ -211,20 +178,16 @@ export type DomainEvent =
   | { type: 'TaskCompleted'; payload: TaskCompletedPayload }
   | { type: 'TaskFailed'; payload: TaskFailedPayload }
   | { type: 'TaskCanceled'; payload: TaskCanceledPayload }
-  | { type: 'TaskBlocked'; payload: TaskBlockedPayload }
   // Plan & Patch
   | { type: 'AgentPlanPosted'; payload: AgentPlanPostedPayload }
   | { type: 'PatchProposed'; payload: PatchProposedPayload }
   | { type: 'PatchAccepted'; payload: PatchAcceptedPayload }
   | { type: 'PatchRejected'; payload: PatchRejectedPayload }
   | { type: 'PatchApplied'; payload: PatchAppliedPayload }
-  // Feedback & Interaction
+  // Feedback
   | { type: 'UserFeedbackPosted'; payload: UserFeedbackPostedPayload }
-  | { type: 'ThreadOpened'; payload: ThreadOpenedPayload }
-  // Artifact & File
-  | { type: 'ArtifactChanged'; payload: ArtifactChangedPayload }
-  | { type: 'TaskNeedsRebase'; payload: TaskNeedsRebasePayload }
-  | { type: 'TaskRebased'; payload: TaskRebasedPayload }
+  // Conflict
+  | { type: 'PatchConflicted'; payload: PatchConflictedPayload }
 
 // ============================================================================
 // Stored Event (with persistence metadata)
@@ -249,20 +212,16 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('TaskCompleted'), payload: TaskCompletedPayloadSchema }),
   z.object({ type: z.literal('TaskFailed'), payload: TaskFailedPayloadSchema }),
   z.object({ type: z.literal('TaskCanceled'), payload: TaskCanceledPayloadSchema }),
-  z.object({ type: z.literal('TaskBlocked'), payload: TaskBlockedPayloadSchema }),
   // Plan & Patch
   z.object({ type: z.literal('AgentPlanPosted'), payload: AgentPlanPostedPayloadSchema }),
   z.object({ type: z.literal('PatchProposed'), payload: PatchProposedPayloadSchema }),
   z.object({ type: z.literal('PatchAccepted'), payload: PatchAcceptedPayloadSchema }),
   z.object({ type: z.literal('PatchRejected'), payload: PatchRejectedPayloadSchema }),
   z.object({ type: z.literal('PatchApplied'), payload: PatchAppliedPayloadSchema }),
-  // Feedback & Interaction
+  // Feedback
   z.object({ type: z.literal('UserFeedbackPosted'), payload: UserFeedbackPostedPayloadSchema }),
-  z.object({ type: z.literal('ThreadOpened'), payload: ThreadOpenedPayloadSchema }),
-  // Artifact & File
-  z.object({ type: z.literal('ArtifactChanged'), payload: ArtifactChangedPayloadSchema }),
-  z.object({ type: z.literal('TaskNeedsRebase'), payload: TaskNeedsRebasePayloadSchema }),
-  z.object({ type: z.literal('TaskRebased'), payload: TaskRebasedPayloadSchema })
+  // Conflict
+  z.object({ type: z.literal('PatchConflicted'), payload: PatchConflictedPayloadSchema })
 ])
 
 // ============================================================================

@@ -131,11 +131,11 @@ docs/                     # Documentation
 - Events have `streamId`, `seq`, `type`, `payload`, `createdAt`
 - Read models are built via projections that fold events into state
 
-**Domain Events (18 types):**
-- Task lifecycle: `TaskCreated`, `TaskClaimed`, `TaskStarted`, `TaskCompleted`, `TaskFailed`, `TaskCanceled`, `TaskBlocked`
+**Domain Events (12 types, V0):**
+- Task lifecycle: `TaskCreated`, `TaskStarted`, `TaskCompleted`, `TaskFailed`, `TaskCanceled`
 - Plan & Patch: `AgentPlanPosted`, `PatchProposed`, `PatchAccepted`, `PatchRejected`, `PatchApplied`
-- Feedback & Interaction: `UserFeedbackPosted`, `ThreadOpened`
-- Artifact & File: `ArtifactChanged`, `TaskNeedsRebase`, `TaskRebased`
+- Feedback: `UserFeedbackPosted`
+- Conflict: `PatchConflicted` (emitted when apply fails due to baseRevision mismatch)
 
 **Projections:**
 - `tasks` projection - Lists all tasks with metadata

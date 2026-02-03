@@ -132,8 +132,19 @@ export class AgentRuntime {
       baseDir: this.#baseDir
     }
 
+    // Emit TaskStarted event - agent claims the task
+    const startedEvent: DomainEvent = {
+      type: 'TaskStarted',
+      payload: {
+        taskId,
+        agentId: this.#agent.id,
+        authorActorId: this.#agent.id
+      }
+    }
+    this.#store.append(taskId, [startedEvent])
+
     // Run the agent and collect emitted events
-    const emittedEvents: DomainEvent[] = []
+    const emittedEvents: DomainEvent[] = [startedEvent]
     try {
       for await (const event of this.#agent.run(task, context)) {
         this.#store.append(taskId, [event])

@@ -35,8 +35,7 @@
 - **位置：** [src/application/projector.ts](src/application/projector.ts) 和各服务中的投影逻辑
 - **架构：** 事件 → Reducer → 状态 (函数式 CQRS 模式)
 - **实现：**
-  - **TasksProjection：** 列出所有任务，跟踪当前打开的任务
-  - **ThreadProjection：** 任务线程、补丁建议及其应用状态
+  - **TasksProjection：** 列出所有任务
 - **回放能力：** 从最后检查点位置增量回放
 
 **验证：**
@@ -48,15 +47,14 @@ npm test -- eventStore.test.ts
 
 ---
 
-### ✅ 2. CLI：创建任务、列表任务、打开线程
+### ✅ 2. CLI：创建任务、列表任务
 
 **状态：** 完成
 
 | 命令 | 实现 | 测试 |
 |---------|-----------------|------|
 | `task create <title>` | ✅ 创建 TaskCreated 事件，生成 nanoid | ✅ cliRun.test.ts |
-| `task list` | ✅ 运行 TasksProjection，显示当前标记 | ✅ cliRun.test.ts |
-| `thread open <taskId>` | ✅ 追加 ThreadOpened 事件 | ✅ cliRun.test.ts |
+| `task list` | ✅ 运行 TasksProjection | ✅ cliRun.test.ts |
 
 **使用示例：**
 ```bash
@@ -67,7 +65,7 @@ npm run dev -- task create "校对导论部分"
 # 列出所有任务
 npm run dev -- task list
 # 输出:
-#   * VnYkjHxQpZ_gN-42aMd 校对导论部分
+#   VnYkjHxQpZ_gN-42aMd 校对导论部分
 ```
 
 ---
@@ -176,8 +174,6 @@ graph TB
   - `src/domain/events.ts`: 
     - Zod 模式定义所有领域事件（TaskCreated, PatchProposed, PatchApplied 等）
     - 类型安全的事件 payload 验证
-  - `src/application/threadProjection.ts`:
-    - `ThreadProjection`: 事件 → 任务线程视图的 reducer
   - `src/application/projector.ts`:
     - 通用投影运行器，实现增量状态重建
     - 检查点机制（cursor-based）
@@ -220,14 +216,13 @@ graph LR
     B --> C[JSONL 事件日志]
     C --> D[Projector]
     D --> E[TasksProjection]
-    D --> F[ThreadProjection]
+    D --> E[TasksProjection]
     E --> G[CLI 输出]
-    F --> G
 ```
 
 **已实现：**
 - ✅ 追加式事件日志（`EventStore`）
-- ✅ 投影系统（`Projector` + `TasksProjection` + `ThreadProjection`）
+- ✅ 投影系统（`Projector` + `TasksProjection`）
 - ✅ 查询 API（`getTask`, `queryTasks` 通过投影实现）
 
 **M1 将增强：**

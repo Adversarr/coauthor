@@ -177,19 +177,23 @@ Applied patch -> chapters/01_intro.tex
 ```
 User: /edit chapters/02_method.tex:50-60 展开这段
 
-Agent: [claiming task, baseRevision=abc123]
+Agent: [TaskStarted, agentId=agent_coauthor_default]
 
 # 用户在 Agent 工作期间手动修改了 02_method.tex
 
-Agent: [TaskNeedsRebase]
-  Detected drift in 02_method.tex (was abc123, now xyz789)
-  Auto-rebasing to latest version...
-
 Agent: [AgentPlanPosted]
-  (Plan based on latest file content)
+  (Plan based on original file content)
   
 Agent: [PatchProposed]
-  (Patch based on latest file content, baseRevision=xyz789)
+  (Patch with baseRevision=abc123)
+
+User: /accept
+
+# Apply 时发现文件已变更
+System: [PatchConflicted]
+  baseRevision 不匹配：expected=abc123 actual=xyz789
+  
+# 用户需要重新触发任务或手动解决
 ```
 
 ### 4.3 典型场景：多候选

@@ -30,7 +30,7 @@ export type Actor = z.infer<typeof ActorSchema>
 // Well-known Actor IDs
 // ============================================================================
 
-/** System actor for automated events (e.g., FileWatcher) */
+/** System actor for automated events */
 export const SYSTEM_ACTOR_ID = 'system'
 
 /** Default user actor ID */

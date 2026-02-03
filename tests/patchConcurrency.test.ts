@@ -38,7 +38,7 @@ describe('Patch baseRevision concurrency control', () => {
     expect(events.some((e) => e.type === 'PatchAccepted')).toBe(false)
     expect(events.some((e) => e.type === 'PatchApplied')).toBe(false)
     expect(events.some((e) => e.type === 'PatchRejected')).toBe(true)
-    expect(events.some((e) => e.type === 'TaskNeedsRebase')).toBe(true)
+    expect(events.some((e) => e.type === 'PatchConflicted')).toBe(true)
 
     rmSync(dir, { recursive: true, force: true })
   })

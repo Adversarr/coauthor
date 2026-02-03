@@ -12,13 +12,11 @@ export function MainTui(props: Props) {
   const [input, setInput] = useState('')
   const [status, setStatus] = useState<string>('')
   const [tasks, setTasks] = useState<Array<{ taskId: string; title: string }>>([])
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
   const [replayOutput, setReplayOutput] = useState<string[]>([])
 
   const refresh = async () => {
     const result = await app.taskService.listTasks()
     setTasks(result.tasks.map((t) => ({ taskId: t.taskId, title: t.title })))
-    setCurrentTaskId(result.currentTaskId)
   }
 
   useEffect(() => {
@@ -60,14 +58,6 @@ export function MainTui(props: Props) {
         return
       }
 
-      if (commandLine.startsWith('thread open ')) {
-        const taskId = commandLine.slice('thread open '.length).trim()
-        await app.taskService.openThread(taskId)
-        await refresh()
-        setStatus(`opened ${taskId}`)
-        return
-      }
-
       if (commandLine === 'log replay' || commandLine.startsWith('log replay ')) {
         const rest = commandLine.slice('log replay'.length).trim()
         const streamId = rest ? rest : undefined
@@ -98,7 +88,7 @@ export function MainTui(props: Props) {
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>{header}</Text>
         <Text dimColor>
-          Commands: /task create &lt;title&gt; · /task list · /thread open &lt;taskId&gt; · /log replay [taskId] · /exit
+          Commands: /task create &lt;title&gt; · /task list · /log replay [taskId] · /exit
         </Text>
       </Box>
       <Box flexDirection="column" marginBottom={1}>
@@ -106,9 +96,7 @@ export function MainTui(props: Props) {
         {tasks.length === 0 ? <Text dimColor>- (empty)</Text> : null}
         {tasks.map((t) => (
           <Box key={t.taskId}>
-            <Text color={t.taskId === currentTaskId ? 'green' : undefined}>
-              {t.taskId === currentTaskId ? '•' : '·'}
-            </Text>
+            <Text>·</Text>
             <Text> {t.title}</Text>
             <Text dimColor> ({t.taskId})</Text>
           </Box>

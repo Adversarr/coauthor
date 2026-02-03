@@ -133,10 +133,11 @@ export class PatchService {
         this.rejectPatch(taskId, proposal.proposalId, reason)
         this.#store.append(taskId, [
           {
-            type: 'TaskNeedsRebase',
+            type: 'PatchConflicted',
             payload: {
               taskId,
-              affectedPaths: [proposal.targetPath],
+              proposalId: proposal.proposalId,
+              targetPath: proposal.targetPath,
               reason,
               authorActorId: this.#currentActorId
             }

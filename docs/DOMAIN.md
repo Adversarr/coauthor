@@ -95,18 +95,9 @@ type TaskCanceledEvent = {
     authorActorId: string
   }
 }
-
-// 任务被阻塞（需要用户补充信息）
-type TaskBlockedEvent = {
-  type: 'TaskBlocked'
-  payload: {
-    taskId: string
-    reason: string
-    questions?: string[]              // 需要用户回答的问题
-    authorActorId: string
-  }
-}
 ```
+
+> **V0 简化说明**：移除了 `TaskBlocked` 事件，该功能推迟到 V1。
 
 #### 1.3.2 计划与补丁事件
 
@@ -178,7 +169,7 @@ type PatchAppliedEvent = {
 }
 ```
 
-#### 1.3.3 反馈与交互事件
+#### 1.3.3 反馈事件
 
 ```typescript
 // 用户反馈
@@ -191,54 +182,28 @@ type UserFeedbackPostedEvent = {
     authorActorId: string
   }
 }
-
-// Thread 打开（用户进入某个任务的讨论）
-type ThreadOpenedEvent = {
-  type: 'ThreadOpened'
-  payload: {
-    taskId: string
-    authorActorId: string
-  }
-}
 ```
 
-#### 1.3.4 资产与文件事件
+> **V0 简化说明**：移除了 `ThreadOpened` 事件，currentTaskId 改用内存状态管理。
+
+#### 1.3.4 冲突事件
 
 ```typescript
-// 资产/文件变更（由 FileWatcher 产生）
-type ArtifactChangedEvent = {
-  type: 'ArtifactChanged'
-  payload: {
-    path: string
-    oldRevision?: string
-    newRevision: string
-    changeKind: 'created' | 'modified' | 'deleted'
-    authorActorId: string             // 'system' 或检测到的 actor
-  }
-}
-
-// 任务需要 Rebase（检测到 drift）
-type TaskNeedsRebaseEvent = {
-  type: 'TaskNeedsRebase'
+// Patch 冲突（apply 时 baseRevision 不匹配）
+type PatchConflictedEvent = {
+  type: 'PatchConflicted'
   payload: {
     taskId: string
-    affectedPaths: string[]
+    proposalId: string
+    targetPath: string
     reason: string
     authorActorId: string
   }
 }
-
-// 任务已 Rebase
-type TaskRebasedEvent = {
-  type: 'TaskRebased'
-  payload: {
-    taskId: string
-    oldBaseRevisions: Record<string, string>
-    newBaseRevisions: Record<string, string>
-    authorActorId: string
-  }
-}
 ```
+
+> **V0 简化说明**：移除了 `ArtifactChanged`、`TaskNeedsRebase`、`TaskRebased` 事件。
+> 冲突检测简化为 JIT 模式：apply 时校验 baseRevision，失败时发出 `PatchConflicted`。
 
 ### 1.4 完整 DomainEvent Union
 
@@ -246,48 +211,40 @@ type TaskRebasedEvent = {
 type DomainEvent =
   // 任务生命周期
   | TaskCreatedEvent
-  | TaskClaimedEvent
   | TaskStartedEvent
   | TaskCompletedEvent
   | TaskFailedEvent
   | TaskCanceledEvent
-  | TaskBlockedEvent
   // 计划与补丁
   | AgentPlanPostedEvent
   | PatchProposedEvent
   | PatchAcceptedEvent
   | PatchRejectedEvent
   | PatchAppliedEvent
-  // 反馈与交互
+  // 反馈
   | UserFeedbackPostedEvent
-  | ThreadOpenedEvent
-  // 资产与文件
-  | ArtifactChangedEvent
-  | TaskNeedsRebaseEvent
-  | TaskRebasedEvent
-  // V1: 子任务事件
-  // | SubtaskCreatedEvent
-  // | SubtaskCompletedEvent
+  // 冲突
+  | PatchConflictedEvent
 
 type EventType = DomainEvent['type']
 ```
 
-### 1.5 V0 最小事件集
+### 1.5 V0 事件集（12 种）
 
-V0 阶段需要实现的最小事件集：
-
-| 事件 | 必需 | 说明 |
-|------|------|------|
-| TaskCreated | ✅ | 任务创建 |
-| TaskClaimed | ✅ | Agent 认领 |
-| AgentPlanPosted | ✅ | 修改计划 |
-| PatchProposed | ✅ | 补丁提议 |
-| PatchAccepted | ✅ | 接受补丁 |
-| PatchApplied | ✅ | 应用补丁 |
-| UserFeedbackPosted | ✅ | 用户反馈 |
-| ThreadOpened | ⚪ | 可选，兼容现有 |
-| ArtifactChanged | ⚪ | M2 实现 |
-| TaskNeedsRebase | ⚪ | M2 实现 |
+| 事件 | 说明 |
+|------|------|
+| `TaskCreated` | 用户发起任务请求，入队等待 |
+| `TaskStarted` | Agent 认领并开始处理（含 agentId） |
+| `TaskCompleted` | 任务成功完成 |
+| `TaskFailed` | 任务执行失败 |
+| `TaskCanceled` | 用户取消任务 |
+| `AgentPlanPosted` | Agent 发布修改计划 |
+| `PatchProposed` | Agent 提议补丁 |
+| `PatchAccepted` | 用户接受补丁 |
+| `PatchRejected` | 用户拒绝补丁 |
+| `PatchApplied` | 补丁已写入文件 |
+| `UserFeedbackPosted` | 用户发布反馈 |
+| `PatchConflicted` | apply 时 baseRevision 不匹配 |
 
 ---
 
@@ -370,7 +327,6 @@ export const TaskSchema = z.object({
   status: TaskStatusSchema,
   artifactRefs: z.array(ArtifactRefSchema).optional(),
   baseRevisions: z.record(z.string()).optional(),
-  threadId: z.string().min(1),
   createdAt: z.string().min(1),
   // V1: 子任务支持
   parentTaskId: z.string().optional()
@@ -479,26 +435,7 @@ export type TaskView = {
 }
 ```
 
-### 3.2 ThreadView
-
-```typescript
-export type ThreadItem = {
-  id: string
-  kind: 'plan' | 'patch' | 'feedback' | 'decision'
-  content: string
-  authorActorId: string
-  createdAt: string
-  metadata?: Record<string, unknown>
-}
-
-export type ThreadView = {
-  threadId: string
-  taskId: string
-  items: ThreadItem[]
-}
-```
-
-### 3.3 Projection Reducer 规范
+### 3.2 Projection Reducer 规范
 
 ```typescript
 export type ProjectionReducer<TState> = (

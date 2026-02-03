@@ -10,15 +10,6 @@ export type AppConfig = {
       modelByProfile: Record<LLMProfile, string>
     }
   }
-  agent: {
-    /** @deprecated AgentRuntime is event-driven (RxJS), not polling-based. This config is unused. */
-    pollIntervalMs: number
-  }
-  watch: {
-    pollIntervalMs: number
-    includeExtensions: string[]
-    includePaths: string[]
-  }
 }
 
 const EnvSchema = z.object({
@@ -27,27 +18,7 @@ const EnvSchema = z.object({
   COAUTHOR_OPENAI_BASE_URL: z.string().min(1).optional(),
   COAUTHOR_OPENAI_MODEL_FAST: z.string().min(1).default('gpt-4o-mini'),
   COAUTHOR_OPENAI_MODEL_WRITER: z.string().min(1).default('gpt-4o'),
-  COAUTHOR_OPENAI_MODEL_REASONING: z.string().min(1).default('gpt-4o'),
-  COAUTHOR_AGENT_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
-  COAUTHOR_WATCH_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
-  COAUTHOR_WATCH_EXTENSIONS: z
-    .string()
-    .default('.tex,.md,.txt')
-    .transform((v) =>
-      v
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-    ),
-  COAUTHOR_WATCH_PATHS: z
-    .string()
-    .default('.')
-    .transform((v) =>
-      v
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-    )
+  COAUTHOR_OPENAI_MODEL_REASONING: z.string().min(1).default('gpt-4o')
 })
 
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
@@ -64,14 +35,6 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
           reasoning: parsed.COAUTHOR_OPENAI_MODEL_REASONING
         }
       }
-    },
-    agent: {
-      pollIntervalMs: parsed.COAUTHOR_AGENT_POLL_INTERVAL_MS
-    },
-    watch: {
-      pollIntervalMs: parsed.COAUTHOR_WATCH_POLL_INTERVAL_MS,
-      includeExtensions: parsed.COAUTHOR_WATCH_EXTENSIONS,
-      includePaths: parsed.COAUTHOR_WATCH_PATHS
     }
   }
 }

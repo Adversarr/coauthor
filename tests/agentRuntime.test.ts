@@ -68,6 +68,13 @@ describe('AgentRuntime', () => {
 
     const events = store.readStream('t1', 1)
 
+    // Verify TaskStarted was emitted
+    const startedEvt = events.find((e) => e.type === 'TaskStarted')
+    expect(startedEvt).toBeTruthy()
+    if (startedEvt?.type === 'TaskStarted') {
+      expect(startedEvt.payload.agentId).toBe(DEFAULT_AGENT_ACTOR_ID)
+    }
+
     // Verify AgentPlanPosted was emitted
     const planEvt = events.find((e) => e.type === 'AgentPlanPosted')
     expect(planEvt).toBeTruthy()
@@ -128,6 +135,7 @@ describe('AgentRuntime', () => {
     vi.useRealTimers()
 
     const events = store.readStream('t2', 1)
+    expect(events.some((e) => e.type === 'TaskStarted')).toBe(true)
     expect(events.some((e) => e.type === 'AgentPlanPosted')).toBe(true)
 
     rmSync(dir, { recursive: true, force: true })

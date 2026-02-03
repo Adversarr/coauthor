@@ -3,8 +3,6 @@ import type { EventStore } from '../domain/ports/eventStore.js'
 import { JsonlEventStore } from '../infra/jsonlEventStore.js'
 import { TaskService, PatchService, EventService } from '../application/index.js'
 import { ContextBuilder } from '../application/contextBuilder.js'
-import { FileWatcher } from '../application/fileWatcher.js'
-import { DriftDetector } from '../application/driftDetector.js'
 import { AgentRuntime } from '../agents/runtime.js'
 import { DefaultCoAuthorAgent } from '../agents/defaultAgent.js'
 import { FakeLLMClient } from '../infra/fakeLLMClient.js'
@@ -27,8 +25,6 @@ export type App = {
   llm: LLMClient
   agent: Agent
   agentRuntime: AgentRuntime
-  fileWatcher: FileWatcher
-  driftDetector: DriftDetector
 }
 
 // Create app: initialize EventStore + wire up services
@@ -76,13 +72,6 @@ export function createApp(opts: {
     llm,
     baseDir
   })
-  const fileWatcher = new FileWatcher({
-    store,
-    baseDir,
-    includePaths: config.watch.includePaths,
-    includeExtensions: config.watch.includeExtensions
-  })
-  const driftDetector = new DriftDetector({ store })
 
-  return { baseDir, storePath, store, taskService, patchService, eventService, contextBuilder, llm, agent, agentRuntime, fileWatcher, driftDetector }
+  return { baseDir, storePath, store, taskService, patchService, eventService, contextBuilder, llm, agent, agentRuntime }
 }

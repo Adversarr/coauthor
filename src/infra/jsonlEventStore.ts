@@ -77,7 +77,7 @@ export class JsonlEventStore implements EventStore {
 
   append(streamId: string, events: DomainEvent[]): StoredEvent[] {
     this.#ensureCacheInitialized()
-    return this.#withLock(`${this.#eventsPath}.lock`, () => {
+    const stored = this.#withLock(`${this.#eventsPath}.lock`, () => {
       this.#rebuildCacheFromDisk()
       const now = new Date().toISOString()
 
@@ -102,8 +102,6 @@ export class JsonlEventStore implements EventStore {
           evt
         )
         stored.push(storedEvent)
-
-        this.#eventSubject.next(storedEvent)
       }
 
       this.#maxId = currentMaxId
@@ -111,6 +109,8 @@ export class JsonlEventStore implements EventStore {
 
       return stored
     })
+    for (const e of stored) this.#eventSubject.next(e)
+    return stored
   }
 
   readAll(fromIdExclusive = 0): StoredEvent[] {

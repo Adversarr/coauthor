@@ -26,9 +26,9 @@
 
 ### 1.3 用户随手改文件不会被覆盖
 
-系统必须感知用户对文件的手动修改（通过 FileWatcher + Revision 机制）。
+系统必须感知用户对文件的手动修改（通过 baseRevision 校验机制）。
 
-当 Agent 发现文件已被用户修改（drift），必须 rebase 或提示，而非盲目覆盖。
+当 apply 时发现文件已被用户修改（revision 不匹配），系统拒绝 apply 并发出 `PatchConflicted` 事件。
 
 ### 1.4 CLI 只是一个适配器
 
@@ -85,8 +85,7 @@ User 与 LLM Agent 都是 **Actor**。区别仅在于：
 │  │                                                          │
 │  │  Services:                                               │
 │  │  - ContextBuilder: 构建 Agent 上下文                     │
-│  │  - DriftDetector: 检测文件漂移                           │
-│  │  - Scheduler: 任务调度策略                               │
+│  │  - Scheduler: 任务调度策略 (V1)                          │
 │  └────────────────────────────┬────────────────────────────┘   │
 │                               │                                 │
 │                               ▼                                 │
@@ -97,7 +96,6 @@ User 与 LLM Agent 都是 **Actor**。区别仅在于：
 │  │  Entities:                                               │
 │  │  - Actor: 参与者（User / Agent）                         │
 │  │  - Task: 任务载体                                        │
-│  │  - Thread: 任务讨论串                                    │
 │  │  - Artifact: 资产（tex / outline / figure / code）       │
 │  │                                                          │
 │  │  Events (Zod Schemas):                                   │
@@ -122,7 +120,6 @@ User 与 LLM Agent 都是 **Actor**。区别仅在于：
 │  │  - JsonlEventStore: 当前默认的 JSONL 实现                │
 │  │                                                          │   │
 │  │  Other Adapters:                                         │
-│  │  - FileWatcher: 文件变更监控                             │
 │  │  - LLMProviders: Claude/OpenAI/Local 适配               │
 │  │  - PatchEngine: Unified Diff 应用引擎                    │
 │  │  - LatexCompiler: latexmk 适配                          │
@@ -205,7 +202,6 @@ type Task = {
   intent: string           // 用户意图（自由文本）
   artifactRefs?: ArtifactRef[]  // 关联的资产/位置
   baseRevisions?: Record<string, string>  // 创建时的文件版本快照
-  threadId: string         // 讨论串 ID
   createdAt: string
   parentTaskId?: string    // V1 预留：父任务 ID（子任务支持）
 }
@@ -223,25 +219,7 @@ type ArtifactRef =
   | { kind: 'citation'; citeKey: string }
 ```
 
-### 3.4 Thread（讨论串）
-
-每个 Task 有一个 Thread，包含所有相关的 plan、patch、feedback。
-
-```typescript
-type Thread = {
-  threadId: string
-  taskId: string
-  items: ThreadItem[]
-}
-
-type ThreadItem = 
-  | { kind: 'plan'; planId: string; content: string; authorActorId: string; createdAt: string }
-  | { kind: 'patch'; patchId: string; diff: string; authorActorId: string; createdAt: string }
-  | { kind: 'feedback'; content: string; authorActorId: string; createdAt: string }
-  | { kind: 'decision'; decision: 'accept' | 'reject'; targetPatchId: string; authorActorId: string; createdAt: string }
-```
-
-### 3.5 Artifact（资产）
+### 3.4 Artifact（资产）
 
 论文相关的所有文件/资产统一抽象。
 
@@ -284,7 +262,7 @@ Billboard = EventStore + Projector + RxJS Streams
 ```
 
 - **EventStore（持久化）**：追加写事件，支持回放
-- **Projector（投影）**：从事件流派生读模型（TaskView、ThreadView）
+- **Projector（投影）**：从事件流派生读模型（TaskView）
 - **Streams（实时）**：RxJS Observable 供 UI 和 Agent 订阅
 
 ### 4.2 API 设计
@@ -297,7 +275,6 @@ interface Billboard {
   // 读取（投影）
   getTask(taskId: string): TaskView | null
   queryTasks(filter: TaskFilter): TaskView[]
-  getThread(taskId: string): ThreadView | null
   
   // 订阅
   events$: Observable<StoredEvent>
@@ -380,12 +357,10 @@ src/
 │   │   ├── acceptPatch.ts
 │   │   └── replayEvents.ts
 │   └── services/
-│       ├── contextBuilder.ts
-│       └── driftDetector.ts
+│       └── contextBuilder.ts
 │
 ├── infrastructure/          # 基础设施层
 │   ├── jsonlEventStore.ts
-│   ├── fileWatcher.ts
 │   ├── patchEngine.ts
 │   └── logger.ts
 │
@@ -449,7 +424,7 @@ Interfaces → Application → Domain ← Infrastructure
 | "Billboard" | EventStore + Projector + RxJS |
 | "Task 不细分类" | Task.intent 是自由文本 |
 | "Plan-first + Patch-first" | Agent workflow 标准骨架 |
-| "用户手改感知" | DriftDetector + baseRevisions |
+| "用户手改感知" | PatchService baseRevision 校验 + PatchConflicted |
 | "CLI 只是 Adapter" | Interfaces 层分离 |
 | "V0 单 Agent" | 所有 Task 直接发送给默认 Agent |
 | "V1 多 Agent" | OrchestratorAgent 可创建子任务 |
