@@ -13,10 +13,9 @@ import type { ToolCallRequest } from '../domain/ports/tool.js'
  * Default CoAuthor Agent.
  *
  * This is the V1 agent implementing the UIP + Tool Use workflow:
- * 1. Confirm task with user (UIP)
- * 2. Enter tool loop: call LLM → execute tools → repeat
- * 3. Handle risky tools via UIP confirmation
- * 4. Complete or fail task
+ * 1. Enter tool loop: call LLM → execute tools → repeat
+ * 2. Handle risky tools via UIP confirmation
+ * 3. Complete or fail task
  *
  * Conversation history is managed by AgentRuntime via ConversationStore.
  * The agent uses context.conversationHistory (pre-loaded) and
@@ -35,36 +34,6 @@ export class DefaultCoAuthorAgent implements Agent {
   }
 
   async *run(task: TaskView, context: AgentContext): AsyncGenerator<AgentOutput> {
-    // === Phase 1: Initial Confirmation ===
-    // Request user confirmation before starting work (only if no existing conversation)
-    if (!context.pendingInteractionResponse && context.conversationHistory.length === 0) {
-      const confirmRequest: AgentInteractionRequest = {
-        interactionId: `ui_${nanoid(12)}`,
-        kind: 'Confirm',
-        purpose: 'confirm_task',
-        display: {
-          title: 'Confirm Task',
-          description: `I'll work on: "${task.title}"\n\n${task.intent || 'No additional description.'}\n\nShould I proceed?`
-        },
-        options: [
-          { id: 'proceed', label: 'Proceed', style: 'primary', isDefault: true },
-          { id: 'cancel', label: 'Cancel', style: 'danger' }
-        ]
-      }
-      yield { kind: 'interaction', request: confirmRequest }
-      return // Pause and wait for response
-    }
-
-    // Check confirmation response (only if this is the first resume)
-    if (context.pendingInteractionResponse && context.conversationHistory.length === 0) {
-      const response = context.pendingInteractionResponse
-      if (response.selectedOptionId === 'cancel') {
-        yield { kind: 'failed', reason: 'User cancelled task' }
-        return
-      }
-    }
-
-    // === Phase 2: Tool Loop ===
     yield* this.#toolLoop(task, context)
   }
 

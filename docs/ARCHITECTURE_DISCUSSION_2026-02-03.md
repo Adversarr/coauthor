@@ -12,7 +12,7 @@
 本次讨论对既有设计做出三条决定，直接覆盖旧稿与旧约束：
 
 1. **Plan-first 不再成立**：不再要求任何任务必须先产出 plan 才能执行。
-2. **Agent 更通用**：Agent 的唯一职责是完成 Task，本质是 `confirm task → loop until done`。
+2. **Agent 更通用**：Agent 的唯一职责是完成 Task，本质是 `start → loop until done`（按需 UIP）。
 3. **事件层面移除 Patch**：不再在 DomainEvent 中维护 `PatchProposed/PatchApplied/...` 这类“变更表示”事件。
 
 随之而来的关键原则是：**Task 事件只描述协作与决策，不描述具体文件修改；文件修改走独立的工具审计链路**。
@@ -38,7 +38,6 @@ type UserInteractionRequested = {
     kind: 'Select' | 'Confirm' | 'Input' | 'Composite'
 
     purpose:
-      | 'confirm_task'          // 开始执行前：确认理解/范围
       | 'choose_strategy'       // 选择方案/路径
       | 'request_info'          // 缺信息时向用户追问
       | 'confirm_risky_action'  // 需要用户承担风险（例如写文件/执行命令等）
@@ -100,15 +99,12 @@ Agent 只关心“如何把 Task 做完”。在执行过程中，Agent 可能�
 
 ```text
 1) TaskCreated
-2) TaskClaimed (by agent)
-3) TaskStarted
-4) UserInteractionRequested(purpose=confirm_task)
-5) UserInteractionResponded(确认/补充范围)
-6) LOOP:
+2) TaskStarted
+3) LOOP:
      - agent 做一步推进（文本输出或者工具调用）
      - 若缺信息/需要决策：UserInteractionRequested → UserInteractionResponded
      - 直到 done / failed / canceled
-7) TaskCompleted | TaskFailed | TaskCanceled
+4) TaskCompleted | TaskFailed | TaskCanceled
 ```
 
 这个流程应该和市面上的llm agent的工作流非常相似。
@@ -123,7 +119,6 @@ Agent 只关心“如何把 Task 做完”。在执行过程中，Agent 可能�
 type DomainEvent =
   // Task 生命周期
   | TaskCreated
-  | TaskClaimed
   | TaskStarted
   | TaskCompleted
   | TaskFailed
@@ -138,11 +133,9 @@ type DomainEvent =
 
 ### 4.2 “确认 Task”如何表达
 
-不引入额外的 `TaskConfirmed` 事件。把“确认/澄清范围”的交互统一表达为：
-- `UserInteractionRequested(purpose=confirm_task)`
+不引入额外的 `TaskConfirmed` 事件。若需要澄清范围或让用户做选择，按需使用：
+- `UserInteractionRequested(purpose=request_info|choose_strategy)`
 - `UserInteractionResponded(...)`
-
-这样可以避免事件种类扩张，同时让 UI/CLI 以统一方式渲染“确认任务”的交互。
 
 ---
 
@@ -152,12 +145,9 @@ type DomainEvent =
 
 ```text
 Event 1: TaskCreated
-Event 2: TaskClaimed
-Event 3: TaskStarted
-Event 4: UserInteractionRequested(purpose=confirm_task, kind=Confirm|Input|Composite)
-Event 5: UserInteractionResponded
+Event 2: TaskStarted
+Event 3..N: (零个或多个) UserInteractionRequested / UserInteractionResponded
 
-Event 6..N: (零个或多个) UserInteractionRequested / UserInteractionResponded
 Event N+1: TaskCompleted | TaskFailed | TaskCanceled
 ```
 

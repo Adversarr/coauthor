@@ -340,14 +340,12 @@ type AgentContext = {
 
 ```
 1. Start        → emit TaskStarted
-2. Confirm Task → emit UserInteractionRequested(purpose=confirm_task)
-3. User Reply   → emit UserInteractionResponded
-4. LOOP:
+2. LOOP:
      - agent 推进任务（调用工具：readFile, editFile, listFiles, runCommand）
      - 工具调用记录写入 AuditLog（不进 DomainEvent）
-     - 若缺信息/需决策：UserInteractionRequested → UserInteractionResponded
+     - 若缺信息/需决策：UserInteractionRequested(purpose=request_info|choose_strategy) → UserInteractionResponded
      - 若即将执行高风险工具动作：UserInteractionRequested(purpose=confirm_risky_action)
-5. Done/Fail/Cancel → emit TaskCompleted | TaskFailed | TaskCanceled
+3. Done/Fail/Cancel → emit TaskCompleted | TaskFailed | TaskCanceled
 ```
 
 ### 5.3 LLM Profile 策略

@@ -202,7 +202,7 @@ graph TB
 #### 1. Actor 一等公民（预留设计）
 虽然 M0 尚未实现完整的 Actor 系统，但架构已为此预留：
 - 事件 payload 中的 `authorActorId` 字段（`src/domain/events.ts`）
-- 未来可通过 `TaskRouted` 和 `TaskClaimed` 事件实现 Actor 协作
+- 未来可通过 `TaskRouted` 等路由事件实现 Actor 协作（MVP 不引入 TaskClaimed）
 - 当前默认 Actor 为执行命令的用户（CLI 进程）
 
 #### 2. Task 驱动协作

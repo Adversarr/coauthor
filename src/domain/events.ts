@@ -55,7 +55,6 @@ export const TaskCanceledPayloadSchema = z.object({
 export const InteractionKindSchema = z.enum(['Select', 'Confirm', 'Input', 'Composite'])
 
 export const InteractionPurposeSchema = z.enum([
-  'confirm_task',
   'choose_strategy',
   'request_info',
   'confirm_risky_action',
@@ -195,4 +194,3 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
 export function parseDomainEvent(input: unknown): DomainEvent {
   return DomainEventSchema.parse(input)
 }
-

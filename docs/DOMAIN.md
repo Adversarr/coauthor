@@ -19,7 +19,7 @@
 | Tool Use + AuditLog | ✅ 完整实现 | - |
 | ConversationStore | ✅ 对话历史持久化 | - |
 | 风险工具确认 | ✅ ToolExecutor 强制检查 | - |
-| 任务分配 | 创建时直接指定 agentId | TaskClaimed 事件、claimed 状态、多 Agent 路由 |
+| 任务分配 | 创建时直接指定 agentId | 多 Agent 路由（待定） |
 | 子任务 | Schema 预留 parentTaskId | Orchestrator 完整实现 |
 | InteractionPurpose.assign_subtask | 定义但不使用 | Orchestrator 使用 |
 | ArtifactStore Port | TODO（直接使用 fs API） | 完整端口实现 |
@@ -121,7 +121,6 @@ type UserInteractionRequestedEvent = {
     kind: 'Select' | 'Confirm' | 'Input' | 'Composite'
 
     purpose:
-      | 'confirm_task'
       | 'choose_strategy'
       | 'request_info'
       | 'confirm_risky_action'
@@ -678,7 +677,7 @@ export function validateEvent(event: unknown): DomainEvent {
 ### 7.3 任务状态机 (V0)
 
 ```
-open ──────────────────────────────────────────────────────→ canceled
+(TaskCreated) open ────────────────────────────────────→ canceled
   │
   ├─ TaskStarted ──→ in_progress
   │                      │
@@ -693,7 +692,7 @@ open ─────────────────────────
   └─ TaskFailed ──→ failed
 ```
 
-> **V1 扩展**：引入 `TaskClaimed` 事件和 `claimed` 状态，支持 Agent 主动认领任务（多 Agent 协作场景）。
+> MVP：不引入 `TaskClaimed` 事件与 `claimed` 状态；`TaskStarted` 作为唯一“开始运行”标记。
 
 ---
 
@@ -719,4 +718,7 @@ open ─────────────────────────
 
 ### A.2 迁移映射（推荐表达）
 
-- 计划/方案呈现：使用 `UserInteractionRequested(display.contentKind=PlainText|Json, purpose=choose_strategy|confirm_task)`。\n- diff/变更预览：使用 `UserInteractionRequested(display.contentKind=Diff, purpose=confirm_risky_action)`。\n- 文件修改与命令执行：通过 Tool Use 执行，并在 AuditLog 中记录 `ToolCallRequested/ToolCallCompleted`；不要用 DomainEvent 记录具体 diff 或写入细节。\n- 冲突/失败：由工具执行结果（AuditLog 的 isError=true 等）与后续 UIP 交互引导用户决策；必要时以 `TaskFailed` 终止任务。
+- 计划/方案呈现：使用 `UserInteractionRequested(display.contentKind=PlainText|Json, purpose=choose_strategy)`。
+- diff/变更预览：使用 `UserInteractionRequested(display.contentKind=Diff, purpose=confirm_risky_action)`。
+- 文件修改与命令执行：通过 Tool Use 执行，并在 AuditLog 中记录 `ToolCallRequested/ToolCallCompleted`；不要用 DomainEvent 记录具体 diff 或写入细节。
+- 冲突/失败：由工具执行结果（AuditLog 的 isError=true 等）与后续 UIP 交互引导用户决策；必要时以 `TaskFailed` 终止任务。

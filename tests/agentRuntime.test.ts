@@ -55,7 +55,7 @@ function createTestInfra(dir: string) {
 }
 
 describe('AgentRuntime', () => {
-  test('executeTask writes TaskStarted and UserInteractionRequested for confirmation', async () => {
+  test('executeTask writes TaskStarted and completes without confirm_task', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const { store, taskService, runtime } = createTestInfra(dir)
 
@@ -85,23 +85,21 @@ describe('AgentRuntime', () => {
       expect(startedEvt.payload.agentId).toBe(DEFAULT_AGENT_ACTOR_ID)
     }
 
-    // Verify UserInteractionRequested was emitted (for task confirmation)
-    const uipEvt = events.find((e) => e.type === 'UserInteractionRequested')
-    expect(uipEvt).toBeTruthy()
-    if (uipEvt?.type === 'UserInteractionRequested') {
-      expect(uipEvt.payload.kind).toBe('Confirm')
-      expect(uipEvt.payload.purpose).toBe('confirm_task')
-    }
+    // Should not emit confirm_task interaction
+    expect(events.some((e) => e.type === 'UserInteractionRequested')).toBe(false)
 
-    // Task should now be awaiting user
+    // Verify TaskCompleted was emitted
+    expect(events.some((e) => e.type === 'TaskCompleted')).toBe(true)
+
+    // Task should be done
     const view = taskService.getTask('t1')
-    expect(view?.status).toBe('awaiting_user')
+    expect(view?.status).toBe('done')
     expect(view?.agentId).toBe(DEFAULT_AGENT_ACTOR_ID)
 
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('start polls TaskCreated and requests confirmation for assigned tasks', async () => {
+  test('start executes assigned tasks without confirm_task', async () => {
     vi.useFakeTimers()
 
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
@@ -130,7 +128,8 @@ describe('AgentRuntime', () => {
 
     const events = store.readStream('t2', 1)
     expect(events.some((e) => e.type === 'TaskStarted')).toBe(true)
-    expect(events.some((e) => e.type === 'UserInteractionRequested')).toBe(true)
+    expect(events.some((e) => e.type === 'TaskCompleted')).toBe(true)
+    expect(events.some((e) => e.type === 'UserInteractionRequested')).toBe(false)
 
     rmSync(dir, { recursive: true, force: true })
   })
@@ -172,7 +171,7 @@ describe('AgentRuntime', () => {
 })
 
 describe('AgentRuntime - Conversation Persistence', () => {
-  test('conversation history is persisted after user confirms task', async () => {
+  test('conversation history is persisted during automatic task execution', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const { store, conversationStore, runtime } = createTestInfra(dir)
@@ -197,38 +196,16 @@ describe('AgentRuntime - Conversation Persistence', () => {
 
     await vi.advanceTimersByTimeAsync(50)
 
-    // At this point, task is awaiting user confirmation
-    // No conversation should be persisted yet (just UIP event)
-    let messages = conversationStore.getMessages('t1')
-    expect(messages).toHaveLength(0)
-
-    // Simulate user confirming the task
-    const uipEvent = store.readStream('t1').find(e => e.type === 'UserInteractionRequested')
-    expect(uipEvent?.type).toBe('UserInteractionRequested')
-    
-    if (uipEvent?.type === 'UserInteractionRequested') {
-      store.append('t1', [
-        {
-          type: 'UserInteractionResponded',
-          payload: {
-            interactionId: uipEvent.payload.interactionId,
-            taskId: 't1',
-            selectedOptionId: 'proceed',
-            authorActorId: DEFAULT_USER_ACTOR_ID
-          }
-        }
-      ])
-    }
-
     await vi.advanceTimersByTimeAsync(100)
     runtime.stop()
     vi.useRealTimers()
 
-    // After confirmation, conversation should have system + user prompts
-    messages = conversationStore.getMessages('t1')
-    expect(messages.length).toBeGreaterThanOrEqual(2)
+    // Conversation should have system + user prompts and at least one assistant message
+    const messages = conversationStore.getMessages('t1')
+    expect(messages.length).toBeGreaterThanOrEqual(3)
     expect(messages[0]?.role).toBe('system')
     expect(messages[1]?.role).toBe('user')
+    expect(messages.some((m) => m.role === 'assistant')).toBe(true)
 
     rmSync(dir, { recursive: true, force: true })
   })

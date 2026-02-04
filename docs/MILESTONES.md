@@ -122,18 +122,21 @@ M0 实际完成的内容超出了原计划，已包含：
 
 ## M2：MVP：Task 闭环 + UIP + Tool Audit + 通用 Agent
 
-> **目标**：用户一句话 → Agent 先确认任务（UIP）→ 循环推进直到完成；需要用户决策/补信息/高风险动作时统一走 UIP；文件修改与命令执行统一走 Tool Use 并写入 AuditLog。
+> **目标**：用户一句话 → Agent 开始执行（TaskStarted）→ 循环推进直到完成；需要用户决策/补信息/高风险动作时统一走 UIP；文件修改与命令执行统一走 Tool Use 并写入 AuditLog。
 
 ### 完成标准
 
 - [ ] **领域事件收敛**
   - DomainEvent 仅包含 Task 生命周期 + UIP（不包含 Plan/Patch 事件）
 - [ ] **工具审计链路**
-  - ToolRegistry/ToolExecutor + Interceptor\n  - AuditLog 追加写记录 ToolCallRequested/ToolCallCompleted
+  - ToolRegistry/ToolExecutor + Interceptor
+  - AuditLog 追加写记录 ToolCallRequested/ToolCallCompleted
 - [ ] **高风险动作确认**
-  - 写文件/执行命令前触发 `UserInteractionRequested(purpose=confirm_risky_action)`\n  - 用户确认后才允许执行工具
+  - 写文件/执行命令前触发 `UserInteractionRequested(purpose=confirm_risky_action)`
+  - 用户确认后才允许执行工具
 - [ ] **通用 Agent 骨架**
-  - `confirm_task → loop until done`\n  - 缺信息/需决策统一走 UIP
+  - `start → loop until done`
+  - 缺信息/需决策统一走 UIP
 - [ ] **交互渲染与输入**
   - CLI/TUI 能渲染 UIP 请求并提交 UIP 响应
 
@@ -142,8 +145,8 @@ M0 实际完成的内容超出了原计划，已包含：
 ```bash
 # 用户发起请求
 npm run dev -- task create "把这段改得更学术一点" --file chapters/01_intro.tex --lines 10-20
-# Agent 发起 UIP：确认任务（confirm_task）
-# 用户通过 UIP 响应（UserInteractionResponded）
+# Agent 开始执行（TaskStarted）
+# 若缺信息/需决策：Agent 发起 UIP（request_info/choose_strategy），用户通过 UIP 响应（UserInteractionResponded）
 # 若需要写文件/执行命令：Agent 先发起 UIP 高风险确认（confirm_risky_action，可展示 diff）
 # 用户确认后执行 Tool Use，并写入 AuditLog
 # 任务完成（TaskCompleted）
@@ -157,7 +160,9 @@ npm run dev -- task create "把这段改得更学术一点" --file chapters/01_i
 
 ### 设计决策
 
-- ✅ **工具侧 JIT 校验**：写文件类 Tool Use 支持 expectedRevision/原子写入策略；不匹配时直接失败并记录到 AuditLog。\n- ✅ **交互侧引导**：Agent 通过 UIP 询问用户下一步（重试/放弃/改策略/终止任务）。\n- ❌ **不强依赖 FileWatcher**：不做后台监控作为一致性来源（可选增强仅用于“早停/省 token”）。
+- ✅ **工具侧 JIT 校验**：写文件类 Tool Use 支持 expectedRevision/原子写入策略；不匹配时直接失败并记录到 AuditLog。
+- ✅ **交互侧引导**：Agent 通过 UIP 询问用户下一步（重试/放弃/改策略/终止任务）。
+- ❌ **不强依赖 FileWatcher**：不做后台监控作为一致性来源（可选增强仅用于“早停/省 token”）。
 
 ---
 

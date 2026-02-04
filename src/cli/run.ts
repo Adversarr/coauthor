@@ -8,6 +8,7 @@ import type { IO } from './io.js'
  * Commands:
  * - task create <title> [--file <path> --lines <start-end>]
  * - task list
+ * - task cancel <taskId> [--reason <text>]
  * - interact respond <taskId> <choice> [--text <message>]
  * - interact pending [taskId]
  * - agent start | stop | run <taskId>
@@ -29,10 +30,11 @@ export async function runCli(opts: {
       'Task operations',
       (y: Argv) =>
         y
-          .positional('action', { type: 'string', choices: ['create', 'list'] as const, demandOption: true })
+          .positional('action', { type: 'string', choices: ['create', 'list', 'cancel'] as const, demandOption: true })
           .positional('args', { type: 'string', array: true })
           .option('file', { type: 'string' })
-          .option('lines', { type: 'string' }),
+          .option('lines', { type: 'string' })
+          .option('reason', { type: 'string' }),
       async (args: Arguments) => {
         const action = String(args.action)
         if (action === 'create') {
@@ -69,6 +71,16 @@ export async function runCli(opts: {
             const statusIcon = getStatusIcon(t.status)
             io.stdout(`  ${statusIcon} ${t.taskId} [${t.status}] ${t.title}\n`)
           }
+          return
+        }
+
+        if (action === 'cancel') {
+          const positionalArgs = (args.args as unknown as string[] | undefined) ?? []
+          const taskId = (positionalArgs[0] ?? '').trim()
+          if (!taskId) throw new Error('task cancel requires taskId')
+          const reason = args.reason ? String(args.reason) : undefined
+          app.taskService.cancelTask(taskId, reason)
+          io.stdout('canceled\n')
           return
         }
       }

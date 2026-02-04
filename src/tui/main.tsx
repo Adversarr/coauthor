@@ -36,7 +36,7 @@ export function MainTui(props: Props) {
 
       const commandLine = trimmed.slice(1)
       if (commandLine === 'help') {
-        setStatus('commands: /task create <title>, /task list, /log replay [taskId], /exit')
+        setStatus('commands: /task create <title>, /task list, /task cancel <taskId> [reason], /log replay [taskId], /exit')
         return
       }
 
@@ -53,6 +53,20 @@ export function MainTui(props: Props) {
       if (commandLine.startsWith('task create ')) {
         const title = commandLine.slice('task create '.length).trim()
         await app.taskService.createTask({ title, agentId: app.agent.id })
+        await refresh()
+        setStatus('')
+        return
+      }
+
+      if (commandLine.startsWith('task cancel ')) {
+        const rest = commandLine.slice('task cancel '.length).trim()
+        const [taskId, ...reasonParts] = rest.split(/\s+/)
+        if (!taskId) {
+          setStatus('usage: /task cancel <taskId> [reason]')
+          return
+        }
+        const reason = reasonParts.join(' ').trim() || undefined
+        await app.taskService.cancelTask(taskId, reason)
         await refresh()
         setStatus('')
         return
@@ -88,7 +102,7 @@ export function MainTui(props: Props) {
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>{header}</Text>
         <Text dimColor>
-          Commands: /task create &lt;title&gt; · /task list · /log replay [taskId] · /exit
+          Commands: /task create &lt;title&gt; · /task list · /task cancel &lt;taskId&gt; [reason] · /log replay [taskId] · /exit
         </Text>
       </Box>
       <Box flexDirection="column" marginBottom={1}>
