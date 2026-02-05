@@ -100,14 +100,19 @@ export class DefaultCoAuthorAgent implements Agent {
       })
 
       // Handle text response - persist immediately for crash recovery
-      if (llmResponse.content || llmResponse.toolCalls) {
+      if (llmResponse.content || llmResponse.reasoning || llmResponse.toolCalls) {
         const assistantMessage: LLMMessage = {
           role: 'assistant',
           content: llmResponse.content,
+          reasoning: llmResponse.reasoning,
           toolCalls: llmResponse.toolCalls
         }
         context.persistMessage(assistantMessage)
         
+        if (llmResponse.reasoning) {
+          yield { kind: 'reasoning', content: llmResponse.reasoning }
+        }
+
         if (llmResponse.content) {
           yield { kind: 'text', content: llmResponse.content }
         }
@@ -179,13 +184,18 @@ export class DefaultCoAuthorAgent implements Agent {
     // Get result (injected by runtime)
     const result = context.toolResults.get(toolCall.toolCallId)
     if (result) {
-      // Persist tool result message for crash recovery
-      const toolMessage: LLMMessage = {
-        role: 'tool',
-        content: JSON.stringify(result.output),
-        toolCallId: toolCall.toolCallId
+      const alreadyExists = context.conversationHistory.some(
+        (message) => message.role === 'tool' && message.toolCallId === toolCall.toolCallId
+      )
+      if (!alreadyExists) {
+        const toolMessage: LLMMessage = {
+          role: 'tool',
+          content: JSON.stringify(result.output),
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName
+        }
+        context.persistMessage(toolMessage)
       }
-      context.persistMessage(toolMessage)
       
       if (result.isError) {
         yield { kind: 'text', content: `Tool failed: ${JSON.stringify(result.output)}` }

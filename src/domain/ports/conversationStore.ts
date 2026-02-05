@@ -38,7 +38,8 @@ export const LLMMessageSchema = z.discriminatedUnion('role', [
   z.object({
     role: z.literal('tool'),
     toolCallId: z.string(),
-    content: z.string()
+    content: z.string(),
+    toolName: z.string().optional()
   })
 ])
 

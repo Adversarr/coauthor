@@ -23,7 +23,6 @@ import { dirname } from 'node:path'
 import type { LLMMessage } from '../domain/ports/llmClient.js'
 import type {
   ConversationStore,
-  ConversationEntry,
   StoredConversationEntry
 } from '../domain/ports/conversationStore.js'
 import { ConversationEntrySchema } from '../domain/ports/conversationStore.js'
@@ -99,6 +98,7 @@ export class JsonlConversationStore implements ConversationStore {
       .filter((r) => r.taskId === taskId)
       .sort((a, b) => a.index - b.index)
       .map((r) => this.#parseMessage(r.message))
+      .filter((message): message is LLMMessage => message !== null)
   }
 
   truncate(taskId: string, keepLastN: number): void {
@@ -145,6 +145,7 @@ export class JsonlConversationStore implements ConversationStore {
     return rows
       .filter((r) => r.id > fromIdExclusive)
       .map((r) => this.#rowToStoredEntry(r))
+      .filter((entry): entry is StoredConversationEntry => entry !== null)
   }
 
   // ============================================================================
@@ -180,7 +181,15 @@ export class JsonlConversationStore implements ConversationStore {
     if (!existsSync(this.#conversationsPath)) return []
     const raw = readFileSync(this.#conversationsPath, 'utf8')
     const lines = raw.split('\n').filter((line) => line.trim())
-    return lines.map((line) => JSON.parse(line) as JsonlConversationRow)
+    const rows: JsonlConversationRow[] = []
+    for (const line of lines) {
+      try {
+        rows.push(JSON.parse(line) as JsonlConversationRow)
+      } catch {
+        continue
+      }
+    }
+    return rows
   }
 
   #rewriteFile(rows: JsonlConversationRow[]): void {
@@ -188,18 +197,20 @@ export class JsonlConversationStore implements ConversationStore {
     writeFileSync(this.#conversationsPath, content)
   }
 
-  #parseMessage(raw: unknown): LLMMessage {
-    // Validate and parse the message
-    const entry = ConversationEntrySchema.pick({ message: true }).parse({ message: raw })
-    return entry.message as LLMMessage
+  #parseMessage(raw: unknown): LLMMessage | null {
+    const parsed = ConversationEntrySchema.pick({ message: true }).safeParse({ message: raw })
+    if (!parsed.success) return null
+    return parsed.data.message as LLMMessage
   }
 
-  #rowToStoredEntry(row: JsonlConversationRow): StoredConversationEntry {
+  #rowToStoredEntry(row: JsonlConversationRow): StoredConversationEntry | null {
+    const message = this.#parseMessage(row.message)
+    if (!message) return null
     return {
       id: row.id,
       taskId: row.taskId,
       index: row.index,
-      message: this.#parseMessage(row.message),
+      message,
       createdAt: row.createdAt
     }
   }

@@ -3,6 +3,8 @@ import type { EventStore } from '../domain/ports/eventStore.js'
 import type { LLMClient, LLMMessage } from '../domain/ports/llmClient.js'
 import type { ToolRegistry, ToolExecutor, ToolResult } from '../domain/ports/tool.js'
 import type { ConversationStore } from '../domain/ports/conversationStore.js'
+import type { AuditLog } from '../domain/ports/auditLog.js'
+import type { TelemetrySink } from '../domain/ports/telemetry.js'
 import type { DomainEvent, StoredEvent, UserInteractionRespondedPayload } from '../domain/events.js'
 import type { TaskService, TaskView } from '../application/taskService.js'
 import type { InteractionService } from '../application/interactionService.js'
@@ -28,6 +30,8 @@ import type { Agent, AgentContext, AgentOutput } from './agent.js'
 export class AgentRuntime {
   readonly #store: EventStore
   readonly #conversationStore: ConversationStore
+  readonly #auditLog: AuditLog
+  readonly #telemetry: TelemetrySink
   readonly #taskService: TaskService
   readonly #interactionService: InteractionService
   readonly #agent: Agent
@@ -43,6 +47,8 @@ export class AgentRuntime {
   constructor(opts: {
     store: EventStore
     conversationStore: ConversationStore
+    auditLog: AuditLog
+    telemetry?: TelemetrySink
     taskService: TaskService
     interactionService: InteractionService
     agent: Agent
@@ -53,6 +59,8 @@ export class AgentRuntime {
   }) {
     this.#store = opts.store
     this.#conversationStore = opts.conversationStore
+    this.#auditLog = opts.auditLog
+    this.#telemetry = opts.telemetry ?? { emit: () => {} }
     this.#taskService = opts.taskService
     this.#interactionService = opts.interactionService
     this.#agent = opts.agent
@@ -214,6 +222,7 @@ export class AgentRuntime {
     
     // Load persisted conversation history (enables resume across restarts)
     const conversationHistory: LLMMessage[] = this.#conversationStore.getMessages(taskId)
+    await this.#repairConversationHistory(taskId, conversationHistory)
     const toolResults = new Map<string, ToolResult>()
 
     // If resuming from a confirm_risky_action response, track the confirmed interactionId
@@ -289,6 +298,11 @@ export class AgentRuntime {
         console.log(`[Agent] ${output.content}`)
         return {}
 
+      case 'reasoning':
+        // Reasoning output - just log
+        console.log(`[Agent] (Thinking) ${output.content}`)
+        return {}
+
       case 'tool_call': {
         const tool = this.#toolRegistry.get(output.call.toolName)
         const isRisky = tool?.riskLevel === 'risky'
@@ -303,6 +317,7 @@ export class AgentRuntime {
         const result = await this.#toolExecutor.execute(output.call, toolContext)
         // Inject result back into context for agent to use
         context.toolResults.set(output.call.toolCallId, result)
+        this.#persistToolResultIfMissing(taskId, output.call.toolCallId, output.call.toolName, result, context)
         if (isRisky) {
           context.confirmedInteractionId = undefined
         }
@@ -363,5 +378,119 @@ export class AgentRuntime {
   #formatError(error: unknown): string {
     if (error instanceof Error) return error.message || String(error)
     return String(error)
+  }
+
+  #persistToolResultIfMissing(
+    taskId: string,
+    toolCallId: string,
+    toolName: string,
+    result: ToolResult,
+    context: AgentContext
+  ): void {
+    const alreadyExists = context.conversationHistory.some(
+      (message) => message.role === 'tool' && message.toolCallId === toolCallId
+    )
+    if (alreadyExists) return
+
+    context.persistMessage({
+      role: 'tool',
+      toolCallId,
+      toolName,
+      content: JSON.stringify(result.output),
+    })
+    this.#telemetry.emit({
+      type: 'tool_result_persisted',
+      payload: { taskId, toolCallId, toolName, isError: result.isError },
+    })
+  }
+
+  async #repairConversationHistory(taskId: string, conversationHistory: LLMMessage[]): Promise<void> {
+    const existingToolResults = new Set<string>()
+    for (const message of conversationHistory) {
+      if (message.role === 'tool') {
+        existingToolResults.add(message.toolCallId)
+      }
+    }
+
+    const desiredToolCalls: Array<{ toolCallId: string; toolName: string; arguments: Record<string, unknown> }> = []
+    for (const message of conversationHistory) {
+      if (message.role !== 'assistant') continue
+      for (const toolCall of message.toolCalls ?? []) {
+        desiredToolCalls.push({
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          arguments: toolCall.arguments,
+        })
+      }
+    }
+
+    if (desiredToolCalls.length === 0) return
+
+    const auditEntries = this.#auditLog.readByTask(taskId)
+    const toolCompletionById = new Map<string, { toolName: string; output: unknown; isError: boolean }>()
+    for (const entry of auditEntries) {
+      if (entry.type !== 'ToolCallCompleted') continue
+      toolCompletionById.set(entry.payload.toolCallId, {
+        toolName: entry.payload.toolName,
+        output: entry.payload.output,
+        isError: entry.payload.isError,
+      })
+    }
+
+    let repairedToolResults = 0
+    let retriedToolCalls = 0
+
+    for (const toolCall of desiredToolCalls) {
+      if (existingToolResults.has(toolCall.toolCallId)) continue
+
+      const completed = toolCompletionById.get(toolCall.toolCallId)
+      if (completed) {
+        const toolMessage: LLMMessage = {
+          role: 'tool',
+          toolCallId: toolCall.toolCallId,
+          toolName: completed.toolName,
+          content: JSON.stringify(completed.output),
+        }
+        this.#conversationStore.append(taskId, toolMessage)
+        conversationHistory.push(toolMessage)
+        existingToolResults.add(toolCall.toolCallId)
+        repairedToolResults += 1
+        continue
+      }
+
+      const tool = this.#toolRegistry.get(toolCall.toolName)
+      if (!tool || tool.riskLevel !== 'safe') continue
+
+      const retryResult = await this.#toolExecutor.execute(
+        {
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          arguments: toolCall.arguments,
+        },
+        {
+          taskId,
+          actorId: this.#agent.id,
+          baseDir: this.#baseDir,
+        }
+      )
+
+      const toolMessage: LLMMessage = {
+        role: 'tool',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        content: JSON.stringify(retryResult.output),
+      }
+      this.#conversationStore.append(taskId, toolMessage)
+      conversationHistory.push(toolMessage)
+      existingToolResults.add(toolCall.toolCallId)
+      retriedToolCalls += 1
+    }
+
+    if (repairedToolResults > 0 || retriedToolCalls > 0) {
+      this.#telemetry.emit({
+        type: 'conversation_repair_applied',
+        payload: { taskId, repairedToolResults, retriedToolCalls },
+      })
+    }
   }
 }

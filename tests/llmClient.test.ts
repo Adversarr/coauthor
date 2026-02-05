@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => {
   return {
     generateText: vi.fn(),
     streamText: vi.fn(),
+    jsonSchema: vi.fn((schema: unknown) => ({ schema })),
     createOpenAICompatible: vi.fn()
   }
 })
@@ -15,7 +16,8 @@ vi.mock('nanoid', () => ({
 vi.mock('ai', () => {
   return {
     generateText: mocks.generateText,
-    streamText: mocks.streamText
+    streamText: mocks.streamText,
+    jsonSchema: mocks.jsonSchema
   }
 })
 

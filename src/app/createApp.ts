@@ -19,6 +19,7 @@ import { FakeLLMClient } from '../infra/fakeLLMClient.js'
 import { OpenAILLMClient } from '../infra/openaiLLMClient.js'
 import { DEFAULT_USER_ACTOR_ID } from '../domain/actor.js'
 import { loadAppConfig, type AppConfig } from '../config/appConfig.js'
+import { ConsoleTelemetrySink, NoopTelemetrySink, type TelemetrySink } from '../domain/ports/telemetry.js'
 
 // ============================================================================
 // App Container
@@ -54,6 +55,7 @@ export type App = {
   store: EventStore
   auditLog: AuditLog
   conversationStore: ConversationStore
+  telemetry: TelemetrySink
   toolRegistry: ToolRegistry
   toolExecutor: ToolExecutor
   llm: LLMClient
@@ -126,6 +128,9 @@ export function createApp(opts: CreateAppOptions): App {
   // Tool Executor
   const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, auditLog })
 
+  const telemetry: TelemetrySink =
+    config.telemetry.sink === 'console' ? new ConsoleTelemetrySink() : new NoopTelemetrySink()
+
   // LLM Client
   const llm =
     opts.llm ??
@@ -133,7 +138,8 @@ export function createApp(opts: CreateAppOptions): App {
       ? new OpenAILLMClient({
           apiKey: config.llm.openai.apiKey,
           baseURL: config.llm.openai.baseURL,
-          modelByProfile: config.llm.openai.modelByProfile
+          modelByProfile: config.llm.openai.modelByProfile,
+          toolSchemaStrategy: config.toolSchema.strategy,
         })
       : new FakeLLMClient())
 
@@ -152,6 +158,8 @@ export function createApp(opts: CreateAppOptions): App {
   const agentRuntime = new AgentRuntime({
     store,
     conversationStore,
+    auditLog,
+    telemetry,
     taskService,
     interactionService,
     agent,
@@ -170,6 +178,7 @@ export function createApp(opts: CreateAppOptions): App {
     store,
     auditLog,
     conversationStore,
+    telemetry,
     toolRegistry,
     toolExecutor,
     llm,

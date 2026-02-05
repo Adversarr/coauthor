@@ -1,6 +1,5 @@
-import { generateText, streamText, type ModelMessage, type LanguageModel } from 'ai'
+import { generateText, streamText, type ModelMessage, type LanguageModel, AssistantModelMessage, TextPart, FilePart, ToolApprovalRequest, ToolCallPart, ToolResultPart } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { z } from 'zod'
 import { nanoid } from 'nanoid'
 import type {
   LLMClient,
@@ -11,10 +10,19 @@ import type {
   LLMStreamChunk,
   LLMStreamOptions
 } from '../domain/ports/llmClient.js'
-import type { ToolDefinition, ToolCallRequest } from '../domain/ports/tool.js'
+import type { ToolCallRequest } from '../domain/ports/tool.js'
+import { convertToolDefinitionsToAISDKTools, type ToolSchemaStrategy } from './toolSchemaAdapter.js'
+import { ReasoningPart } from '@ai-sdk/provider-utils'
 
 // Convert our LLMMessage to ai-sdk ModelMessage format
 function toModelMessages(messages: LLMMessage[]): ModelMessage[] {
+  const toToolResultOutput = (content: string): { type: 'json'; value: unknown } | { type: 'text'; value: string } => {
+    try {
+      return { type: 'json', value: JSON.parse(content) as unknown }
+    } catch {
+      return { type: 'text', value: content }
+    }
+  }
   return messages.map((m): ModelMessage => {
     if (m.role === 'system') {
       return { role: 'system', content: m.content }
@@ -23,23 +31,30 @@ function toModelMessages(messages: LLMMessage[]): ModelMessage[] {
       return { role: 'user', content: m.content }
     }
     if (m.role === 'assistant') {
-      if (m.toolCalls && m.toolCalls.length > 0) {
-        // Build content parts for assistant with tool calls
-        const parts: Array<{ type: 'text'; text: string } | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }> = []
-        if (m.content) {
-          parts.push({ type: 'text', text: m.content })
+      const hasToolCalls = (m.toolCalls?.length ?? 0) > 0
+      const hasReasoning = Boolean(m.reasoning)
+      if (hasToolCalls || hasReasoning) {
+        const parts: Array<TextPart | FilePart | ReasoningPart | ToolCallPart 
+                          | ToolResultPart | ToolApprovalRequest> = []
+        if (m.reasoning) {
+          parts.push({ type: 'reasoning', text: m.reasoning } as ReasoningPart)
         }
-        for (const tc of m.toolCalls) {
-          parts.push({
-            type: 'tool-call',
-            toolCallId: tc.toolCallId,
-            toolName: tc.toolName,
-            args: tc.arguments
-          })
+        if (m.content) {
+          parts.push({ type: 'text', text: m.content } as TextPart)
+        }
+        if (m.toolCalls) {
+          for (const tc of m.toolCalls) {
+            parts.push({
+              type: 'tool-call',
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input: tc.arguments
+            } as ToolCallPart)
+          }
         }
         return { role: 'assistant', content: parts } as ModelMessage
       }
-      return { role: 'assistant', content: m.content ?? '' }
+      return { role: 'assistant', content: m.content ?? '' } as AssistantModelMessage
     }
     if (m.role === 'tool') {
       // Use 'as unknown as ModelMessage' to work around ai-sdk type changes
@@ -49,8 +64,8 @@ function toModelMessages(messages: LLMMessage[]): ModelMessage[] {
           {
             type: 'tool-result',
             toolCallId: m.toolCallId,
-            toolName: 'unknown',
-            output: { text: m.content }
+            toolName: m.toolName ?? 'unknown',
+            output: toToolResultOutput(m.content)
           }
         ]
       } as unknown as ModelMessage
@@ -59,82 +74,28 @@ function toModelMessages(messages: LLMMessage[]): ModelMessage[] {
   })
 }
 
-// Convert our ToolDefinition to ai-sdk Tool format
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toCoreTools(tools?: ToolDefinition[]): Record<string, any> | undefined {
-  if (!tools || tools.length === 0) return undefined
-  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result: Record<string, any> = {}
-  for (const t of tools) {
-    result[t.name] = {
-      description: t.description,
-      inputSchema: jsonSchemaToZod(t.parameters)
-    }
-  }
-  return result
-}
-
 // Convert ai-sdk tool calls to our ToolCallRequest format
-export function toToolCallRequests(toolCalls?: Array<{ toolCallId?: string; toolName: string; args?: unknown }>): ToolCallRequest[] {
+export function toToolCallRequests(toolCalls?: Array<{ toolCallId?: string; toolName: string; args?: unknown; input?: unknown }>): ToolCallRequest[] {
   return toolCalls?.map((tc) => ({
     toolCallId: tc.toolCallId ?? `tool_${nanoid(12)}`,
     toolName: tc.toolName,
-    arguments: (tc.args ?? {}) as Record<string, unknown>
+    arguments: (tc.args ?? tc.input ?? {}) as Record<string, unknown>
   })) ?? []
-}
-
-// Simple JSON Schema to Zod converter (covers basic cases)
-function jsonSchemaToZod(schema: ToolDefinition['parameters']): z.ZodType {
-  const shape: Record<string, z.ZodType> = {}
-  
-  for (const [key, prop] of Object.entries(schema.properties)) {
-    let zodType: z.ZodType
-    
-    switch (prop.type) {
-      case 'string':
-        zodType = (prop.enum && prop.enum.length > 0) ? z.enum(prop.enum as [string, ...string[]]) : z.string()
-        break
-      case 'number':
-        zodType = z.number()
-        break
-      case 'boolean':
-        zodType = z.boolean()
-        break
-      case 'array':
-        zodType = z.array(z.unknown())
-        break
-      case 'object':
-        zodType = z.record(z.unknown())
-        break
-      default:
-        zodType = z.unknown()
-    }
-    
-    if (prop.description) {
-      zodType = zodType.describe(prop.description)
-    }
-    
-    // Make optional if not in required
-    if (!schema.required?.includes(key)) {
-      zodType = zodType.optional()
-    }
-    
-    shape[key] = zodType
-  }
-  
-  return z.object(shape)
 }
 
 export class OpenAILLMClient implements LLMClient {
   readonly #apiKey: string
   readonly #openai: ReturnType<typeof createOpenAICompatible>
   readonly #modelByProfile: Record<LLMProfile, string>
+  readonly #toolSchemaStrategy: ToolSchemaStrategy
+  readonly #verboseEnabled: boolean
 
   constructor(opts: {
     apiKey: string | null
     baseURL?: string | null
     modelByProfile: Record<LLMProfile, string>
+    toolSchemaStrategy?: ToolSchemaStrategy
+    verbose?: boolean
   }) {
     if (!opts.apiKey) {
       throw new Error('Missing COAUTHOR_OPENAI_API_KEY (or inject apiKey via config)')
@@ -146,11 +107,33 @@ export class OpenAILLMClient implements LLMClient {
       baseURL: opts.baseURL ?? 'https://api.openai.com/v1',
     })
     this.#modelByProfile = opts.modelByProfile
+    this.#toolSchemaStrategy = opts.toolSchemaStrategy ?? 'auto'
+    const envVerbose = process.env.COAUTHOR_LLM_VERBOSE
+    const envVerboseEnabled = envVerbose === '1' || envVerbose === 'true'
+    this.#verboseEnabled = opts.verbose ?? envVerboseEnabled
+  }
+
+  #logVerbose(message: string, data?: Record<string, unknown>): void {
+    if (!this.#verboseEnabled) return
+    if (data) {
+      console.log(`[OpenAILLMClient] ${message}`, data)
+      return
+    }
+    console.log(`[OpenAILLMClient] ${message}`)
   }
 
   async complete(opts: LLMCompleteOptions): Promise<LLMResponse> {
     const modelId = this.#modelByProfile[opts.profile]
-    const tools = toCoreTools(opts.tools)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
+
+    this.#logVerbose('complete request', {
+      profile: opts.profile,
+      modelId,
+      messagesCount: opts.messages.length,
+      toolsCount: opts.tools?.length ?? 0,
+      maxTokens: opts.maxTokens ?? null
+    })
     
     const result = await generateText({
       model: this.#openai(modelId) as unknown as LanguageModel,
@@ -170,8 +153,17 @@ export class OpenAILLMClient implements LLMClient {
       stopReason = 'max_tokens'
     }
 
+    this.#logVerbose('complete response', {
+      finishReason: result.finishReason ?? null,
+      stopReason,
+      textLength: result.text?.length ?? 0,
+      reasoningLength: result.reasoningText?.length ?? 0,
+      toolCallsCount: toolCalls.length
+    })
+
     return {
       content: result.text || undefined,
+      reasoning: result.reasoningText || undefined,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       stopReason
     }
@@ -179,7 +171,16 @@ export class OpenAILLMClient implements LLMClient {
 
   async *stream(opts: LLMStreamOptions): AsyncGenerator<LLMStreamChunk> {
     const modelId = this.#modelByProfile[opts.profile]
-    const tools = toCoreTools(opts.tools)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
+
+    this.#logVerbose('stream request', {
+      profile: opts.profile,
+      modelId,
+      messagesCount: opts.messages.length,
+      toolsCount: opts.tools?.length ?? 0,
+      maxTokens: opts.maxTokens ?? null
+    })
     
     const res = await streamText({
       model: this.#openai(modelId) as unknown as LanguageModel,
@@ -188,34 +189,135 @@ export class OpenAILLMClient implements LLMClient {
       maxOutputTokens: opts.maxTokens,
       providerOptions: {
         openai: {
-          enable_thinking: true
+          enable_thinking: false
         }
       }
     })
 
-    // Track reasoning and tool calls being built
-    let reasoningBuffer = ''
+    const getPartText = (part: unknown): string => {
+      if (!part || typeof part !== 'object') return ''
+      const record = part as Record<string, unknown>
+      if (typeof record.text === 'string') return record.text
+      if (typeof record.delta === 'string') return record.delta
+      return ''
+    }
+    const getPartId = (part: unknown): string | undefined => {
+      if (!part || typeof part !== 'object') return undefined
+      const record = part as Record<string, unknown>
+      return typeof record.id === 'string' ? record.id : undefined
+    }
+    const parseToolInput = (input: unknown): Record<string, unknown> => {
+      if (input && typeof input === 'object') {
+        return input as Record<string, unknown>
+      }
+      if (typeof input === 'string') {
+        try {
+          const parsed = JSON.parse(input) as unknown
+          if (parsed && typeof parsed === 'object') {
+            return parsed as Record<string, unknown>
+          }
+        } catch {
+          return { input }
+        }
+      }
+      return {}
+    }
+    const reasoningBuffers = new Map<string, string>()
+    const toolInputBuffers = new Map<string, { toolName: string; input: string }>()
     
     for await (const part of res.fullStream) {
-      if (part.type === 'text-delta') {
-        yield { type: 'text', content: part.text }
-      } else if (part.type === 'reasoning-start') {
-        reasoningBuffer = ''
-      } else if (part.type === 'reasoning-delta') {
-        const delta = part.text
-        reasoningBuffer += delta
-      } else if (part.type === 'reasoning-end') {
-        if (reasoningBuffer) {
-          yield { type: 'reasoning', content: reasoningBuffer }
+      const partType = (part as { type: string }).type
+      this.#logVerbose('stream part', {
+        type: partType,
+        id: getPartId(part) ?? null,
+        toolName: (part as { toolName?: string }).toolName ?? null
+      })
+      if (
+        partType === 'start' ||
+        partType === 'start-step' ||
+        partType === 'text-start' ||
+        partType === 'text-end' ||
+        partType === 'finish-step' ||
+        partType === 'stream-start' ||
+        partType === 'response-metadata' ||
+        partType === 'source' ||
+        partType === 'file' ||
+        partType === 'raw'
+      ) {
+        continue
+      }
+      if (partType === 'text-delta') {
+        const textDelta = getPartText(part)
+        if (textDelta) {
+          this.#logVerbose('text-delta', { length: textDelta.length })
+          yield { type: 'text', content: textDelta }
         }
-        reasoningBuffer = ''
-      } else if (part.type === 'tool-call') {
+      } else if (partType === 'reasoning-start') {
+        const reasoningId = getPartId(part) ?? `reasoning_${nanoid(10)}`
+        reasoningBuffers.set(reasoningId, '')
+      } else if (partType === 'reasoning-delta') {
+        const reasoningId = getPartId(part)
+        const delta = getPartText(part)
+        if (reasoningId && delta) {
+          const existing = reasoningBuffers.get(reasoningId) ?? ''
+          reasoningBuffers.set(reasoningId, existing + delta)
+          this.#logVerbose('reasoning-delta', { id: reasoningId, length: delta.length })
+          yield { type: 'reasoning', content: delta }
+        }
+      } else if (partType === 'reasoning-end') {
+        const reasoningId = getPartId(part)
+        if (reasoningId) {
+          reasoningBuffers.delete(reasoningId)
+        }
+      } else if (partType === 'tool-input-start') {
+        const toolInputId = getPartId(part) ?? `tool_${nanoid(12)}`
+        const toolName = (part as { toolName?: string }).toolName ?? 'unknown'
+        toolInputBuffers.set(toolInputId, { toolName, input: '' })
+        this.#logVerbose('tool-input-start', { toolCallId: toolInputId, toolName })
+        yield { type: 'tool_call_start', toolCallId: toolInputId, toolName }
+      } else if (partType === 'tool-input-delta') {
+        const toolInputId = getPartId(part)
+        if (toolInputId) {
+          const delta = getPartText(part)
+          if (!delta) continue
+
+          const existing = toolInputBuffers.get(toolInputId)
+          if (existing) {
+            toolInputBuffers.set(toolInputId, { toolName: existing.toolName, input: existing.input + delta })
+            this.#logVerbose('tool-input-delta', { toolCallId: toolInputId, delta })
+            yield { type: 'tool_call_delta', toolCallId: toolInputId, argumentsDelta: delta }
+            continue
+          }
+
+          toolInputBuffers.set(toolInputId, { toolName: 'unknown', input: delta })
+          this.#logVerbose('tool-input-delta', { toolCallId: toolInputId, delta })
+          yield { type: 'tool_call_start', toolCallId: toolInputId, toolName: 'unknown' }
+          yield { type: 'tool_call_delta', toolCallId: toolInputId, argumentsDelta: delta }
+        }
+      } else if (partType === 'tool-input-end') {
+        const toolInputId = getPartId(part)
+        if (toolInputId) {
+          this.#logVerbose('tool-input-end', { toolCallId: toolInputId })
+          yield { type: 'tool_call_end', toolCallId: toolInputId }
+          toolInputBuffers.delete(toolInputId)
+        }
+      } else if (partType === 'tool-call') {
         const toolCallPart = part as { type: 'tool-call'; toolCallId?: string; toolName: string; args?: unknown; input?: unknown }
         const toolCallId = toolCallPart.toolCallId ?? `tool_${nanoid(12)}`
+        const parsedInput = parseToolInput(toolCallPart.args ?? toolCallPart.input)
+        this.#logVerbose('tool-call', { toolCallId, toolName: toolCallPart.toolName })
         yield { type: 'tool_call_start', toolCallId, toolName: toolCallPart.toolName }
-        yield { type: 'tool_call_delta', toolCallId, argumentsDelta: JSON.stringify(toolCallPart.args ?? toolCallPart.input ?? {}) }
+        yield { type: 'tool_call_delta', toolCallId, argumentsDelta: JSON.stringify(parsedInput) }
         yield { type: 'tool_call_end', toolCallId }
-      } else if (part.type === 'finish') {
+      } else if (partType === 'tool-result' || partType === 'tool-error') {
+        const errorValue = (part as { error?: unknown }).error
+        if (errorValue) {
+          throw errorValue instanceof Error ? errorValue : new Error(String(errorValue))
+        }
+      } else if (partType === 'error') {
+        const errorValue = (part as { error?: unknown }).error
+        throw errorValue instanceof Error ? errorValue : new Error(String(errorValue ?? 'Stream error'))
+      } else if (partType === 'finish') {
         const finishPart = part as { type: 'finish'; finishReason?: string }
         let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' = 'end_turn'
         if (finishPart.finishReason === 'tool-calls') {
@@ -223,6 +325,7 @@ export class OpenAILLMClient implements LLMClient {
         } else if (finishPart.finishReason === 'length') {
           stopReason = 'max_tokens'
         }
+        this.#logVerbose('stream finish', { finishReason: finishPart.finishReason ?? null, stopReason })
         yield { type: 'done', stopReason }
       } else {
         console.warn(`Unknown stream part type: ${(part as { type: string }).type}`)
@@ -230,4 +333,3 @@ export class OpenAILLMClient implements LLMClient {
     }
   }
 }
-

@@ -42,6 +42,7 @@ function createTestInfra(dir: string) {
   const runtime = new AgentRuntime({
     store,
     conversationStore,
+    auditLog,
     taskService,
     interactionService,
     agent,

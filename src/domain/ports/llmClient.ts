@@ -6,7 +6,7 @@ export type LLMMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string }
   | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string }
-  | { role: 'tool'; toolCallId: string; content: string }
+  | { role: 'tool'; toolCallId: string; content: string; toolName?: string }
 
 // ============================================================================
 // LLM Response Types
@@ -16,6 +16,7 @@ export type LLMStopReason = 'end_turn' | 'tool_use' | 'max_tokens'
 
 export type LLMResponse = {
   content?: string
+  reasoning?: string
   toolCalls?: ToolCallRequest[]
   stopReason: LLMStopReason
 }
@@ -67,5 +68,3 @@ export interface LLMClient {
    */
   stream(opts: LLMStreamOptions): AsyncGenerator<LLMStreamChunk>
 }
-
-

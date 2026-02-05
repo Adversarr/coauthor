@@ -39,3 +39,20 @@ npm run dev
 npm run build
 npm test
 ```
+
+## LLM 调试
+
+```bash
+npm run dev -- llm test --mode tool_use
+npm run dev -- llm test --mode stream_tool_use
+```
+
+如需输出结构化监控事件到 stdout：
+
+```bash
+COAUTHOR_TELEMETRY_SINK=console npm run dev -- llm test --mode tool_use
+```
+
+上下文持久化与恢复语义见 [llm-context.md](file:///Users/yangjerry/Repo/coauthor/docs/llm-context.md)。
+
+工具 schema 适配与回滚开关见 [tool-schema.md](file:///Users/yangjerry/Repo/coauthor/docs/tool-schema.md)。

@@ -2,6 +2,12 @@ import { z } from 'zod'
 import type { LLMProfile } from '../domain/ports/llmClient.js'
 
 export type AppConfig = {
+  telemetry: {
+    sink: 'none' | 'console'
+  }
+  toolSchema: {
+    strategy: 'zod' | 'jsonschema' | 'auto'
+  }
   llm: {
     provider: 'fake' | 'openai'
     openai: {
@@ -13,6 +19,8 @@ export type AppConfig = {
 }
 
 const EnvSchema = z.object({
+  COAUTHOR_TELEMETRY_SINK: z.enum(['none', 'console']).default('none'),
+  COAUTHOR_TOOL_SCHEMA_STRATEGY: z.enum(['zod', 'jsonschema', 'auto']).default('auto'),
   COAUTHOR_LLM_PROVIDER: z.enum(['fake', 'openai']).default('fake'),
   COAUTHOR_OPENAI_API_KEY: z.string().min(1).optional(),
   COAUTHOR_OPENAI_BASE_URL: z.string().min(1).optional(),
@@ -24,6 +32,12 @@ const EnvSchema = z.object({
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const parsed = EnvSchema.parse(env)
   const config = {
+    telemetry: {
+      sink: parsed.COAUTHOR_TELEMETRY_SINK,
+    },
+    toolSchema: {
+      strategy: parsed.COAUTHOR_TOOL_SCHEMA_STRATEGY,
+    },
     llm: {
       provider: parsed.COAUTHOR_LLM_PROVIDER,
       openai: {

@@ -26,6 +26,7 @@ export type AgentInteractionRequest = InteractionRequest & {
  */
 export type AgentOutput =
   | { kind: 'text'; content: string }
+  | { kind: 'reasoning'; content: string }
   | { kind: 'tool_call'; call: ToolCallRequest }
   | { kind: 'interaction'; request: AgentInteractionRequest }
   | { kind: 'done'; summary?: string }

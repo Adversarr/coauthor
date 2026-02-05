@@ -16,7 +16,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "bench:tool-schema": "tsx scripts/bench-tool-schema.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.25",
