@@ -1,0 +1,17 @@
+# Sample Data File
+
+This is a sample data file for the CoAuthor demo.
+
+## Purpose
+
+This file can be used to demonstrate file reading capabilities in the demo workflow.
+
+## Content
+
+Line 1: Sample data point A
+Line 2: Sample data point B
+Line 3: Sample data point C
+
+## Conclusion
+
+End of sample data.

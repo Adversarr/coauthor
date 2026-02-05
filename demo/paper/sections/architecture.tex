@@ -1,0 +1,31 @@
+% System Architecture Section
+% This section describes the technical design of the CoAuthor system
+
+\subsection{Overview}
+\label{subsec:overview}
+
+CoAuthor is built on a hexagonal architecture that separates domain logic from infrastructure concerns. This design enables testability, flexibility, and clear separation of responsibilities.
+
+\subsection{Core Components}
+\label{subsec:components}
+
+The system consists of the following key components:
+
+\begin{itemize}
+    \item \textbf{Domain Layer}: Contains business logic, event definitions, and type schemas.
+    \item \textbf{Application Layer}: Implements use cases through services for tasks, patches, and events.
+    \item \textbf{Infrastructure Layer}: Provides adapters for event storage, LLM clients, and logging.
+    \item \textbf{Interface Layer}: Includes CLI and TUI for user interaction.
+\end{itemize}
+
+\subsection{Event Flow}
+\label{subsec:event-flow}
+
+All state changes in CoAuthor are captured as domain events and stored in an append-only log. This event-sourced approach provides:
+
+\begin{enumerate}
+    \item Complete audit trails of all changes
+    \item Ability to reconstruct any historical state
+    \item Natural support for temporal queries
+    \item Built-in conflict resolution through event ordering
+\end{enumerate}
