@@ -188,7 +188,7 @@ export class OpenAILLMClient implements LLMClient {
       maxOutputTokens: opts.maxTokens,
       providerOptions: {
         openai: {
-          // enable_thinking: true
+          enable_thinking: true
         }
       }
     })
