@@ -30,6 +30,7 @@ export function MainTui(props: Props) {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [showTasks, setShowTasks] = useState(false)
   const logSequence = useRef(0)
+  const hasAutoOpenedTasks = useRef(false)
 
   const addLog = (
     content: string,
@@ -86,6 +87,11 @@ export function MainTui(props: Props) {
       } else {
         setPendingInteraction(null)
       }
+
+      if (!awaitingTask && !hasAutoOpenedTasks.current && taskList.length > 0) {
+        hasAutoOpenedTasks.current = true
+        setShowTasks(true)
+      }
     } catch (e) {
       addLog(`Failed to refresh: ${e}`, { color: 'red' })
     }
@@ -105,14 +111,14 @@ export function MainTui(props: Props) {
         const isThinking = event.payload.kind === 'reasoning'
         if (isThinking) {
           addLog(event.payload.content, {
-            prefix: '[Thinking] ',
+            prefix: '󰧑 ',
             color: 'yellow',
             dim: true
           })
         } else {
           addLog(event.payload.content, {
-            prefix: '> ',
-            color: 'green'
+            prefix: '󰍥 ',
+            // color: 'green'
           })
         }
       }
@@ -181,6 +187,7 @@ export function MainTui(props: Props) {
   const taskStatus = focusedTask ? focusedTask.status : ''
   const statusIcon = getStatusIcon(taskStatus)
   const columns = stdout?.columns ?? 80
+  const rows = stdout?.rows ?? 24
   const statusLine = truncateText(status || '', columns - 2)
   const separatorLine = createSeparatorLine(columns)
 
@@ -204,63 +211,77 @@ export function MainTui(props: Props) {
         )}
       </Static>
 
-      {/* Task list overlay */}
       {showTasks ? (
-        <Box 
-            position="absolute" 
-            marginTop={2} 
-            marginLeft={2} 
-            width="80%" 
-            height="70%" 
-            borderStyle="double" 
-            borderColor="white" 
-            flexDirection="column"
-            padding={1}
-        >
-          <Text bold underline>Task List (Press ESC to close)</Text>
-          {tasks.map((task) => (
-            <Box key={task.taskId}>
-              <Text color={task.taskId === focusedTaskId ? 'green' : 'white'}>
-                {task.taskId === focusedTaskId ? '> ' : '  '}
-                {task.title}
-              </Text>
-              <Text dimColor> ({task.status}) [{task.taskId}]</Text>
-            </Box>
-          ))}
-        </Box>
-      ) : null}
+        <Box flexDirection="column" paddingX={1}>
+          <Box borderStyle="double" borderColor="white" flexDirection="column" padding={1}>
+            <Text bold underline>
+              Tasks (Press ESC to close)
+            </Text>
+            <Text dimColor>{statusLine || ' '}</Text>
+            <Box flexDirection="column" marginTop={1}>
+              {(() => {
+                const maximumTaskRows = Math.max(0, rows - 7)
+                const visibleTasks = tasks.slice(0, maximumTaskRows)
+                const hiddenTaskCount = Math.max(0, tasks.length - visibleTasks.length)
 
-      {/* Status line */}
-      <Text dimColor>{separatorLine}</Text>
-      <Box flexDirection="column" paddingX={1}>
-        <Text color="yellow">{statusLine || ' '}</Text>
-        
-        {/* Interactive area: either interaction panel or input */}
-        {pendingInteraction ? (
-          <InteractionPanel 
-            pendingInteraction={pendingInteraction} 
-            onSubmit={onInteractionSubmit} 
-          />
-        ) : (
-          <Box>
-            <Text color="cyan">{'> '}</Text>
-            <TextInput value={input} onChange={setInput} onSubmit={onSubmit} />
+                return (
+                  <>
+                    {visibleTasks.map((task) => {
+                      const isFocused = task.taskId === focusedTaskId
+                      const taskSuffix = ` (${task.status}) [${task.taskId}]`
+                      const availableTitleWidth = Math.max(0, columns - taskSuffix.length - 6)
+                      const truncatedTitle = truncateText(task.title, availableTitleWidth)
+
+                      return (
+                        <Box key={task.taskId}>
+                          <Text color={isFocused ? 'green' : 'white'} bold={isFocused}>
+                            {isFocused ? '> ' : '  '}
+                            {truncatedTitle}
+                          </Text>
+                          <Text dimColor>{taskSuffix}</Text>
+                        </Box>
+                      )
+                    })}
+                    {hiddenTaskCount > 0 ? (
+                      <Text dimColor>{`… and ${hiddenTaskCount} more`}</Text>
+                    ) : null}
+                  </>
+                )
+              })()}
+            </Box>
           </Box>
-        )}
-      </Box>
-      
-      {/* Status bar */}
-      <Text dimColor>{separatorLine}</Text>
-      <Box height={1} width="100%" paddingX={1}>
-        <Box flexGrow={1}>
-          <Text color="cyan" bold>🔷 CoAuthor</Text>
-          <Text dimColor> │ </Text>
-          <Text color="yellow">FOCUSED: </Text>
-          <Text bold>{taskTitle}</Text>
-          <Text> {statusIcon} </Text>
         </Box>
-        <Text color="green">[●]</Text>
-      </Box>
+      ) : (
+        <>
+          <Text dimColor>{separatorLine}</Text>
+          <Box flexDirection="column" paddingX={1}>
+            <Text color="yellow">{statusLine || ' '}</Text>
+
+            {pendingInteraction ? (
+              <InteractionPanel pendingInteraction={pendingInteraction} onSubmit={onInteractionSubmit} />
+            ) : (
+              <Box>
+                <Text color="cyan">{'> '}</Text>
+                <TextInput value={input} onChange={setInput} onSubmit={onSubmit} />
+              </Box>
+            )}
+          </Box>
+
+          <Text dimColor>{separatorLine}</Text>
+          <Box height={1} width="100%" paddingX={1}>
+            <Box flexGrow={1}>
+              <Text color="cyan" bold>
+                CoAuthor
+              </Text>
+              <Text dimColor> │ </Text>
+              <Text color="yellow">FOCUSED: </Text>
+              <Text bold>{taskTitle}</Text>
+              <Text> {statusIcon} </Text>
+            </Box>
+            <Text color="green">[●]</Text>
+          </Box>
+        </>
+      )}
     </Box>
   )
 }
@@ -280,11 +301,11 @@ function getStatusIcon(status: string): string {
 function formatAuditEntry(entry: StoredAuditEntry): string {
   if (entry.type === 'ToolCallRequested') {
     const input = truncateJson(entry.payload.input, 200)
-    return `→ ${entry.payload.toolName} ${input}`
+    return ` → ${entry.payload.toolName} ${input}`
   }
   const result = entry.payload.isError ? 'error' : 'ok'
   const output = truncateJson(entry.payload.output, 200)
-  return `✓ ${entry.payload.toolName} ${result} (${entry.payload.durationMs}ms) ${output}`
+  return ` ✓ ${entry.payload.toolName} ${result} (${entry.payload.durationMs}ms) ${output}`
 }
 
 function truncateJson(value: unknown, maxLength: number): string {

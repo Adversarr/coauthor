@@ -150,7 +150,7 @@ export class DefaultCoAuthorAgent implements Agent {
     let iteration = 0
     while (iteration < this.#maxIterations) {
       iteration++
-      yield { kind: 'text', content: `[Iteration ${iteration}] Calling LLM...` }
+      // yield { kind: 'text', content: `[Iteration ${iteration}] Calling LLM...` }
 
       // Get tool definitions for LLM
       const toolDefs = context.tools.list().map(t => ({
@@ -247,7 +247,7 @@ export class DefaultCoAuthorAgent implements Agent {
     toolCall: ToolCallRequest,
     context: AgentContext
   ): AsyncGenerator<AgentOutput> {
-    yield { kind: 'text', content: `Executing tool: ${toolCall.toolName}` }
+    // yield { kind: 'text', content: `Executing tool: ${toolCall.toolName}` }
     yield { kind: 'tool_call', call: toolCall }
 
     // Get result (injected by runtime)
