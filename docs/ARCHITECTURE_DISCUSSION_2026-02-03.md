@@ -1,29 +1,29 @@
-# CoAuthor 架构设计讨论记录
+# CoAuthor Architecture Design Discussion Record
 
-> 日期：2026-02-03
-> 主题：Task 闭环 + 通用交互事件 (UIP) + 工具审计解耦（MVP 方向）
+> Date: 2026-02-03
+> Topic: Task Loop + Universal Interaction Events (UIP) + Tool Audit Decoupling (MVP Direction)
 
-适用性说明：本文档是 2026-02-03 的方向重设记录，用于覆盖此前 docs/ 中关于 Plan/Patch 协议的旧口径；后续规范文档（ARCHITECTURE.md、DOMAIN.md）应以本文为准完成对齐。
-
----
-
-## 1. 方向更新（覆盖旧设计）
-
-本次讨论对既有设计做出三条决定，直接覆盖旧稿与旧约束：
-
-1. **Plan-first 不再成立**：不再要求任何任务必须先产出 plan 才能执行。
-2. **Agent 更通用**：Agent 的唯一职责是完成 Task，本质是 `start → loop until done`（按需 UIP）。
-3. **事件层面移除 Patch**：不再在 DomainEvent 中维护 `PatchProposed/PatchApplied/...` 这类“变更表示”事件。
-
-随之而来的关键原则是：**Task 事件只描述协作与决策，不描述具体文件修改；文件修改走独立的工具审计链路**。
+Applicability Note: This document is a direction reset record from 2026-02-03, intended to supersede previous statements in docs/ regarding the Plan/Patch protocol; subsequent specification documents (ARCHITECTURE.md, DOMAIN.md) should be aligned with this document.
 
 ---
 
-## 2. 通用交互协议（UIP）
+## 1. Direction Update (Superseding Old Design)
 
-UIP 解决的问题是：用户交互不应为某个业务类型（plan/patch/其他）量身定制事件。系统只需要表达两件事：
-- 系统向用户提出一个交互请求
-- 用户对该请求做出响应
+This discussion makes three decisions regarding the existing design, directly superseding old drafts and constraints:
+
+1. **Plan-first No Longer Holds**: No longer requiring any task to produce a plan before execution.
+2. **More Generic Agent**: The Agent's sole responsibility is to complete the Task, essentially `start → loop until done` (on-demand UIP).
+3. **Remove Patch at Event Level**: No longer maintaining "change representation" events like `PatchProposed/PatchApplied/...` in DomainEvent.
+
+The key principle that follows is: **Task events only describe collaboration and decisions, not specific file modifications; file modifications go through an independent tool audit chain**.
+
+---
+
+## 2. Universal Interaction Protocol (UIP)
+
+The problem UIP solves is: user interactions should not be tailored to specific business types (plan/patch/other) with custom events. The system only needs to express two things:
+- The system presents an interaction request to the user
+- The user responds to that request
 
 ### 2.1 `UserInteractionRequested`
 
@@ -38,10 +38,10 @@ type UserInteractionRequested = {
     kind: 'Select' | 'Confirm' | 'Input' | 'Composite'
 
     purpose:
-      | 'choose_strategy'       // 选择方案/路径
-      | 'request_info'          // 缺信息时向用户追问
-      | 'confirm_risky_action'  // 需要用户承担风险（例如写文件/执行命令等）
-      | 'assign_subtask'        // 子任务委派
+      | 'choose_strategy'       // Choose solution/path
+      | 'request_info'          // Ask user for more information when missing
+      | 'confirm_risky_action'  // Require user to assume risk (e.g., writing files/running commands)
+      | 'assign_subtask'        // Subtask delegation
       | 'generic'
 
     display: {
@@ -85,158 +85,158 @@ type UserInteractionResponded = {
 
 ---
 
-## 3. 通用 Agent：`confirm → loop until done`
+## 3. Generic Agent: `confirm → loop until done`
 
-### 3.1 Agent 的职责边界
+### 3.1 Agent Responsibility Boundaries
 
-Agent 只关心“如何把 Task 做完”。在执行过程中，Agent 可能需要：
-- 通过 UIP 请求用户确认选择/补充信息
-- 调用工具完成具体动作（例如 edit file / run command / read file）
+The Agent only cares about "how to complete the Task." During execution, the Agent may need to:
+- Request user confirmation/choice or supplement information through UIP
+- Call tools to complete specific actions (e.g., edit file / run command / read file)
 
-关键点：**function call（工具调用）采用另一个审计系统**，不是 Task 的领域事件。Task 事件不记录具体文件 diff、不记录文件写入细节，只记录“何时需要用户做决定/提供信息/任务状态如何变化”。
+Key point: **function call (tool invocation) uses a separate audit system**, not Task domain events. Task events do not record specific file diffs or file write details, only record "when user needs to make decisions/provide information/how task status changes".
 
-### 3.2 标准工作流骨架
+### 3.2 Standard Workflow Skeleton
 
 ```text
 1) TaskCreated
 2) TaskStarted
 3) LOOP:
-     - agent 做一步推进（文本输出或者工具调用）
-     - 若缺信息/需要决策：UserInteractionRequested → UserInteractionResponded
-     - 直到 done / failed / canceled
+     - agent makes one step progress (text output or tool call)
+     - If missing info/need decision: UserInteractionRequested → UserInteractionResponded
+     - Until done / failed / canceled
 4) TaskCompleted | TaskFailed | TaskCanceled
 ```
 
-这个流程应该和市面上的llm agent的工作流非常相似。
+This workflow should be very similar to LLM agent workflows in the market.
 
 ---
 
-## 4. 事件模型（MVP：无 Patch、无 Plan）
+## 4. Event Model (MVP: No Patch, No Plan)
 
-### 4.1 DomainEvent（建议最小集合）
+### 4.1 DomainEvent (Recommended Minimum Set)
 
 ```typescript
 type DomainEvent =
-  // Task 生命周期
+  // Task lifecycle
   | TaskCreated
   | TaskStarted
   | TaskCompleted
   | TaskFailed
   | TaskCanceled
 
-  // 通用交互
+  // Universal interaction
   | UserInteractionRequested
   | UserInteractionResponded
 ```
 
-> 说明：本方向下，Task 的“执行细节”通过工具审计记录；DomainEvent 保持极简、清晰、可扩展。
+> Note: Under this direction, Task "execution details" are recorded through tool audit logs; DomainEvent remains minimalist, clear, and extensible.
 
-### 4.2 “确认 Task”如何表达
+### 4.2 How to Express "Confirm Task"
 
-不引入额外的 `TaskConfirmed` 事件。若需要澄清范围或让用户做选择，按需使用：
+No additional `TaskConfirmed` event is introduced. If scope clarification or user choice is needed, use on-demand:
 - `UserInteractionRequested(purpose=request_info|choose_strategy)`
 - `UserInteractionResponded(...)`
 
 ---
 
-## 5. 简化后的事件流（UIP + Task 闭环）
+## 5. Simplified Event Flow (UIP + Task Loop)
 
-同一个 Task 的事件流（按时间顺序）：
+Event flow for the same Task (in chronological order):
 
 ```text
 Event 1: TaskCreated
 Event 2: TaskStarted
-Event 3..N: (零个或多个) UserInteractionRequested / UserInteractionResponded
+Event 3..N: (zero or more) UserInteractionRequested / UserInteractionResponded
 
 Event N+1: TaskCompleted | TaskFailed | TaskCanceled
 ```
 
-### 5.1 需要用户确认的高风险动作（示例）
+### 5.1 High-Risk Actions Requiring User Confirmation (Example)
 
-当 Agent 即将执行不可逆或高风险的工具调用（例如写文件、批量替换、运行会修改环境的命令）时，先用 UIP 取得明确确认：
+When the Agent is about to execute irreversible or high-risk tool calls (e.g., writing files, batch replacement, running commands that modify the environment), first obtain explicit confirmation through UIP:
 
 ```text
 UserInteractionRequested(purpose=confirm_risky_action, kind=Confirm, display.contentKind=Diff|PlainText)
 UserInteractionResponded(selectedOptionId=approve|reject, comment?)
 ```
 
-### 5.2 Subtask 的交互（仅交互层，V1）
+### 5.2 Subtask Interaction (Interaction Layer Only, V1)
 
-当 Orchestrator 需要用户选择子任务执行者时：
+When the Orchestrator needs the user to select a subtask executor:
 
 ```text
 UserInteractionRequested(purpose=assign_subtask, kind=Select, options=[agentA, agentB, ...])
 UserInteractionResponded(selectedOptionId=agentB)
 ```
 
-子任务的创建与完成是否需要领域事件属于后续设计（可选）。本讨论稿只确定：**交互统一走 UIP**。
+Whether subtask creation and completion require domain events is a future design decision (optional). This discussion only determines: **interactions go through UIP uniformly**.
 
 ---
 
-## 6. Agent 工具调用机制与审计（Tool Use）
+## 6. Agent Tool Invocation Mechanism & Auditing (Tool Use)
 
-### 6.1 核心定义：Agent 的“手和脚”
+### 6.1 Core Definition: Agent's "Hands and Feet"
 
-工具调用（Tool Use / Function Calling）是 Agent 与外部环境（文件系统、Shell、浏览器等）交互的**唯一方式**。
-这直接对应于 OpenAI 或 Claude 等现代 LLM 提供的 Tool Use 能力，或者是基于结构化输出（XML/JSON）的模拟工具调用。
+Tool invocation (Tool Use / Function Calling) is the **only way** for the Agent to interact with the external environment (file system, Shell, browser, etc.).
+This directly corresponds to the Tool Use capability provided by modern LLMs like OpenAI or Claude, or simulated tool invocation based on structured output (XML/JSON).
 
-### 6.2 两种实现模式的统一抽象
+### 6.2 Unified Abstraction of Two Implementation Modes
 
-CoAuthor 内部应通过 `ToolRegistry` 和 `ToolExecutor` 屏蔽底层模型的差异，对外提供统一的工具调用协议。
+CoAuthor should internally use `ToolRegistry` and `ToolExecutor` to shield differences in underlying models, providing a unified tool invocation protocol externally.
 
 #### A. Native Tool Use (OpenAI / Claude)
-- **机制**：在 API 请求中传入 `tools` 定义（JSON Schema）。
-- **表现**：模型直接返回 `tool_calls` 字段（含 `function.name` 和 `function.arguments`）。
-- **优势**：模型原生支持，准确率高，能够处理复杂的参数结构。
+- **Mechanism**: Pass `tools` definitions (JSON Schema) in API requests.
+- **Behavior**: Model directly returns `tool_calls` field (containing `function.name` and `function.arguments`).
+- **Advantage**: Native model support, high accuracy, capable of handling complex parameter structures.
 
 #### B. Structured Output (XML / JSON)
-- **机制**：通过 System Prompt 约定特定的输出格式（例如 XML 标签）。
-- **表现**：模型在文本流中输出类似 `<tool_code>...</tool_code>` 或 `<tool_use>...</tool_use>` 的内容。
-- **优势**：通用性强，适用于不支持 Native Tool Use 的模型。
+- **Mechanism**: Agree on specific output formats through System Prompt (e.g., XML tags).
+- **Behavior**: Model outputs content like `<tool_code>...</tool_code>` or `<tool_use>...</tool_use>` in the text stream.
+- **Advantage**: Strong universality, suitable for models that don't support Native Tool Use.
 
-**CoAuthor 的统一处理流：**
-无论底层是 Native 还是 XML，系统都会将其解析为统一的内部结构 `ToolCallRequest`，然后再分发执行。
+**CoAuthor's Unified Processing Flow:**
+Regardless of whether the underlying implementation is Native or XML, the system will parse it into a unified internal structure `ToolCallRequest`, then distribute for execution.
 
-### 6.3 工具调用的生命周期与审计
+### 6.3 Tool Invocation Lifecycle & Auditing
 
-为了保证安全与可追溯，每一次工具调用都必须经过严格的生命周期管理，并记录到独立的 AuditLog 中。
+To ensure security and traceability, every tool invocation must go through strict lifecycle management and be recorded in an independent AuditLog.
 
-#### 流程图解
+#### Flow Diagram
 ```text
-[Agent] 
-   | (发起调用)
+[Agent]
+   | (Initiate call)
    v
 [System Interceptor]
-   | 1. 解析请求 (Parse)
-   | 2. 权限检查 (Check Permission) -> 若高风险，触发 UIP (InteractionRequested)
-   | 3. 记录请求日志 (Log Request)
+   | 1. Parse request (Parse)
+   | 2. Check permission (Check Permission) -> If high risk, trigger UIP (InteractionRequested)
+   | 3. Log request (Log Request)
    v
 [Tool Executor]
-   | (执行具体逻辑：editFile / runCommand / searchCode ...)
+   | (Execute specific logic: editFile / runCommand / searchCode ...)
    v
 [System Interceptor]
-   | 1. 捕获结果 (Capture Output / Error)
-   | 2. 记录完成日志 (Log Completion)
+   | 1. Capture result (Capture Output / Error)
+   | 2. Log completion (Log Completion)
    v
-[Agent] (接收 ToolResult，继续思考)
+[Agent] (Receive ToolResult, continue thinking)
 ```
 
-#### 审计日志结构 (AuditLog)
+#### Audit Log Structure (AuditLog)
 
-AuditLog 是独立于 DomainEvent 的追加写日志，用于完整记录工具调用的“现场”。
+AuditLog is an append-only log independent of DomainEvent, used to completely record the "scene" of tool calls.
 
 ```typescript
-type JsonObject = { [key: string]: any } // 简化定义，实际应为严格的 JSON 结构
+type JsonObject = { [key: string]: any } // Simplified definition, actual should be strict JSON structure
 
 type AuditLogEvent =
   | {
       type: 'ToolCallRequested'
       payload: {
-        toolCallId: string       // 唯一 ID
+        toolCallId: string       // Unique ID
         toolName: string         // e.g. "editFile", "runCommand"
-        authorActorId: string    // 发起调用的 Agent 或 User
-        taskId: string           // 关联的 Task
-        input: JsonObject        // 具体的参数，必须是 JSON 对象
+        authorActorId: string    // Agent or User initiating the call
+        taskId: string           // Associated Task
+        input: JsonObject        // Specific parameters, must be JSON object
         timestamp: number
       }
     }
@@ -246,7 +246,7 @@ type AuditLogEvent =
         toolCallId: string
         authorActorId: string
         taskId: string
-        output: JsonObject       // 执行结果，必须是 JSON 对象 (如 { stdout: "..." })
+        output: JsonObject       // Execution result, must be JSON object (e.g. { stdout: "..." })
         isError: boolean
         durationMs: number
         timestamp: number
@@ -254,89 +254,89 @@ type AuditLogEvent =
     }
 ```
 
-### 6.4 关键工具示例
+### 6.4 Key Tool Examples
 
-CoAuthor 的核心能力将通过以下基础工具暴露给 Agent：
+CoAuthor's core capabilities will be exposed to the Agent through the following basic tools:
 
-1.  **文件操作**：
-    -   `readFile(path)`: 读取文件内容（通常是只读安全）。
-    -   `editFile(path, oldStr, newStr)`: 申请修改文件（高风险，需审计，可能需确认）。
-    -   `listFiles(path)`: 浏览目录结构。
+1.  **File Operations**:
+    -   `readFile(path)`: Read file content (usually read-only safe).
+    -   `editFile(path, oldStr, newStr)`: Request to modify file (high risk, needs audit, may require confirmation).
+    -   `listFiles(path)`: Browse directory structure.
 
-2.  **命令执行**：
-    -   `runCommand(command)`: 执行 Shell 命令（高风险，必须确认）。
+2.  **Command Execution**:
+    -   `runCommand(command)`: Execute Shell command (high risk, must confirm).
 
-3.  **知识检索**：
-    -   `searchCode(query)`: 语义搜索代码库。
-    -   `grep(pattern)`: 正则搜索。
+3.  **Knowledge Retrieval**:
+    -   `searchCode(query)`: Semantic search of codebase.
+    -   `grep(pattern)`: Regex search.
 
-4.  **交互请求**（这也是一种特殊的 Tool）：
-    -   `askUser(question)`: 实际上是触发 `UserInteractionRequested` 事件，等待 `UserInteractionResponded` 后作为 Tool Result 返回。
-
----
-
-## 7. 与 docs/ 现有文档的冲突记录（供后续统一收敛）
-
-本讨论稿已明确覆盖旧设计，因此当前 `docs/ARCHITECTURE.md`、`docs/DOMAIN.md` 等规范文档中存在大量冲突，典型包括：
-- `Plan-first + Patch-first + Review-first` 的协议需要重写（至少 Plan-first 与 Patch-first 不再成立）。
-- `PatchProposed/PatchApplied/PatchConflicted` 等事件在本方向下被移除或迁移到工具审计层表达。
-- 既有 CLI patch 命令与 DomainEvent 的绑定方式需要重设（若继续保留 CLI 命令，也应映射为工具调用与 UIP 交互，而不是 Patch 事件）。
-
-本文件作为"讨论记录"，此处只记录冲突，不在本次改动中同步修改其他文档。
+4.  **Interaction Request** (This is also a special Tool):
+    -   `askUser(question)`: Actually triggers `UserInteractionRequested` event, waits for `UserInteractionResponded` then returns as Tool Result.
 
 ---
 
-# 第二部分：Agent 状态管理与 Task-Context 关系（2026-02-03 晚）
+## 7. Conflict Records with Existing docs/ Documents (For Subsequent Convergence)
 
-> **✅ 已解决**：2026-02-03 晚引入 `ConversationStore` 端口，实现对话历史持久化。
-> 详见 `src/domain/ports/conversationStore.ts` 和 `src/infra/jsonlConversationStore.ts`。
+This discussion draft has clearly superseded the old design, so there are numerous conflicts in the current specification documents like `docs/ARCHITECTURE.md`, `docs/DOMAIN.md`, etc. Typical examples include:
+- The `Plan-first + Patch-first + Review-first` protocol needs rewriting (at least Plan-first and Patch-first no longer apply).
+- Events like `PatchProposed/PatchApplied/PatchConflicted` are removed or migrated to tool audit layer expression under this direction.
+- The binding method of existing CLI patch commands with DomainEvent needs resetting (if CLI commands are to be retained, they should map to tool calls and UIP interactions, not Patch events).
 
-## 一、初始发现的问题（已修复）
+This file serves as a "discussion record", here only records conflicts, does not synchronously modify other documents in this change.
 
-### 1.1 重复的类型设计 ✅ 已修复
+---
 
-**原问题**：
-- `AgentContext.conversationHistory` 始终是空数组
-- Agent 每次都在本地重建 `messages` 数组
-- `conversationHistory` 和 `messages` 指代同一个概念，但被割裂了
+# Part 2: Agent State Management and Task-Context Relationship (2026-02-03 Evening)
 
-**解决方案**：
-- `AgentRuntime` 通过 `ConversationStore.getMessages(taskId)` 加载历史
-- `AgentContext.conversationHistory` 现在是 `readonly LLMMessage[]`，由 Runtime 预加载
-- 新增 `AgentContext.persistMessage(message)` 回调，Agent 调用后消息被持久化
-- `DefaultCoAuthorAgent.#toolLoop()` 不再本地维护 `messages` 数组，直接使用 `context.conversationHistory`
+> **✅ Resolved**: On 2026-02-03 evening, introduced `ConversationStore` port to implement conversation history persistence.
+> See `src/domain/ports/conversationStore.ts` and `src/infra/jsonlConversationStore.ts` for details.
 
-### 1.2 跨 Resume 状态丢失 ✅ 已修复
+## 1. Initial Issues Discovered (Fixed)
 
-**原问题**：暂停/恢复之间没有机制保持对话历史。
+### 1.1 Duplicate Type Design ✅ Fixed
 
-**解决方案**：
+**Original Problem**:
+- `AgentContext.conversationHistory` was always an empty array
+- Agent rebuilt `messages` array locally each time
+- `conversationHistory` and `messages` referred to the same concept but were split
+
+**Solution**:
+- `AgentRuntime` loads history via `ConversationStore.getMessages(taskId)`
+- `AgentContext.conversationHistory` is now `readonly LLMMessage[]`, preloaded by Runtime
+- Added `AgentContext.persistMessage(message)` callback, Agent calls it and message is persisted
+- `DefaultCoAuthorAgent.#toolLoop()` no longer maintains `messages` array locally, directly uses `context.conversationHistory`
+
+### 1.2 Cross-Resume State Loss ✅ Fixed
+
+**Original Problem**: No mechanism to maintain conversation history between pause/resume.
+
+**Solution**:
 ```
-新流程：
+New Process:
 messages = [system, user] → persistMessage() → LLM → persistMessage(assistant) → Tool → persistMessage(tool)
    ↓
-遇到 risky 工具，yield interaction, return
+Encounter risky tool, yield interaction, return
    ↓
-#toolLoop 结束，但消息已持久化到 ConversationStore！
+#toolLoop ends, but messages already persisted to ConversationStore!
    ↓
-等待用户响应...（程序可以重启，状态不丢失）
+Waiting for user response... (program can restart, state not lost)
    ↓
-用户响应后，Agent.run() 重新开始
+After user response, Agent.run() restarts
    ↓
-conversationHistory = ConversationStore.getMessages(taskId)  ← 完整恢复！
+conversationHistory = ConversationStore.getMessages(taskId) ← Complete recovery!
 ```
 
-## 二、三层存储职责分离
+## 2. Three-Layer Storage Responsibility Separation
 
-引入 `ConversationStore` 后，系统形成清晰的三层存储职责分离：
+After introducing `ConversationStore`, the system forms clear three-layer storage responsibility separation:
 
-| 存储 | 职责 | 交互类型 |
-|------|------|----------|
-| **EventStore** | 协作与决策（Task 生命周期、UIP 交互） | User ↔ Agent |
-| **AuditLog** | 工具执行审计（readFile, editFile, runCommand 等） | Agent ↔ Tools/Files |
-| **ConversationStore** | Agent 执行上下文（LLM 对话历史） | Agent ↔ LLM |
+| Storage | Responsibility | Interaction Type |
+|---------|----------------|------------------|
+| **EventStore** | Collaboration and Decisions (Task lifecycle, UIP interactions) | User ↔ Agent |
+| **AuditLog** | Tool Execution Audit (readFile, editFile, runCommand, etc.) | Agent ↔ Tools/Files |
+| **ConversationStore** | Agent Execution Context (LLM conversation history) | Agent ↔ LLM |
 
-这种分离确保：
-1. DomainEvent 保持清晰，只记录"发生了什么决策"
-2. AuditLog 提供完整的工具调用追踪，支持文件修改审计
-3. ConversationStore 支持 Agent 状态恢复，无需在事件中存储大量 LLM 对话内容
+This separation ensures:
+1. DomainEvent remains clear, only records "what decisions happened"
+2. AuditLog provides complete tool call tracking, supports file modification audit
+3. ConversationStore supports Agent state recovery, no need to store large amounts of LLM conversation content in events
