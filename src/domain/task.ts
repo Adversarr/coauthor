@@ -64,12 +64,12 @@ export const TaskSchema = z.object({
   title: z.string().min(1),
   intent: z.string(),
   createdBy: z.string().min(1),
-  agentId: z.string().min(1),           // V0: 创建时直接指定处理 Agent
+  agentId: z.string().min(1),           // V0: Specify processing Agent directly upon creation
   priority: TaskPrioritySchema,
   status: TaskStatusSchema,
   artifactRefs: z.array(ArtifactRefSchema).optional(),
   createdAt: z.string().min(1),
-  parentTaskId: z.string().optional()   // V1: 子任务支持
+  parentTaskId: z.string().optional()   // V1: Subtask support
 })
 
 // ============================================================================

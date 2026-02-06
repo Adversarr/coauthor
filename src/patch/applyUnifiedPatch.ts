@@ -37,15 +37,15 @@ export async function applyUnifiedPatchToFile(opts: {
   if (!patch) {
     throw new Error(
       patches.length === 0
-        ? 'patch 解析失败：未发现任何文件差异块'
-        : `patch 解析失败：包含多个文件，且无法匹配 targetPath=${targetPath}`
+        ? 'patch parsing failed: no file diff hunks found'
+        : `patch parsing failed: contains multiple files and cannot match targetPath=${targetPath}`
     )
   }
 
   const originalText = await readFile(absolutePath, 'utf8')
   const updatedText = applyPatch(originalText, patch, { autoConvertLineEndings: true })
   if (updatedText === false) {
-    throw new Error('patch apply 失败：hunks 无法与目标文件匹配')
+    throw new Error('patch application failed: hunks do not match target file')
   }
 
   await writeFile(absolutePath, updatedText, 'utf8')

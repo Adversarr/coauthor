@@ -76,7 +76,7 @@ export const InteractionPurposeSchema = z.enum([
   'choose_strategy',
   'request_info',
   'confirm_risky_action',
-  'assign_subtask',  // V1: Orchestrator 子任务分配
+  'assign_subtask',  // V1: Orchestrator subtask assignment
   'generic'
 ])
 

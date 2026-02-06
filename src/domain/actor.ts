@@ -14,7 +14,7 @@ export const ActorCapabilitySchema = z.enum([
   'run_latex_build',
   'read_assets',
   'create_task'
-  // V1: 'claim_task' - Agent 主动认领任务
+  // V1: 'claim_task' - Agent proactively claims task
 ])
 
 export const ActorSchema = z.object({

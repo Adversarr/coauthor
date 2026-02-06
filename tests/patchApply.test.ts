@@ -45,7 +45,7 @@ describe('applyUnifiedPatchToFile', () => {
     ].join('\n')
 
     await expect(applyUnifiedPatchToFile({ baseDir: 'repo', targetPath: 'doc.tex', patchText })).rejects.toThrow(
-      /patch apply 失败/
+      /patch application failed/
     )
     const unchanged = await readFile('repo/doc.tex', 'utf8')
     expect(unchanged).toBe('a\nb\n')

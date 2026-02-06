@@ -250,7 +250,7 @@ export class JsonlEventStore implements EventStore {
         }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-        if (Date.now() - start > 2000) throw new Error(`锁超时：${lockPath}`)
+        if (Date.now() - start > 2000) throw new Error(`Lock timeout: ${lockPath}`)
         sleepSync(10)
       }
     }

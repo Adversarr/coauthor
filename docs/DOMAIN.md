@@ -1,91 +1,91 @@
-# CoAuthor 领域模型规范
+# CoAuthor Domain Model Specification
 
-> 版本：V0.1  
-> 最后更新：2026-02-03  
-> 状态：规范文档（Normative）
+> Version: V0.1  
+> Last Updated: 2026-02-03  
+> Status: Normative
 
-本文档定义 CoAuthor 的领域模型：Event Schema、Entity 定义、Policy 规则。所有代码实现必须与本文档保持一致。
+This document defines the domain model for CoAuthor: Event Schema, Entity definitions, and Policy rules. All code implementations must remain consistent with this document.
 
-本规范已按 [ARCHITECTURE_DISCUSSION_2026-02-03.md](ARCHITECTURE_DISCUSSION_2026-02-03.md) 的方向重设进行更新：DomainEvent 仅表达 Task 生命周期与通用交互（UIP）；工具调用与其结果记录在独立的 AuditLog 中，不以 Plan/Patch 事件表达。
+This specification has been updated according to the direction reset in [ARCHITECTURE_DISCUSSION_2026-02-03.md](ARCHITECTURE_DISCUSSION_2026-02-03.md): DomainEvents only express the Task lifecycle and general interactions (UIP); tool calls and their results are recorded in a separate AuditLog and are not expressed via Plan/Patch events.
 
 ---
 
-## V0/V1 特性边界
+## V0/V1 Feature Boundaries
 
-| 特性 | V0 状态 | V1 计划 |
+| Feature | V0 Status | V1 Plan |
 |------|---------|---------|
-| Task 生命周期事件 | ✅ 5 种事件（Created/Started/Completed/Failed/Canceled） | 可能新增 Claim/Subtask 等事件 |
-| UIP 通用交互 | ✅ 完整实现 | - |
-| Tool Use + AuditLog | ✅ 完整实现 | - |
-| ConversationStore | ✅ 对话历史持久化 | - |
-| 风险工具确认 | ✅ ToolExecutor 强制检查 | - |
-| 任务分配 | 创建时直接指定 agentId | 多 Agent 路由（待定） |
-| 子任务 | Schema 预留 parentTaskId | Orchestrator 完整实现 |
-| InteractionPurpose.assign_subtask | 定义但不使用 | Orchestrator 使用 |
-| ArtifactStore Port | TODO（直接使用 fs API） | 完整端口实现 |
+| Task Lifecycle Events | ✅ 5 types (Created/Started/Completed/Failed/Canceled) | Possible addition of Claim/Subtask events |
+| UIP General Interaction | ✅ Fully implemented | - |
+| Tool Use + AuditLog | ✅ Fully implemented | - |
+| ConversationStore | ✅ Persistence of conversation history | - |
+| Risky Tool Confirmation | ✅ Mandatory check by ToolExecutor | - |
+| Task Assignment | agentId specified directly upon creation | Multi-Agent routing (TBD) |
+| Subtasks | Schema reserves parentTaskId | Full Orchestrator implementation |
+| InteractionPurpose.assign_subtask | Defined but not used | Used by Orchestrator |
+| ArtifactStore Port | TODO (directly using fs API) | Full Port implementation |
 
 ---
 
-## 1. Event Schema（事件 Schema）
+## 1. Event Schema
 
-### 1.1 设计原则
+### 1.1 Design Principles
 
-- **追加写**：事件只能追加，不能修改或删除
-- **自描述**：每个事件包含足够信息用于审计和回放
-- **Zod 校验**：所有事件使用 Zod schema 定义和校验
-- **authorActorId**：每个事件必须记录谁触发的
+- **Append-only**: Events can only be appended, not modified or deleted.
+- **Self-describing**: Each event contains sufficient information for auditing and replay.
+- **Zod Validation**: All events are defined and validated using Zod schemas.
+- **authorActorId**: Every event must record who triggered it.
 
-### 1.2 StoredEvent（持久化事件）
+### 1.2 StoredEvent
 
 ```typescript
 type StoredEvent = DomainEvent & {
-  id: number          // 全局自增 ID
-  streamId: string    // 通常是 taskId
-  seq: number         // 流内序号
+  id: number          // Global auto-increment ID
+  streamId: string    // Usually taskId
+  seq: number         // Sequence number within the stream
   createdAt: string   // ISO timestamp
 }
 ```
 
-### 1.3 DomainEvent（领域事件定义）
+### 1.3 DomainEvent Definition
 
-#### 1.3.1 任务生命周期事件
+#### 1.3.1 Task Lifecycle Events
 
 ```typescript
-// 任务创建
+// Task Creation
 type TaskCreatedEvent = {
   type: 'TaskCreated'
   payload: {
     taskId: string
     title: string
-    intent: string                    // 用户原始意图
+    intent: string                    // Original user intent
     priority: 'foreground' | 'normal' | 'background'
-    agentId: string                   // 指定处理的 Agent
-    artifactRefs?: ArtifactRef[]      // 关联的文件/位置
-    authorActorId: string             // 谁创建的（通常是 user）
+    agentId: string                   // Designated processing Agent
+    artifactRefs?: ArtifactRef[]      // Associated files/locations
+    authorActorId: string             // Who created it (usually user)
   }
 }
 
-// 任务开始执行
+// Task Execution Started
 type TaskStartedEvent = {
   type: 'TaskStarted'
   payload: {
     taskId: string
-    agentId: string                   // 执行任务的 Agent
+    agentId: string                   // Agent executing the task
     authorActorId: string
   }
 }
 
-// 任务完成
+// Task Completed
 type TaskCompletedEvent = {
   type: 'TaskCompleted'
   payload: {
     taskId: string
-    summary?: string                  // 完成摘要
+    summary?: string                  // Completion summary
     authorActorId: string
   }
 }
 
-// 任务失败
+// Task Failed
 type TaskFailedEvent = {
   type: 'TaskFailed'
   payload: {
@@ -95,7 +95,7 @@ type TaskFailedEvent = {
   }
 }
 
-// 任务取消
+// Task Canceled
 type TaskCanceledEvent = {
   type: 'TaskCanceled'
   payload: {
@@ -106,9 +106,9 @@ type TaskCanceledEvent = {
 }
 ```
 
-> **V0.1 说明**：不再使用 Plan/Patch 事件表达协作流程；“等待用户确认/补充信息”等阶段统一用 UIP 表达。
+> **V0.1 Note**: Plan/Patch events are no longer used to express the collaboration process; stages such as "waiting for user confirmation/supplementary information" are unified under UIP.
 
-#### 1.3.2 通用交互事件（UIP）
+#### 1.3.2 General Interaction Events (UIP)
 
 ```typescript
 type UserInteractionRequestedEvent = {
@@ -162,11 +162,11 @@ type UserInteractionRespondedEvent = {
 }
 ```
 
-### 1.4 完整 DomainEvent Union（V0.1）
+### 1.4 Full DomainEvent Union (V0.1)
 
 ```typescript
 type DomainEvent =
-  // Task 生命周期
+  // Task Lifecycle
   | TaskCreatedEvent
   | TaskStartedEvent
   | TaskCompletedEvent
@@ -179,21 +179,21 @@ type DomainEvent =
 type EventType = DomainEvent['type']
 ```
 
-### 1.5 V0.1 事件集（7 种）
+### 1.5 V0.1 Event Set (7 types)
 
-| 事件 | 说明 |
+| Event | Description |
 |------|------|
-| `TaskCreated` | 用户发起任务请求（含 agentId 指定处理者） |
-| `TaskStarted` | 任务开始执行 |
-| `UserInteractionRequested` | 系统发起交互请求（统一协议） |
-| `UserInteractionResponded` | 用户对交互请求做出回应 |
-| `TaskCompleted` | 任务成功完成 |
-| `TaskFailed` | 任务执行失败 |
-| `TaskCanceled` | 任务被取消 |
+| `TaskCreated` | User initiates a task request (including designated agentId) |
+| `TaskStarted` | Task execution begins |
+| `UserInteractionRequested` | System initiates an interaction request (unified protocol) |
+| `UserInteractionResponded` | User responds to an interaction request |
+| `TaskCompleted` | Task successfully completed |
+| `TaskFailed` | Task execution failed |
+| `TaskCanceled` | Task was canceled |
 
 ---
 
-## 2. Entity 定义
+## 2. Entity Definitions
 
 ### 2.1 Actor
 
@@ -209,7 +209,7 @@ export const ActorCapabilitySchema = z.enum([
   'run_latex_build',
   'read_assets',
   'create_task'
-  // V1: 'claim_task' - Agent 主动认领任务
+  // V1: 'claim_task' - Agent proactively claims task
 ])
 
 export const ActorSchema = z.object({
@@ -273,7 +273,7 @@ export const TaskSchema = z.object({
   status: TaskStatusSchema,
   artifactRefs: z.array(ArtifactRefSchema).optional(),
   createdAt: z.string().min(1),
-  // V1: 子任务支持
+  // V1: Subtask support
   parentTaskId: z.string().optional()
 })
 
@@ -309,15 +309,15 @@ export type ArtifactType = z.infer<typeof ArtifactTypeSchema>
 export type Artifact = z.infer<typeof ArtifactSchema>
 ```
 
-### 2.4 说明：Plan/Patch（已废弃）
+### 2.4 Note: Plan/Patch (Deprecated)
 
-V0.1 不再将 plan/patch 作为领域对象与领域事件的一部分。若需要兼容历史事件日志或旧实现的对照，请参考文末 `附录 A（Deprecated）`。
+V0.1 no longer includes plan/patch as part of domain objects and events. If you need compatibility with historical event logs or reference for old implementations, please refer to `Appendix A (Deprecated)` at the end of this document.
 
 ---
 
-## 3. Projection 定义
+## 3. Projection Definitions
 
-Projection 是从事件流派生的读模型，用于快速查询。
+Projections are read models derived from the event stream for fast queries.
 
 ### 3.1 TaskView
 
@@ -331,25 +331,25 @@ export type TaskView = {
   title: string
   intent: string
   createdBy: string
-  agentId: string                 // V0: 创建时直接指定的处理 Agent
+  agentId: string                 // V0: Processing Agent specified directly upon creation
   priority: TaskPriority
   status: TaskStatus
   artifactRefs?: ArtifactRef[]
   
-  // UIP 交互状态
-  pendingInteractionId?: string   // 当前等待响应的交互 ID
-  lastInteractionId?: string      // 最后一次交互的 ID
+  // UIP Interaction State
+  pendingInteractionId?: string   // ID of the interaction currently awaiting response
+  lastInteractionId?: string      // ID of the last interaction
   
-  // V1 预留：子任务支持
+  // V1 Reserved: Subtask support
   parentTaskId?: string
   childTaskIds?: string[]
   
   createdAt: string
-  updatedAt: string               // 最后事件时间
+  updatedAt: string               // Timestamp of the last event
 }
 ```
 
-### 3.2 Projection Reducer 规范
+### 3.2 Projection Reducer Specification
 
 ```typescript
 export type ProjectionReducer<TState> = (
@@ -358,53 +358,53 @@ export type ProjectionReducer<TState> = (
 ) => TState
 ```
 
-每个 Projection 必须：
-1. 提供 `defaultState`
-2. 提供纯函数 `reducer`
-3. 支持幂等（同一事件多次 apply 结果相同）
+Each Projection must:
+1. Provide a `defaultState`.
+2. Provide a pure function `reducer`.
+3. Support idempotency (applying the same event multiple times yields the same result).
 
 ---
 
-## 4. Policy 规则
+## 4. Policy Rules
 
-Policy 是纯函数，用于决策逻辑。不依赖外部状态。
+Policies are pure functions used for decision logic. They do not depend on external state.
 
-### 4.1 V0 任务分发模型
+### 4.1 V0 Task Distribution Model
 
-V0 采用 **单 Agent 直连模型**，无需路由：
+V0 adopts a **Single Agent direct model**, requiring no routing:
 
 ```
-用户 → Billboard (TaskCreated) → 默认 Agent 自动认领 → 执行 workflow
+User → Billboard (TaskCreated) → Default Agent automatically claims → Workflow execution
 ```
 
-这类似于 chat 模式，但任务经过 Billboard 形成可审计的 Task 历史。
+This is similar to a chat mode, but tasks are formed through the Billboard, creating an auditable Task history.
 
-**V1 扩展：Orchestrator 子任务模型（仅交互层）**
+**V1 Extension: Orchestrator Subtask Model (Interaction layer only)**
 
-当 Orchestrator 需要把工作拆成多个子任务并选择执行者时，V0.1 只要求交互统一走 UIP：
+When an Orchestrator needs to split work into multiple subtasks and select performers, V0.1 only requires the interaction to use UIP:
 - `UserInteractionRequested(purpose=assign_subtask, kind=Select, options=[agentA, agentB, ...])`
 - `UserInteractionResponded(selectedOptionId=agentB)`
 
-子任务是否需要额外的领域事件属于后续设计（可选）；本规范不在 DomainEvent 中预置 `SubtaskCreated/SubtaskCompleted` 事件类型。
+Whether subtasks require additional domain events is a matter for future design (optional); this specification does not preset `SubtaskCreated/SubtaskCompleted` event types in DomainEvent.
 
 ### 4.2 SchedulerPolicy
 
 ```typescript
 export type SchedulerPolicy = (
   tasks: TaskView[]
-) => TaskView[]  // 返回排序后的任务列表
+) => TaskView[]  // Returns sorted list of tasks
 
-// V0 默认实现：按优先级和创建时间排序
+// V0 Default Implementation: Sort by priority and creation time
 export const defaultSchedulerPolicy: SchedulerPolicy = (tasks) => {
   const priorityOrder = { foreground: 0, normal: 1, background: 2 }
   
   return [...tasks]
     .filter(t => t.status === 'open' || t.status === 'in_progress')
     .sort((a, b) => {
-      // 先按优先级
+      // First by priority
       const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority]
       if (pDiff !== 0) return pDiff
-      // 再按创建时间
+      // Then by creation time
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     })
 }
@@ -412,28 +412,28 @@ export const defaultSchedulerPolicy: SchedulerPolicy = (tasks) => {
 
 ---
 
-## 5. Port 接口定义
+## 5. Port Interface Definitions
 
 ### 5.1 EventStore
 
 ```typescript
 export interface EventStore {
-  // 初始化 schema（创建表等）
+  // Initialize schema (create tables, etc.)
   ensureSchema(): void
   
-  // 追加事件
+  // Append events
   append(streamId: string, events: DomainEvent[]): StoredEvent[]
   
-  // 读取所有事件（从指定 ID 之后）
+  // Read all events (after specified ID)
   readAll(fromIdExclusive?: number): StoredEvent[]
   
-  // 读取特定流的事件
+  // Read events for a specific stream
   readStream(streamId: string, fromSeqInclusive?: number): StoredEvent[]
   
-  // 按 ID 读取单个事件
+  // Read a single event by ID
   readById(id: number): StoredEvent | null
   
-  // Projection 状态管理
+  // Projection state management
   getProjection<TState>(name: string, defaultState: TState): {
     cursorEventId: number
     state: TState
@@ -444,53 +444,53 @@ export interface EventStore {
 
 ### 5.2 ConversationStore
 
-用于持久化 Agent 与 LLM 的对话历史，支持跨 UIP 暂停、程序重启的状态恢复。
+Used to persist the conversation history between Agent and LLM, supporting state recovery across UIP pauses and program restarts.
 
 ```typescript
 import type { LLMMessage } from './llmClient.js'
 
 /**
- * 对话条目 - 消息 + 任务上下文
+ * Conversation Entry - Message + Task Context
  */
 export type ConversationEntry = {
-  taskId: string       // 所属任务
-  index: number        // 任务内顺序索引
-  message: LLMMessage  // LLM 消息
+  taskId: string       // Associated task
+  index: number        // Sequential index within the task
+  message: LLMMessage  // LLM message
 }
 
 /**
- * 持久化的对话条目（含元数据）
+ * Persisted Conversation Entry (with metadata)
  */
 export type StoredConversationEntry = ConversationEntry & {
-  id: number           // 全局自增 ID
+  id: number           // Global auto-increment ID
   createdAt: string    // ISO timestamp
 }
 
 /**
- * ConversationStore 端口接口
+ * ConversationStore Port Interface
  *
- * 职责分离：
- * - EventStore: User ↔ Agent 协作决策
- * - AuditLog: Agent ↔ Tools/Files 执行审计
- * - ConversationStore: Agent ↔ LLM 对话上下文
+ * Separation of Responsibilities:
+ * - EventStore: User ↔ Agent collaboration decisions
+ * - AuditLog: Agent ↔ Tools/Files execution auditing
+ * - ConversationStore: Agent ↔ LLM conversation context
  */
 export interface ConversationStore {
-  // 初始化 schema
+  // Initialize schema
   ensureSchema(): void
   
-  // 追加消息到任务对话历史
+  // Append message to task conversation history
   append(taskId: string, message: LLMMessage): StoredConversationEntry
   
-  // 获取任务的所有消息（按顺序）
+  // Get all messages for a task (in order)
   getMessages(taskId: string): LLMMessage[]
   
-  // 截断对话历史，只保留最后 N 条
+  // Truncate conversation history, keeping only the last N entries
   truncate(taskId: string, keepLastN: number): void
   
-  // 清除任务的所有对话历史
+  // Clear all conversation history for a task
   clear(taskId: string): void
   
-  // 读取所有条目（调试/测试用）
+  // Read all entries (for debugging/testing)
   readAll(fromIdExclusive?: number): StoredConversationEntry[]
 }
 ```
@@ -499,24 +499,24 @@ export interface ConversationStore {
 
 ```typescript
 export interface ArtifactStore {
-  // 读取文件内容
+  // Read file content
   readFile(path: string): Promise<string>
   
-  // 读取文件指定行范围
+  // Read specific line range from file
   readFileRange(path: string, lineStart: number, lineEnd: number): Promise<string>
   
-  // 获取文件版本（hash）
+  // Get file version (hash)
   getRevision(path: string): Promise<string>
   
-  // 列出目录
+  // List directory contents
   listDir(path: string): Promise<string[]>
   
-  // 写入文件
+  // Write to file
   writeFile(path: string, content: string): Promise<void>
 }
 ```
 
-### 5.3 LLMClient
+### 5.4 LLMClient
 
 ```typescript
 import type { ToolDefinition, ToolCallRequest } from './tool.js'
@@ -591,11 +591,11 @@ export interface LLMClient {
 
 ---
 
-## 6. 命名约定
+## 6. Naming Conventions
 
-### 6.1 ID 命名
+### 6.1 ID Naming
 
-| 类型 | 格式 | 示例 |
+| Type | Format | Example |
 |------|------|------|
 | taskId | nanoid(21) | `V1StGXR8_Z5jdHi6B-myT` |
 | interactionId | `ui_` + nanoid(12) | `ui_abc123def456` |
@@ -603,26 +603,26 @@ export interface LLMClient {
 | actorId (user) | `user_` + identifier | `user_jerry` |
 | actorId (agent) | `agent_` + name | `agent_coauthor_default` |
 
-### 6.2 事件流 ID
+### 6.2 Event Stream ID
 
-| 流类型 | streamId 格式 |
+| Stream Type | streamId Format |
 |--------|---------------|
-| 任务流 | `task_{taskId}` 或直接用 `taskId` |
-| 全局流 | 不分流，所有事件按 `id` 排序 |
+| Task Stream | `task_{taskId}` or directly `taskId` |
+| Global Stream | No splitting, all events sorted by `id` |
 
-### 6.3 文件路径
+### 6.3 File Paths
 
-- 使用相对于 `baseDir` 的路径
-- 使用 POSIX 风格（`/` 分隔符）
-- 示例：`chapters/01_introduction.tex`
+- Use paths relative to `baseDir`.
+- Use POSIX style (`/` separator).
+- Example: `chapters/01_introduction.tex`
 
 ---
 
-## 7. 验证规则
+## 7. Validation Rules
 
-### 7.1 事件验证
+### 7.1 Event Validation
 
-所有事件写入前必须通过 Zod schema 验证：
+All events must be validated via Zod schema before writing:
 
 ```typescript
 export function validateEvent(event: unknown): DomainEvent {
@@ -630,15 +630,15 @@ export function validateEvent(event: unknown): DomainEvent {
 }
 ```
 
-### 7.2 业务规则验证
+### 7.2 Business Rule Validation
 
-| 规则 | 说明 |
+| Rule | Description |
 |------|------|
-| 任务状态转换 | 只能按状态机转换（见下图） |
-| 工具高风险动作 | 写文件/执行命令等必须先走 UIP `confirm_risky_action` |
-| Actor 权限 | 只有具备对应 tool capability 才能执行对应 Tool Use |
+| Task State Transition | Transitions must strictly follow the state machine (see diagram below). |
+| High-Risk Tool Actions | Actions like writing files or executing commands must first pass UIP `confirm_risky_action`. |
+| Actor Permissions | Tools can only be used if the Actor possesses the corresponding tool capability. |
 
-### 7.3 任务状态机 (V0)
+### 7.3 Task State Machine (V0)
 
 ```
 (TaskCreated) open ────────────────────────────────────→ canceled
@@ -656,33 +656,33 @@ export function validateEvent(event: unknown): DomainEvent {
   └─ TaskFailed ──→ failed
 ```
 
-> MVP：不引入 `TaskClaimed` 事件与 `claimed` 状态；`TaskStarted` 作为唯一“开始运行”标记。
+> MVP: No `TaskClaimed` event or `claimed` state introduced; `TaskStarted` is the sole marker for "beginning execution."
 
 ---
 
-## 8. 与现有代码的兼容映射
+## 8. Compatibility Mapping with Existing Code
 
-| 现有代码 | 新规范 |
+| Existing Code | New Specification |
 |----------|--------|
-| `domain.ts` | 拆分为 `domain/events.ts` + `domain/task.ts` + `domain/actor.ts` |
-| `TaskCreated.payload.taskId` | 保留，增加 `authorActorId` |
-| `Patch*`/`AgentPlanPosted` 等旧事件 | 不再属于 DomainEvent（V0.1）；迁移为 UIP + Tool Audit 表达（见附录 A） |
+| `domain.ts` | Split into `domain/events.ts` + `domain/task.ts` + `domain/actor.ts` |
+| `TaskCreated.payload.taskId` | Retained, with added `authorActorId` |
+| Old events like `Patch*`/`AgentPlanPosted` | No longer DomainEvents (V0.1); migrated to UIP + Tool Audit expressions (see Appendix A). |
 
 ---
 
-## 附录 A（Deprecated）：旧 Plan/Patch 事件与迁移映射
+## Appendix A (Deprecated): Old Plan/Patch Events and Migration Mapping
 
-本附录仅用于阅读历史事件日志或迁移旧实现。自 V0.1 起，不应再新增使用这些事件或将其作为协作协议的一部分。
+This appendix is intended only for reading historical event logs or migrating old implementations. Starting with V0.1, these events should no longer be added or used as part of the collaboration protocol.
 
-### A.1 旧事件清单（历史兼容）
+### A.1 Old Event List (Historical Compatibility)
 
 - `AgentPlanPosted`
 - `PatchProposed` / `PatchAccepted` / `PatchRejected` / `PatchApplied` / `PatchConflicted`
 - `UserFeedbackPosted`
 
-### A.2 迁移映射（推荐表达）
+### A.2 Migration Mapping (Recommended Expression)
 
-- 计划/方案呈现：使用 `UserInteractionRequested(display.contentKind=PlainText|Json, purpose=choose_strategy)`。
-- diff/变更预览：使用 `UserInteractionRequested(display.contentKind=Diff, purpose=confirm_risky_action)`。
-- 文件修改与命令执行：通过 Tool Use 执行，并在 AuditLog 中记录 `ToolCallRequested/ToolCallCompleted`；不要用 DomainEvent 记录具体 diff 或写入细节。
-- 冲突/失败：由工具执行结果（AuditLog 的 isError=true 等）与后续 UIP 交互引导用户决策；必要时以 `TaskFailed` 终止任务。
+- Plan/Proposal Presentation: Use `UserInteractionRequested(display.contentKind=PlainText|Json, purpose=choose_strategy)`.
+- Diff/Change Preview: Use `UserInteractionRequested(display.contentKind=Diff, purpose=confirm_risky_action)`.
+- File Modification and Command Execution: Executed via Tool Use and recorded in AuditLog as `ToolCallRequested/ToolCallCompleted`; do not use DomainEvents to record specific diffs or write details.
+- Conflict/Failure: Guided by tool execution results (e.g., `isError=true` in AuditLog) and subsequent UIP interactions to guide user decisions; terminate task with `TaskFailed` if necessary.

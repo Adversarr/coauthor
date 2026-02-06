@@ -1,27 +1,27 @@
-# 工具参数 Schema 适配（最小实现）
+# Tool Parameter Schema Adaptation (Minimal Implementation)
 
-## 背景
+## Background
 
-LLM 工具参数定义使用 JSON Schema（见 [tool.ts](file:///Users/yangjerry/Repo/coauthor/src/domain/ports/tool.ts#L42-L52)）。
+LLM tool parameter definitions use JSON Schema (see [tool.ts](file:///Users/yangjerry/Repo/coauthor/src/domain/ports/tool.ts#L42-L52)).
 
-适配到 AI SDK 时，需要提供 `inputSchema`。当前实现采用两种路径：
+When adapting to the AI SDK, an `inputSchema` must be provided. The current implementation uses two paths:
 
-- 简单 schema：JSONSchema→Zod（快速、行为稳定）
-- 复杂 schema（少数场景）：直接走 AI SDK `jsonSchema(...)`（避免实现完整转换器）
+- Simple schema: JSONSchema → Zod (fast, stable behavior)
+- Complex schema (few scenarios): Directly use AI SDK `jsonSchema(...)` (to avoid implementing a full converter)
 
-## 复杂度判定（预估 <5% 用例）
+## Complexity Determination (Estimated <5% of use cases)
 
-出现下列特征之一即视为复杂：
+A schema is considered complex if it has any of the following characteristics:
 
-- property 为 object 且包含嵌套 properties
-- array.items 为 object/array 或包含 properties
+- A property is an object and contains nested properties
+- `array.items` is an object/array or contains properties
 
-判定逻辑见 [toolSchemaAdapter.ts](file:///Users/yangjerry/Repo/coauthor/src/infra/toolSchemaAdapter.ts)。
+The determination logic can be found in [toolSchemaAdapter.ts](file:///Users/yangjerry/Repo/coauthor/src/infra/toolSchemaAdapter.ts).
 
-## 策略与回滚
+## Strategy and Rollback
 
-通过环境变量控制：
+Controlled via environment variables:
 
-- `COAUTHOR_TOOL_SCHEMA_STRATEGY=auto`（默认）：简单用 Zod，复杂用 jsonSchema
-- `COAUTHOR_TOOL_SCHEMA_STRATEGY=zod`：强制全量走 Zod（回滚路径）
-- `COAUTHOR_TOOL_SCHEMA_STRATEGY=jsonschema`：强制全量走 jsonSchema
+- `COAUTHOR_TOOL_SCHEMA_STRATEGY=auto` (default): Use Zod for simple, jsonSchema for complex
+- `COAUTHOR_TOOL_SCHEMA_STRATEGY=zod`: Force Zod for everything (rollback path)
+- `COAUTHOR_TOOL_SCHEMA_STRATEGY=jsonschema`: Force jsonSchema for everything

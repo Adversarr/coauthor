@@ -1,124 +1,124 @@
-# 里程碑 0 (M0) 状态报告：Billboard 基础闭环
+# Milestone 0 (M0) Status Report: Billboard Basic Loop
 
-**日期：** 2026年2月2日  
-**状态：** ✅ **完全实现**  
-**测试覆盖率：** 7/7 测试通过 (100%)
+**Date:** February 2, 2026  
+**Status:** ✅ **Fully Implemented**  
+**Test Coverage:** 7/7 tests passed (100%)
 
-> 口径声明：本报告反映 2026-02-02 的实现与验收口径（包含 Plan/Patch 相关命令与事件）。自 2026-02-03 起，Plan/Patch 不再作为现行协作协议：领域事件收敛为 Task 生命周期 + UIP；文件修改与命令执行通过 Tool Use + AuditLog 表达。当前 `src/` 已不再包含 patch CLI 与 Patch* 事件实现，因此本文中 patch 相关段落仅作历史参考。
-
----
-
-## 执行摘要
-
-里程碑 0 已**完全实现并验证**（按当时验收口径）。核心事件溯源架构运行正常，CLI 命令按设计执行，并演示了当时以 Patch 事件驱动的闭环：创建任务 → 提出补丁 → 接受补丁 → 验证文件更改 → 回放事件。
+> Disclaimer: This report reflects the implementation and acceptance criteria as of 2026-02-02 (including Plan/Patch related commands and events). Since 2026-02-03, Plan/Patch are no longer the current collaboration protocol: domain events have converged into Task Lifecycle + UIP; file modifications and command executions are expressed through Tool Use + AuditLog. Current `src/` no longer contains patch CLI and Patch* event implementations, so patch-related sections in this document are for historical reference only.
 
 ---
 
-## M0 需求验证
+## Executive Summary
 
-根据路线图，M0 必须实现：
+Milestone 0 has been **fully implemented and verified** (according to the acceptance criteria at the time). The core Event Sourcing architecture is functioning correctly, CLI commands execute as designed, and a closed loop driven by Patch events was demonstrated: Create Task → Propose Patch → Accept Patch → Verify File Changes → Replay Events.
 
-### ✅ 1. 事件存储 (Port-Adapter) + 投影
+---
 
-**状态：** 完成
+## M0 Requirement Verification
 
-#### 事件存储实现
-- **架构：** 接口化设计（Port-Adapter），后端可替换。
-- **当前实现：** [src/infra/jsonlEventStore.ts](src/infra/jsonlEventStore.ts) 使用 JSONL 格式，便于开发过程中的人工查阅。
-- **模式：**
-  - `events`：包含 `id`, `streamId`, `seq`, `type`, `payload`, `createdAt`。
-  - `projections`：包含 `name`, `cursorEventId`, `stateJson`。
-- **特性：**
-  - 接口定义在 [src/domain/ports/eventStore.ts](src/domain/ports/eventStore.ts)。
-  - 核心逻辑不再依赖具体的数据库驱动。
-  - 统一的 ID 生成与流序列号管理。
+According to the roadmap, M0 must implement:
 
-#### 投影系统
-- **位置：** [src/application/projector.ts](src/application/projector.ts) 和各服务中的投影逻辑
-- **架构：** 事件 → Reducer → 状态 (函数式 CQRS 模式)
-- **实现：**
-  - **TasksProjection：** 列出所有任务
-- **回放能力：** 从最后检查点位置增量回放
+### ✅ 1. Event Store (Port-Adapter) + Projection
 
-**验证：**
+**Status:** Completed
+
+#### Event Store Implementation
+- **Architecture:** Interface-based design (Port-Adapter), backend is replaceable.
+- **Current Implementation:** [src/infra/jsonlEventStore.ts](src/infra/jsonlEventStore.ts) uses JSONL format for easy manual inspection during development.
+- **Schema:**
+  - `events`: contains `id`, `streamId`, `seq`, `type`, `payload`, `createdAt`.
+  - `projections`: contains `name`, `cursorEventId`, `stateJson`.
+- **Features:**
+  - Interface defined in [src/domain/ports/eventStore.ts](src/domain/ports/eventStore.ts).
+  - Core logic no longer depends on specific database drivers.
+  - Unified ID generation and stream sequence number management.
+
+#### Projection System
+- **Location:** [src/application/projector.ts](src/application/projector.ts) and projection logic within various services.
+- **Architecture:** Event → Reducer → State (Functional CQRS pattern).
+- **Implementation:**
+  - **TasksProjection:** Lists all tasks.
+- **Replay Capability:** Incremental replay from the last checkpoint.
+
+**Verification:**
 ```bash
 npm test -- eventStore.test.ts
-# ✓ append/readStream 保持 seq 顺序
-# ✓ readAll 返回按 id 全局排序的事件
+# ✓ append/readStream maintains seq order
+# ✓ readAll returns events sorted globally by id
 ```
 
 ---
 
-### ✅ 2. CLI：创建任务、列表任务
+### ✅ 2. CLI: Create Task, List Tasks
 
-**状态：** 完成
+**Status:** Completed
 
-| 命令 | 实现 | 测试 |
+| Command | Implementation | Test |
 |---------|-----------------|------|
-| `task create <title>` | ✅ 创建 TaskCreated 事件，生成 nanoid | ✅ cliRun.test.ts |
-| `task list` | ✅ 运行 TasksProjection | ✅ cliRun.test.ts |
+| `task create <title>` | ✅ Creates TaskCreated event, generates nanoid | ✅ cliRun.test.ts |
+| `task list` | ✅ Runs TasksProjection | ✅ cliRun.test.ts |
 
-**使用示例：**
+**Usage Example:**
 ```bash
-# 创建任务
-npm run dev -- task create "校对导论部分"
-# 输出: VnYkjHxQpZ_gN-42aMd (taskId)
+# Create task
+npm run dev -- task create "Proofread Introduction section"
+# Output: VnYkjHxQpZ_gN-42aMd (taskId)
 
-# 列出所有任务
+# List all tasks
 npm run dev -- task list
-# 输出:
-#   VnYkjHxQpZ_gN-42aMd 校对导论部分
+# Output:
+#   VnYkjHxQpZ_gN-42aMd Proofread Introduction section
 ```
 
 ---
 
-### ✅ 3.（历史口径）补丁管道：提出 → 接受 → 应用
+### ✅ 3. (Historical) Patch Pipeline: Propose → Accept → Apply
 
-**状态：** 完成
+**Status:** Completed
 
-> 注：新方向下不再以 PatchProposed/PatchApplied 等 DomainEvent 表达文件改动；应改为 Tool Use 执行 + AuditLog 记录，并在需要确认时通过 UIP 交互完成决策。
+> Note: Under the new direction, file changes are no longer expressed via DomainEvents like PatchProposed/PatchApplied; instead, they are executed via Tool Use + AuditLog recording, with decision-making completed through UIP interactions when confirmation is needed.
 
-#### 补丁提出 (Propose)
-- **命令：** `patch propose <taskId> <targetPath>`
-- **输入：** 来自 stdin 的统一 Diff (Unified Diff)
-- **存储：** 带有 proposalId 的 PatchProposed 事件
+#### Patch Proposal (Propose)
+- **Command:** `patch propose <taskId> <targetPath>`
+- **Input:** Unified Diff from stdin
+- **Storage:** PatchProposed event with proposalId
 
-#### 补丁接受与应用 (Accept & Apply)
-- **命令：** `patch accept <taskId> [proposalId|latest]`
-- **机制：**
-  1. 查询任务流中的 PatchProposed 事件
-  2. 解决相对于 baseDir 的目标文件
-  3. 使用 `applyUnifiedPatchToFile()` 调用 `diff` 库
-  4. 成功后追加 PatchApplied 事件并原子写入磁盘
-
----
-
-### ✅ 4. 事件回放 / 日志检查
-
-**状态：** 完成
-
-- **命令：** `log replay [streamId]` - 全局或按流回放所有事件
-- **输出格式：** `<id> <streamId>#<seq> <type> <payload_json>`
+#### Patch Acceptance and Application (Accept & Apply)
+- **Command:** `patch accept <taskId> [proposalId|latest]`
+- **Mechanism:**
+  1. Query PatchProposed events in the task stream.
+  2. Resolve target file relative to baseDir.
+  3. Call `diff` library via `applyUnifiedPatchToFile()`.
+  4. Upon success, append PatchApplied event and atomically write to disk.
 
 ---
 
-## 架构详情
+### ✅ 4. Event Replay / Log Inspection
 
-> 注：本节及后文出现的 Plan/Patch 事件、补丁管道与相关用例均为 2026-02-02 的历史实现口径；现行方向请以 2026-02-03 的 UIP + Tool Use + AuditLog 口径为准。
+**Status:** Completed
 
-### 分层架构 (六边形架构)
+- **Command:** `log replay [streamId]` - Replays all events globally or per stream.
+- **Output Format:** `<id> <streamId>#<seq> <type> <payload_json>`
 
-根据 [roadmap.md](roadmap.md) 中定义的架构原则，M0 实现了完整的分层设计：
+---
+
+## Architecture Details
+
+> Note: The Plan/Patch events, patch pipeline, and related use cases appearing in this section and hereafter reflect the historical implementation as of 2026-02-02; please refer to the 2026-02-03 UIP + Tool Use + AuditLog direction for the current approach.
+
+### Layered Architecture (Hexagonal Architecture)
+
+According to the architectural principles defined in [roadmap.md](roadmap.md), M0 implements a full layered design:
 
 ```mermaid
 graph TB
-    subgraph Interface["接口层 (Interfaces)"]
+    subgraph Interface["Interface Layer"]
         CLI["CLI REPL<br/>(src/cli/run.ts)"]
-        TUI["TUI 组件<br/>(src/tui/)"]
+        TUI["TUI Components<br/>(src/tui/)"]
     end
     
-    subgraph Application["应用层 (Application)"]
-        UC["用例 (Use Cases)<br/>(application/ 层)"]
+    subgraph Application["Application Layer"]
+        UC["Use Cases<br/>(application/ folder)"]
         UC1["createTask()"]
         UC2["acceptPatch()"]
         UC3["proposePatch()"]
@@ -126,17 +126,17 @@ graph TB
         UC5["replayEvents()"]
     end
     
-    subgraph Domain["领域层 (Domain)"]
-        Events["领域事件<br/>(src/domain/events.ts)"]
-        Proj["投影系统<br/>(src/application/)"]
-        Projector["投影运行器<br/>(src/application/projector.ts)"]
+    subgraph Domain["Domain Layer"]
+        Events["Domain Events<br/>(src/domain/events.ts)"]
+        Proj["Projection System<br/>(src/application/)"]
+        Projector["Projection Runner<br/>(src/application/projector.ts)"]
     end
     
-    subgraph Infrastructure["基础设施层 (Infrastructure)"]
+    subgraph Infrastructure["Infrastructure Layer"]
         Store["EventStore Interface<br/>(src/domain/ports/eventStore.ts)"]
         JSONL["JSONL Adapter<br/>(infra/jsonlEventStore.ts)"]
-        Patch["补丁引擎<br/>(src/patch/applyUnifiedPatch.ts)"]
-        FS["文件系统 I/O"]
+        Patch["Patch Engine<br/>(src/patch/applyUnifiedPatch.ts)"]
+        FS["File System I/O"]
     end
     
     CLI --> UC
@@ -153,90 +153,90 @@ graph TB
     JSONL --> FS
 ```
 
-#### 各层职责与实现映射
+#### Layer Responsibilities and Implementation Mapping
 
-**1. 接口层 (Interfaces)**
-- **职责：** 将外部输入转换为领域事件，订阅并展示系统状态
-- **实现：**
-  - `src/cli/run.ts`: yargs 命令解析器，将用户命令转换为用例调用
-  - `src/tui/`: Ink React 组件（可选），提供交互式界面
-- **关键特性：** 
-  - 无业务逻辑
-  - 可替换性：未来 Overleaf 插件只需实现新的 Adapter
+**1. Interface Layer**
+- **Responsibility:** Convert external input into domain events, subscribe to and display system state.
+- **Implementation:**
+  - `src/cli/run.ts`: yargs command parser, converts user commands into use case calls.
+  - `src/tui/`: Ink React components (optional), providing an interactive interface.
+- **Key Features:** 
+  - No business logic.
+  - Replaceability: Future Overleaf plugins only need to implement a new Adapter.
 
-**2. 应用层 (Application)**
-- **职责：** 编排领域逻辑，协调各层交互
-- **实现：**
-  - `src/application/`: 应用层服务
-    - `TaskService`, `PatchService`, `EventService`: 业务用例封装
-    - `projector.ts`: 投影运行器
-- **关键特性：**
-  - 持久化保证（JSONL 版支持原子追加；后端可替换以获得更强事务/并发能力）
-  - 不包含 UI 逻辑或基础设施细节
+**2. Application Layer**
+- **Responsibility:** Orchestrate domain logic, coordinate interaction between layers.
+- **Implementation:**
+  - `src/application/`: Application layer services.
+    - `TaskService`, `PatchService`, `EventService`: Business use case encapsulation.
+    - `projector.ts`: Projection runner.
+- **Key Features:**
+  - Persistence guarantees (JSONL version supports atomic appends; backend replaceable for stronger transaction/concurrency capabilities).
+  - Contains no UI logic or infrastructure details.
 
-**3. 领域层 (Domain)**
-- **职责：** 定义核心业务概念和规则（纯函数、无副作用）
-- **实现：**
+**3. Domain Layer**
+- **Responsibility:** Define core business concepts and rules (pure functions, side-effect free).
+- **Implementation:**
   - `src/domain/events.ts`: 
-    - Zod 模式定义所有领域事件（TaskCreated, PatchProposed, PatchApplied 等）
-    - 类型安全的事件 payload 验证
+    - Zod schemas define all domain events (TaskCreated, PatchProposed, PatchApplied, etc.).
+    - Type-safe event payload validation.
   - `src/application/projector.ts`:
-    - 通用投影运行器，实现增量状态重建
-    - 检查点机制（cursor-based）
-- **关键特性：**
-  - 函数式 CQRS 模式（事件溯源 + 读模型分离）
-  - 可测试性高（纯函数）
-  - 可回放性（任何时刻状态可重建）
+    - General projection runner implementing incremental state reconstruction.
+    - Checkpoint mechanism (cursor-based).
+- **Key Features:**
+  - Functional CQRS pattern (Event Sourcing + Read Model separation).
+  - High testability (pure functions).
+  - Replayability (state can be reconstructed at any point in time).
 
-**4. 基础设施层 (Infrastructure)**
-- **职责：** 提供具体的技术实现，对核心层屏蔽外部依赖。
-- **实现：**
-  - `src/infra/jsonlEventStore.ts`: 默认的持久化实现，易于本地调试。
-  - `src/patch/applyUnifiedPatch.ts`: 基于 `diff` 库的文本补丁逻辑。
-- **关键特性：**
-  - 核心逻辑完全解耦驱动细节。
-  - 通过 `ensureSchema()` 保证不同后端环境的一致性。
+**4. Infrastructure Layer**
+- **Responsibility:** Provide specific technical implementations, shielding core layers from external dependencies.
+- **Implementation:**
+  - `src/infra/jsonlEventStore.ts`: Default persistence implementation, easy for local debugging.
+  - `src/patch/applyUnifiedPatch.ts`: Text patch logic based on the `diff` library.
+- **Key Features:**
+  - Core logic fully decoupled from driver details.
+  - Consistency across different backend environments guaranteed via `ensureSchema()`.
 
-### 架构如何体现 roadmap 核心理念
+### How the Architecture Embodies Roadmap Core Concepts
 
-#### 1. Actor 一等公民（预留设计）
-虽然 M0 尚未实现完整的 Actor 系统，但架构已为此预留：
-- 事件 payload 中的 `authorActorId` 字段（`src/domain/events.ts`）
-- 未来可通过 `TaskRouted` 等路由事件实现 Actor 协作（MVP 不引入 TaskClaimed）
-- 当前默认 Actor 为执行命令的用户（CLI 进程）
+#### 1. Actor as First-Class Citizen (Reserved Design)
+Although M0 has not yet implemented a full Actor system, the architecture reserves space for it:
+- `authorActorId` field in event payloads (`src/domain/events.ts`).
+- Future Actor collaboration can be achieved through routing events like `TaskRouted` (MVP does not introduce `TaskClaimed`).
+- Current default Actor is the user executing commands (CLI process).
 
-#### 2. Task 驱动协作
-✅ **完全实现：**
-- 所有操作最终都创建或影响 Task
-- Task 通过 `taskId` (streamId) 组织所有相关事件
-- `task create` → TaskCreated 事件
-- `patch propose` → PatchProposed 事件关联到 Task
-- `patch accept` → PatchApplied 事件关联到 Task
+#### 2. Task-Driven Collaboration
+✅ **Fully Implemented:**
+- All operations eventually create or affect a Task.
+- Tasks organize all related events via `taskId` (streamId).
+- `task create` → TaskCreated event.
+- `patch propose` → PatchProposed event associated with Task.
+- `patch accept` → PatchApplied event associated with Task.
 
-#### 3. Billboard（共享任务池）基础
-M0 实现了 Billboard 的核心组件：
+#### 3. Billboard (Shared Task Pool) Foundation
+M0 implements the core components of the Billboard:
 
 ```mermaid
 graph LR
-    A[命令输入] --> B[EventStore.append]
-    B --> C[JSONL 事件日志]
+    A[Command Input] --> B[EventStore.append]
+    B --> C[JSONL Event Log]
     C --> D[Projector]
     D --> E[TasksProjection]
-    E --> G[CLI 输出]
+    E --> G[CLI Output]
 ```
 
-**已实现：**
-- ✅ 追加式事件日志（`EventStore`）
-- ✅ 投影系统（`Projector` + `TasksProjection`）
-- ✅ 查询 API（`getTask`, `queryTasks` 通过投影实现）
+**Implemented:**
+- ✅ Append-only event log (`EventStore`).
+- ✅ Projection system (`Projector` + `TasksProjection`).
+- ✅ Query API (`getTask`, `queryTasks` implemented via projections).
 
-**M1 将增强：**
-- RxJS 流式订阅（`events$`, `taskViews$`）
-- Router/Scheduler（任务路由与调度策略）
-- Agent 运行时集成
+**M1 will enhance:**
+- RxJS streaming subscriptions (`events$`, `taskViews$`).
+- Router/Scheduler (Task routing and scheduling policies).
+- Agent Runtime integration.
 
-#### 4. Event Sourcing（事件溯源）
-完整的事件溯源实现：
+#### 4. Event Sourcing
+Full Event Sourcing implementation:
 
 ```mermaid
 sequenceDiagram
@@ -247,37 +247,37 @@ sequenceDiagram
     participant Projector
     participant StoreBackend
 
-    User->>CLI: task create "校对导论"
+    User->>CLI: task create "Proofread Intro"
     CLI->>Operations: createTask(title)
     Operations->>EventStore: append(TaskCreated)
-    EventStore->>StoreBackend: 保存事件 (JSONL/SQL)
+    EventStore->>StoreBackend: Save event (JSONL/SQL)
     StoreBackend-->>EventStore: eventId=1
     
     User->>CLI: task list
     CLI->>Operations: listTasks()
     Operations->>Projector: project(TasksProjection)
     Projector->>EventStore: readAll()
-    EventStore->>StoreBackend: 读取所有记录
+    EventStore->>StoreBackend: Read all records
     StoreBackend-->>Projector: events[1..n]
     Projector-->>Operations: TasksState
-    Operations-->>CLI: 显示任务列表
+    Operations-->>CLI: Display task list
 ```
 
-**保证：**
-- 所有状态变更通过事件记录
-- 任何时刻可回放历史（`log replay`）
-- 投影可重建（删除 projection 表，重新 reduce）
+**Guarantees:**
+- All state changes recorded via events.
+- History can be replayed at any time (`log replay`).
+- Projections can be reconstructed (delete projection table, re-reduce).
 
-#### 5. 可扩展性证明
+#### 5. Proof of Extensibility
 
-**接口层可替换：**
+**Replaceable Interface Layer:**
 ```typescript
-// 当前: CLI Adapter
+// Current: CLI Adapter
 yargs.command('task create', ..., (args) => {
   createTask(store, args.title);
 });
 
-// 未来: Overleaf Adapter (伪代码)
+// Future: Overleaf Adapter (Pseudo-code)
 overleafWebhook.on('comment', (comment) => {
   createTask(store, comment.text, {
     artifactRefs: [{ path: comment.file, range: comment.selection }]
@@ -285,19 +285,21 @@ overleafWebhook.on('comment', (comment) => {
 });
 ```
 
-**基础设施层可替换：**
+**Replaceable Infrastructure Layer:**
 ```typescript
-// 当前: 使用 JsonlEventStore
+// Current: Using JsonlEventStore
 const store = application.store;
 
-// 未来: PostgreSQL EventStore
+// Future: PostgreSQL EventStore
 const store = new PostgresEventStore(config);
 
-// 接口相同，应用层无需逻辑改动
+// Same interface, no logic changes needed in the Application layer
 store.append(streamId, events);
 ```
 
-### 事件流转图（M0 实际流程）
+---
+
+### Event Flow Diagram (Actual M0 Process)
 
 ```mermaid
 sequenceDiagram
@@ -310,18 +312,18 @@ sequenceDiagram
     participant PatchEngine
     participant FileSystem
 
-    Note over User,FileSystem: 1. 创建任务
-    User->>CLI: task create "校对导论"
+    Note over User,FileSystem: 1. Create Task
+    User->>CLI: task create "Proofread Intro"
     CLI->>Operations: createTask(title)
     Operations->>EventStore: append(TaskCreated)
     EventStore-->>Operations: taskId
 
-    Note over User,FileSystem: 2. 提出补丁
+    Note over User,FileSystem: 2. Propose Patch
     User->>CLI: patch propose taskId doc.tex < diff.patch
     CLI->>Operations: proposePatch(taskId, path, patchText)
     Operations->>EventStore: append(PatchProposed)
     
-    Note over User,FileSystem: 3. 接受并应用补丁
+    Note over User,FileSystem: 3. Accept and Apply Patch
     User->>CLI: patch accept taskId latest
     CLI->>Operations: acceptPatch(taskId, proposalId)
     Operations->>EventStore: readStream(taskId)
@@ -334,62 +336,64 @@ sequenceDiagram
     PatchEngine-->>Operations: success
     Operations->>EventStore: append(PatchApplied)
     
-    Note over User,FileSystem: 4. 查看审计日志
+    Note over User,FileSystem: 4. View Audit Log
     User->>CLI: log replay taskId
     CLI->>Operations: replayEvents(taskId)
     Operations->>EventStore: readStream(taskId)
     EventStore-->>Operations: [TaskCreated, PatchProposed, PatchApplied]
-    Operations-->>CLI: 格式化输出
-    CLI-->>User: 显示事件历史
+    Operations-->>CLI: Format output
+    CLI-->>User: Display event history
 ```
-
-### 关键设计决策与权衡
-
-#### 1. 同步 vs 异步
-**M0 选择：** 同步 JSONL + 同步文件 I/O
-- **理由：** 简化实现；追加写入具备足够的原子性与可回放性
-- **权衡：** 不支持高并发（M0 单用户 CLI 无需考虑）
-- **未来：** M1+ 引入 RxJS 流支持异步 Agent 运行时
-
-#### 2. 投影更新策略
-**M0 选择：** 按需重建（每次查询时 reduce）
-- **理由：** 简单可靠，事件量小（< 1000）
-- **权衡：** 大规模数据需要缓存
-- **未来：** M1 增加持久化投影快照（checkpoint）
-
-#### 3. Patch 格式
-**M0 选择：** 统一 diff (unified diff)
-- **理由：** 
-  - 标准格式，生态工具支持好
-  - 人类可读性强
-  - `diff` 库成熟可靠
-- **权衡：** 不支持二进制文件、大文件效率低
-- **未来：** 可扩展支持结构化 patch（JSON-based）
-
-#### 4. 错误处理哲学
-**M0 采用：** Fail-fast + 事件记录
-- 补丁无法应用 → 立即返回错误，**不写入 PatchApplied 事件**
-- 文件不存在 → 抛出异常，用户可见
-- 保证：**事件日志中的 PatchApplied 事件 = 文件确实被修改**
 
 ---
 
-## 已知局限性与 M1 计划
+### Key Design Decisions and Trade-offs
 
-### 当前架构的完整性与缺失
+#### 1. Synchronous vs. Asynchronous
+**M0 Choice:** Synchronous JSONL + Synchronous File I/O
+- **Reason:** Simplified implementation; append-only writes provide sufficient atomicity and replayability.
+- **Trade-off:** Does not support high concurrency (not required for single-user M0 CLI).
+- **Future:** M1+ introduces RxJS streams to support asynchronous Agent Runtime.
 
-#### ✅ 已实现的架构组件
-1. **事件存储 (EventStore)** - 完整实现
-2. **投影系统 (Projections)** - 核心 reducer 完成
-3. **用例层 (Use Cases)** - 5 个关键操作完成
-4. **CLI 适配器 (CLI Adapter)** - 功能齐全
-5. **补丁引擎 (Patch Engine)** - 可用且经过测试
+#### 2. Projection Update Strategy
+**M0 Choice:** Reconstruction on-demand (reduce on every query)
+- **Reason:** Simple and reliable for small event volumes (< 1000).
+- **Trade-off:** Caching required for large-scale data.
+- **Future:** M1 adds persisted projection snapshots (checkpoints).
 
-#### 🚧 M1 需要补全的组件（按 roadmap）
+#### 3. Patch Format
+**M0 Choice:** Unified diff
+- **Reason:** 
+  - Standard format with good ecosystem tool support.
+  - High human readability.
+  - Mature and reliable `diff` library.
+- **Trade-off:** Does not support binary files; inefficient for very large files.
+- **Future:** Extensible support for structured patches (JSON-based).
 
-1. **Billboard RxJS 流式调度**
-   - 当前：同步查询投影
-   - M1 目标：
+#### 4. Error Handling Philosophy
+**M0 Adoption:** Fail-fast + Event Logging
+- Patch cannot be applied → Return error immediately, **do not write PatchApplied event**.
+- File does not exist → Throw exception, visible to user.
+- Guarantee: **PatchApplied event in event log = File was actually modified**.
+
+---
+
+## Known Limitations and M1 Plan
+
+### Architectural Completeness and Gaps
+
+#### ✅ Implemented Architectural Components
+1. **Event Store (EventStore)** - Full implementation.
+2. **Projection System (Projections)** - Core reducer completed.
+3. **Use Case Layer (Use Cases)** - 5 key operations completed.
+4. **CLI Adapter (CLI Adapter)** - Fully functional.
+5. **Patch Engine (Patch Engine)** - Usable and tested.
+
+#### 🚧 Components to be completed in M1 (per roadmap)
+
+1. **Billboard RxJS Streaming Scheduler**
+   - Current: Synchronous projection query.
+   - M1 Goal:
      ```typescript
      billboard.events$.pipe(
        filter(e => e.type === 'TaskCreated'),
@@ -397,9 +401,9 @@ sequenceDiagram
      ).subscribe(agent);
      ```
 
-2. **Agent Runtime 与 Workflow**
-   - 当前：无 LLM 集成
-   - M1 目标：
+2. **Agent Runtime and Workflow**
+   - Current: No LLM integration.
+   - M1 Goal:
      ```typescript
      class CoAuthorAgent {
        async handleTask(task: Task) {
@@ -411,43 +415,43 @@ sequenceDiagram
      }
      ```
 
-3. **Context Builder（上下文构建器）**
-   - 当前：无 OUTLINE.md / BRIEF.md 读取逻辑
-   - M1 目标：自动注入全局上下文 + 局部聚焦片段
+3. **Context Builder**
+   - Current: No OUTLINE.md / BRIEF.md reading logic.
+   - M1 Goal: Automatic injection of global context + local focus snippets.
 
-4. **Artifact 管理与版本跟踪**
-   - 当前：无 Artifact 实体
-   - M1 目标：
-     - `baseRevisions` 快照机制
-     - Drift 检测（`task.baseRevision !== artifact.currentRevision`）
+4. **Artifact Management and Version Tracking**
+   - Current: No Artifact entities.
+   - M1 Goal:
+     - `baseRevisions` snapshotting mechanism.
+     - Drift detection (`task.baseRevision !== artifact.currentRevision`).
 
-5. **FileWatcher（文件监控）**
-   - 当前：无
-   - M1 目标：监控 `.tex` 文件变化 → 自动追加 `ArtifactChanged` 事件
+5. **FileWatcher**
+   - Current: None.
+   - M1 Goal: Monitor `.tex` file changes → automatically append `ArtifactChanged` events.
 
-6. **Router/Scheduler（任务路由与调度）**
-   - 当前：无任务分配逻辑
-   - M1 目标：
+6. **Router/Scheduler**
+   - Current: No task assignment logic.
+   - M1 Goal:
      ```typescript
      router.policy = (task) => 
        task.assignedTo || user.defaultAgentId;
      ```
 
-### 架构债务与技术债
+### Architectural and Technical Debt
 
-1.  **投影缓存缺失**
-    - **问题：** 每次 `task list` 都重新 reduce 全部事件
-    - **影响：** 事件超过 10k 后性能下降
-    - **M1 方案：** 持久化投影到 `projections` 表，只处理增量
+1.  **Missing Projection Cache**
+    - **Problem:** Every `task list` re-reduces all events.
+    - **Impact:** Performance degrades after events exceed 10k.
+    - **M1 Solution:** Persist projections to a `projections` table, process incrementally.
 
-2.  **无并发控制**
-    - **问题：** 两个进程同时 `patch accept` 可能冲突
-    - **影响：** 仅在多用户或多 Agent 场景
-    - **M1 方案：** 乐观锁（检查 `baseRevision`）+ 冲突解决策略
+2.  **No Concurrency Control**
+    - **Problem:** Two processes calling `patch accept` simultaneously may conflict.
+    - **Impact:** Only relevant in multi-user or multi-agent scenarios.
+    - **M1 Solution:** Optimistic locking (check `baseRevision`) + conflict resolution strategies.
 
-3.  **缺少 LLM 抽象层**
-    - **问题：** M0 不涉及 LLM，但架构未预留清晰接口
-    - **M1 方案：** 
+3.  **Lack of LLM Abstraction Layer**
+    - **Problem:** M0 does not involve LLM, but the architecture hasn't reserved a clear interface.
+    - **M1 Solution:** 
       ```typescript
       interface LLMClient {
         generate(context: Context, profile: 'fast'|'writer'|'reasoning'): Promise<string>;
@@ -455,86 +459,86 @@ sequenceDiagram
       }
       ```
 
-### 从 M0 到 M1 的演进路径
+### Evolution Path from M0 to M1
 
 ```mermaid
 graph LR
-    M0[M0: 基础闭环<br/>无 LLM] --> M1A[M1.1: Agent Runtime]
-    M1A --> M1B[M1.2: LLM 集成]
+    M0[M0: Basic Loop<br/>No LLM] --> M1A[M1.1: Agent Runtime]
+    M1A --> M1B[M1.2: LLM Integration]
     M1B --> M1C[M1.3: Context Builder]
-    M1C --> M1D[M1.4: Drift 处理]
-    M1D --> M1E[M1.5: 完整 Billboard]
+    M1C --> M1D[M1.4: Drift Handling]
+    M1D --> M1E[M1.5: Full Billboard]
     
     style M0 fill:#90EE90
     style M1E fill:#FFD700
 ```
 
-**关键里程碑：**
-- **M1.1:** Agent 能从 Billboard 订阅任务
-- **M1.2:** Agent 能调用 LLM 生成 plan/patch
-- **M1.3:** Agent 能读取 OUTLINE.md 并构建上下文
-- **M1.4:** Agent 能检测文件变化并 rebase
-- **M1.5:** Router/Scheduler 完整运行
+**Key Milestones:**
+- **M1.1:** Agent can subscribe to tasks from the Billboard.
+- **M1.2:** Agent can call LLM to generate plan/patch.
+- **M1.3:** Agent can read OUTLINE.md and build context.
+- **M1.4:** Agent can detect file changes and rebase.
+- **M1.5:** Router/Scheduler fully operational.
 
 ---
 
-## 技术债务与代码质量
+## Technical Debt and Code Quality
 
-### M0 质量指标
+### M0 Quality Metrics
 
-| 指标 | 状态 |
+| Metric | Status |
 |------|------|
-| **测试通过率** | 7/7 (100%) ✅ |
-| **TypeScript 编译** | 0 错误 ✅ |
-| **ESLint** | 0 错误 ✅ |
-| **代码行数** | ~1200 行 TypeScript |
-| **架构合规性** | 高 ✅ |
-| **文档一致性** | 完全一致 ✅ |
+| **Test Pass Rate** | 7/7 (100%) ✅ |
+| **TypeScript Compilation** | 0 errors ✅ |
+| **ESLint** | 0 errors ✅ |
+| **Lines of Code** | ~1200 lines of TypeScript |
+| **Architectural Compliance** | High ✅ |
+| **Document Consistency** | Fully consistent ✅ |
 
-### 已清理的废弃代码
+### Cleaned Up Deprecated Code
 
-| 清理项 | 位置 | 状态 |
+| Item | Location | Status |
 |--------|------|------|
-| `LegacyTaskCreatedPayload` | src/domain/events.ts | ✅ 已移除 |
-| `LegacyPatchProposedPayload` | src/domain/events.ts | ✅ 已移除 |
-| `LegacyPatchAppliedPayload` | src/domain/events.ts | ✅ 已移除 |
-| 未使用的 `StoredEvent` import | src/application/patchService.ts | ✅ 已移除 |
-| `core/` 目录 (旧代码) | 已迁移到 domain/application | ✅ 已完成 |
-| `operations.ts` (deprecated) | 已迁移到 services | ✅ 已完成 |
-| `sqliteEventStore.ts` | src/infra/ | ✅ 已移除 (Node 不稳定) |
-| `sqlite.ts` | src/infra/ | ✅ 已移除 |
-| SQLite 相关引用 | src/app/createApp.ts | ✅ 已清理 |
+| `LegacyTaskCreatedPayload` | src/domain/events.ts | ✅ Removed |
+| `LegacyPatchProposedPayload` | src/domain/events.ts | ✅ Removed |
+| `LegacyPatchAppliedPayload` | src/domain/events.ts | ✅ Removed |
+| Unused `StoredEvent` import | src/application/patchService.ts | ✅ Removed |
+| `core/` directory (old code) | Migrated to domain/application | ✅ Completed |
+| `operations.ts` (deprecated) | Migrated to services | ✅ Completed |
+| `sqliteEventStore.ts` | src/infra/ | ✅ Removed (unstable on Node) |
+| `sqlite.ts` | src/infra/ | ✅ Removed |
+| SQLite references | src/app/createApp.ts | ✅ Cleaned up |
 
-### 技术债务清单
+### Technical Debt List
 
-#### 高优先级 (P0) - M1 前必须解决
+#### High Priority (P0) - Must resolve before M1
 
-| # | 问题 | 影响 | 位置 | 状态 |
+| # | Issue | Impact | Location | Status |
 |---|------|------|------|---------|
-| TD-1 | `as any` 类型逃逸 | 类型安全 | infra/jsonlEventStore.ts | ✅ 已解决 (使用 toStoredEvent) |
-| TD-2 | TUI 使用 console.log | 输出格式 | src/tui/main.tsx | ✅ 已解决 (使用 replayOutput 状态) |
+| TD-1 | `as any` type escape | Type safety | infra/jsonlEventStore.ts | ✅ Resolved (using toStoredEvent) |
+| TD-2 | TUI using console.log | Output format | src/tui/main.tsx | ✅ Resolved (using replayOutput state) |
 
-#### 中优先级 (P1) - M1 期间解决
+#### Medium Priority (P1) - Resolve during M1
 
-| # | 问题 | 影响 | 位置 | 修复方案 |
+| # | Issue | Impact | Location | Fix Plan |
 |---|------|------|------|---------|
-| TD-3 | 投影每次全量重建 | 性能（>10k事件时） | taskService.ts:80 | 使用 checkpoint |
-| TD-4 | 缺少并发控制 | 多进程竞争 | EventStore | 添加乐观锁 |
+| TD-3 | Projection full reconstruction | Performance (>10k events) | taskService.ts:80 | Use checkpoint |
+| TD-4 | Lack of concurrency control | Multi-process competition | EventStore | Add optimistic locking |
 
-#### 低优先级 (P2) - 技术改进
+#### Low Priority (P2) - Technical Improvements
 
-| # | 问题 | 影响 | 位置 | 状态 |
+| # | Issue | Impact | Location | Status |
 |---|------|------|------|---------|
-| TD-6 | projector.test.ts 使用 any | 类型安全 | tests/projector.test.ts | ✅ 已解决 (使用 StoredEvent) |
-| TD-7 | JSONL 投影追加式存储 | 存储增长 | jsonlEventStore.ts | 添加压缩/归档 (M2+) |
+| TD-6 | projector.test.ts using any | Type safety | tests/projector.test.ts | ✅ Resolved (using StoredEvent) |
+| TD-7 | JSONL projection append-only | Storage growth | jsonlEventStore.ts | Add compression/archiving (M2+) |
 
-### 代码质量改进记录
+### Code Quality Improvement Record
 
-#### 已完成的修复
+#### Completed Fixes
 
-**TD-1: `as any` 类型问题（✅ 已修复）**
+**TD-1: `as any` Type Issue (✅ Fixed)**
 ```typescript
-// 修复方案：使用类型安全的辅助函数 toStoredEvent
+// Fix: Using type-safe helper function toStoredEvent
 function toStoredEvent(
   meta: { id: number; streamId: string; seq: number; createdAt: string },
   evt: DomainEvent
@@ -547,449 +551,50 @@ function toStoredEvent(
 }
 ```
 
-**TD-2: TUI console.log 问题（✅ 已修复）**
+**TD-2: TUI console.log Issue (✅ Fixed)**
 ```tsx
-// 修复前：直接使用 console.log
+// Before: Directly using console.log
 console.log(`${e.id} ${e.streamId}#${e.seq} ${e.type}`)
 
-// 修复后：使用状态管理
+// After: Using state management
 const [replayOutput, setReplayOutput] = useState<string[]>([])
 setReplayOutput(events.map(e => `${e.id} ${e.streamId}#${e.seq} ${e.type}`))
-// 在 JSX 中渲染 replayOutput
+// Render replayOutput in JSX
 ```
 
-**TD-6: 测试文件 any 类型（✅ 已修复）**
+**TD-6: any Type in Test File (✅ Fixed)**
 ```typescript
-// 修复前
+// Before
 function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: any)
 
-// 修复后
+// After
 import type { StoredEvent } from '../src/domain/events.js'
 function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: StoredEvent)
 ```
 
-### 文档一致性验证
+### Document Consistency Verification
 
-所有架构文档与代码实现已验证一致：
+All architectural documentation and code implementations verified as consistent:
 
-| 文档位置 | 代码位置 | 状态 |
+| Document Location | Code Location | Status |
 |----------|----------|------|
-| ARCHITECTURE.md L180: `claim_task` capability | src/domain/actor.ts:15 | ✅ 一致 |
-| ARCHITECTURE.md L201: Task.title | src/domain/task.ts:65 | ✅ 一致 |
-| ARCHITECTURE.md L212: Task.parentTaskId? | src/domain/task.ts (预留) | ✅ 一致 |
-| ARCHITECTURE.md L81: RejectPatch 用例 | src/application/patchService.ts:58 | ✅ 一致 |
-| ARCHITECTURE.md L82: PostFeedback 用例 | src/application/taskService.ts:105 | ✅ 一致 |
-| ARCHITECTURE.md L110: LLMClient 端口 | M1 实现（已规划） | ✅ 符合计划 |
+| ARCHITECTURE.md L180: `claim_task` capability | src/domain/actor.ts:15 | ✅ Consistent |
+| ARCHITECTURE.md L201: Task.title | src/domain/task.ts:65 | ✅ Consistent |
+| ARCHITECTURE.md L212: Task.parentTaskId? | src/domain/task.ts (reserved) | ✅ Consistent |
+| ARCHITECTURE.md L81: RejectPatch use case | src/application/patchService.ts:58 | ✅ Consistent |
+| ARCHITECTURE.md L82: PostFeedback use case | src/application/taskService.ts:105 | ✅ Consistent |
+| ARCHITECTURE.md L110: LLMClient port | M1 implementation (planned) | ✅ Per plan |
 
-### M1 准备清单
+### M1 Preparation Checklist
 
-#### 架构就绪度
+#### Architectural Readiness
 
-| 组件 | M0 状态 | M1 需求 | 差距 |
+| Component | M0 Status | M1 Requirement | Gap |
 |------|---------|---------|------|
-| EventStore | ✅ 完成 | 无变化 | - |
-| Projector | ✅ 基础 | 需 checkpoint | TD-3 |
-| TaskService | ✅ 完成 | 无变化 | - |
-| PatchService | ✅ 完成 | 无变化 | - |
-| Actor 类型 | ✅ 定义 | 需权限校验 | P1 |
-| LLMClient | ❌ 无 | 需添加 | M1 范围 |
-| AgentRuntime | ❌ 无 | 需添加 | M1 范围 |
-| ContextBuilder | ❌ 无 | 需添加 | M1 范围 |
-| FileWatcher | ❌ 无 | 需添加 | M1 范围 |
-
-> **说明**：LLMClient、AgentRuntime、ContextBuilder、FileWatcher 是 M1 的实现范围，不属于 M0 技术债务。M0 已按计划完成核心事件溯源架构。
-
-#### 推荐的 M1 实施顺序
-
-```
-M1.1: 添加 LLMClient 接口 (src/domain/ports/llmClient.ts)
-      ├─ 定义 generate(), stream() 方法
-      └─ 添加 Claude/OpenAI 适配器
-
-M1.2: 实现 AgentRuntime (src/agents/runtime.ts)
-      ├─ 订阅 Billboard 任务
-      ├─ 调用 LLMClient 生成 Plan/Patch
-      └─ 发射事件
-
-M1.3: 实现 ContextBuilder (src/application/contextBuilder.ts)
-      ├─ 读取 OUTLINE.md, BRIEF.md, STYLE.md
-      ├─ 读取目标文件片段
-      └─ 组装 prompt
-
-M1.4: 添加 Drift 检测
-      ├─ baseRevision 比对
-      ├─ FileWatcher 集成
-      └─ TaskNeedsRebase 事件
-
-M1.5: 投影优化
-      ├─ 持久化 checkpoint (解决 TD-3)
-      └─ 增量更新
-```
-
-### 实施检查清单
-
-#### Phase 1: M0 清理（✅ 已完成）
-
-- [x] 移除 deprecated legacy types
-- [x] 移除未使用的 imports
-- [x] 移除 SQLite EventStore 实现
-- [x] 验证所有测试通过
-- [x] 验证文档与代码一致性
-
-#### Phase 2: 代码质量（✅ 已完成）
-
-- [x] 修复 TUI console.log 问题 (TD-2)
-- [x] 修复 `as any` 类型问题 (TD-1)
-- [x] 修复测试文件 any 类型 (TD-6)
-- [x] 修复 ESLint prefer-const 错误
-
-#### Phase 3: M1 准备（部分完成）
-
-- [ ] 添加投影 checkpoint (TD-3)
-- [ ] 添加并发控制 (TD-4)
-- [ ] 实现 LLMClient 接口
-- [ ] 实现 AgentRuntime
-
-### 审计记录
-
-**2026-02-02 架构审计**
-
-**清理完成：**
-- 移除 3 个 deprecated legacy types ✅
-- 移除 SQLite EventStore 实现 ✅
-- 修复 2 个 ESLint 错误（prefer-const）✅
-
-**技术债务解决：**
-- TD-1: `as any` 类型逃逸 → 使用 toStoredEvent 辅助函数 ✅
-- TD-2: TUI console.log → 使用 replayOutput 状态展示 ✅
-- TD-6: 测试文件 any 类型 → 使用 StoredEvent 类型 ✅
-
-**文档验证：**
-- ARCHITECTURE.md 与代码完全一致 ✅
-- 所有能力定义、字段定义、用例映射均已确认 ✅
-
-**质量指标：**
-- 测试覆盖率：7/7 (100%) ✅
-- TypeScript 编译：0 错误 ✅
-- ESLint：0 错误 ✅
-- 架构合规性：高 ✅
-
-**遗留工作（M1 范围）：**
-- TD-3: 投影缓存（性能优化）
-- TD-4: 并发控制（多 Agent 场景）
-- M1 新组件：LLMClient、AgentRuntime、ContextBuilder、FileWatcher
-
----
-
-## 结论
-
-### M0 验收标准：✅ 全部达成
-
-| 标准 | 状态 | 证据 |
-|-----------|--------|----------|
-| 实现事件存储与投影 | ✅ | eventStore.ts, projections.ts |
-| CLI: 创建、列表、打开线程 | ✅ | CLI 命令可用，测试验证通过 |
-| CLI: 补丁提出、接受、应用 | ✅ | patchApply 测试通过，E2E 流程跑通 |
-| 事件日志回放 | ✅ | `log replay` 命令正常运行 |
-| 架构符合六边形模式 | ✅ | 清晰的层次分离，接口可替换 |
-
-### 架构质量评估
-
-**优点：**
-- ✅ 严格的层次隔离（Domain/Application/Infrastructure/Interface）
-- ✅ 事件溯源保证审计能力与可回放性
-- ✅ 投影模式实现 CQRS 读写分离
-- ✅ 端口-适配器模式保证未来扩展性（Overleaf/TODO/多 Agent）
-- ✅ 类型安全（Zod schema 验证所有事件）
-
-**待改进：**
-- ⚠️ 缺少异步流式编程支持（M1 引入 RxJS）
-- ⚠️ 投影未持久化（M1 增加 checkpoint）
-- ⚠️ 无资源隔离与权限控制（M1+ 增加 Actor 系统）
-
-### 从 M0 到 roadmap 完整愿景的路径
-
-M0 的基础对于实现 roadmap 中的完整愿景至关重要：
-
-1. **Task 驱动协作** - ✅ 基础已建立，M1 增加 Agent Runtime
-2. **Billboard 共享池** - 🚧 EventStore 已完成，M1 增加流式调度
-3. **Actor 一等公民** - 🚧 预留设计，M1 增加 Router/Scheduler
-4. **可扩展到 Overleaf** - ✅ Adapter 模式已验证，直接复用 Billboard
-
-**关键成功因素：** M0 没有走捷径，严格遵循了 roadmap 的架构原则，为后续迭代打下了坚实基础。
-
----
-
-## 附录：架构决策记录 (ADR)
-
-### ADR-001: 选择 JSONL 作为事件存储（当前实现）
-- **决策：** 使用 JSONL 作为追加式事件日志与投影 checkpoint 存储（`.coauthor/events.jsonl` / `.coauthor/projections.jsonl`）。
-- **理由：** 
-  - 零配置部署，便于调试与回放
-  - 满足 M0 单用户事件溯源的可靠性需求
-  - 避免依赖 Node.js 原生 `node:sqlite` 的实验性特性带来的兼容风险
-- **权衡：** 不提供数据库级事务与并发隔离；如需更强一致性与多进程并发，后续可在 EventStore 端口下替换为稳定数据库后端
-
-### ADR-002: 事件即审计日志，不做软删除
-- **决策：** 事件永不删除，只追加
-- **理由：** 
-  - 完整审计链路
-  - 可回放任意时刻状态
-  - 符合事件溯源最佳实践
-- **权衡：** 存储增长，但可通过归档解决（M2+）
-
-### ADR-003: 投影按需重建而非增量更新（M0）
-- **决策：** 每次查询时从头 reduce
-- **理由：** 
-  - 实现简单
-  - 易于调试
-  - M0 事件量小（< 1000）
-- **权衡：** 性能不足以支持生产，M1 改为持久化投影
-
-### ADR-004: Patch 采用 unified diff 格式
-- **决策：** 使用标准 unified diff
-- **理由：** 
-  - 人类可读
-  - 生态工具成熟（git、diff 命令）
-  - `diff` 库可靠
-- **权衡：** 不适合二进制，但 M0 只处理文本
-
-### ADR-005: CLI 先行，TUI 可选
-- **决策：** M0 优先实现 CLI，TUI 作为增强
-- **理由：** 
-  - CLI 可脚本化
-  - 易于测试
-  - 满足核心开发者需求
-- **权衡：** 用户体验不如 GUI，但符合 V0 定位
-
----
-
-## M1 任务规划
-
-### M1 目标：LLM 集成基础
-
-基于 M0 已完成的架构，M1 的核心任务是**添加 LLM 抽象层和基础 Agent 运行时**，为 M2 端到端 Workflow 做准备。
-
-### M1 与 M0 的关系
-
-**M0 超预期完成项（原计划在 M1）：**
-- ✅ Domain 层完整（Actor, Task, Artifact, Events 含 authorActorId）
-- ✅ Application 层完整（TaskService, PatchService, EventService）
-- ✅ 六边形架构（Port-Adapter）
-
-**M1 实际需要做的工作：**
-- ❌ LLMClient 端口与适配器（核心）
-- ❌ AgentRuntime 基础框架
-- ❌ ContextBuilder 服务
-- ⚠️ 投影 Checkpoint 优化（解决 TD-3）
-
-### M1 详细任务分解
-
-#### 任务 1：定义 LLMClient 端口（1-2h）
-
-**目标：** 创建 LLM 抽象层，支持多模型切换
-
-**产出：**
-```typescript
-// src/domain/ports/llmClient.ts
-export type LLMProfile = 'fast' | 'writer' | 'reasoning'
-
-export interface LLMClient {
-  generate(context: string, profile: LLMProfile): Promise<string>
-  stream(context: string, profile: LLMProfile): Observable<string>
-}
-```
-
-**设计决策：**
-- 使用 profile 而非直接模型名，便于切换底层模型
-- 支持同步（generate）和流式（stream）两种模式
-- context 是纯文本，由 ContextBuilder 负责构建
-
-#### 任务 2：实现 Anthropic 适配器（2-3h）
-
-**目标：** 实现 Claude API 集成
-
-**产出：**
-```typescript
-// src/infra/anthropicLLMClient.ts
-export class AnthropicLLMClient implements LLMClient {
-  private modelMap = {
-    fast: 'claude-3-5-haiku-20241022',
-    writer: 'claude-3-5-sonnet-20241022',
-    reasoning: 'claude-3-7-sonnet-20250219'
-  }
-  
-  async generate(context: string, profile: LLMProfile): Promise<string>
-  // stream() 可选实现
-}
-```
-
-**技术选择：**
-- 使用官方 `@anthropic-ai/sdk`
-- 初期只实现 generate()，stream() 留给 M2
-- API Key 通过环境变量 `ANTHROPIC_API_KEY` 传入
-
-#### 任务 3：实现 ContextBuilder（2-3h）
-
-**目标：** 构建任务上下文字符串，供 LLM 使用
-
-**产出：**
-```typescript
-// src/application/contextBuilder.ts
-export class ContextBuilder {
-  buildTaskContext(task: TaskView): string {
-    // 1. 任务描述
-    // 2. 相关文件片段（基于 artifactRefs）
-    // 3. TODO: OUTLINE.md 注入（M4）
-  }
-  
-  private readArtifact(ref: ArtifactRef): string
-}
-```
-
-**实现要点：**
-- 读取 `task.artifactRefs` 指定的文件
-- M1 暂不支持 range 裁剪（读整个文件）
-- M1 暂不注入 OUTLINE.md（留给 M4）
-
-#### 任务 4：实现基础 AgentRuntime（3-4h）
-
-**目标：** Agent 生命周期管理 + 手动任务处理
-
-**产出：**
-```typescript
-// src/agents/runtime.ts
-export class AgentRuntime {
-  start(): void  // 启动 Agent（M1 仅打印日志）
-  stop(): void   // 停止 Agent
-  
-  // 手动处理任务（M1 测试用）
-  async handleTask(task: TaskView): Promise<void> {
-    // 1. 调用 ContextBuilder
-    // 2. 调用 LLMClient.generate()
-    // 3. 打印结果（不写事件）
-  }
-}
-```
-
-**M1 限制：**
-- 不实现自动任务订阅（M2 增加）
-- 不写 `AgentPlanPosted` 事件（M2 增加）
-- 只验证 LLM 调用链路通畅
-
-#### 任务 5：投影 Checkpoint 优化（2-3h）
-
-**目标：** 解决 TD-3，提升投影性能
-
-**改动：**
-```typescript
-// 修改 src/application/projector.ts
-export async function projectWithCheckpoint<S>(
-  store: EventStore,
-  projectionName: string,
-  initialState: S,
-  reducer: (state: S, event: StoredEvent) => S
-): Promise<S> {
-  // 1. 从 .coauthor/projections.jsonl 读取 checkpoint
-  // 2. 只处理 checkpoint 之后的新事件
-  // 3. 保存新 checkpoint
-}
-```
-
-**持久化方案：**
-- 复用 JsonlEventStore 的 projection 存储
-- 格式：`{ name, cursorEventId, stateJson }`
-- 每次投影更新后保存
-
-#### 任务 6：新增事件类型（1h）
-
-**新增事件：**
-1. `AgentPlanPosted`：Agent 发布执行计划
-2. `UserFeedbackPosted`：用户对计划/补丁的反馈
-
-**用途：**
-- M1 定义 schema，M2 开始使用
-- 为完整 Workflow 做准备
-
-#### 任务 7：测试（2-3h）
-
-**新增测试：**
-- `tests/llmClient.test.ts`：Mock LLMClient 测试
-- `tests/contextBuilder.test.ts`：上下文构建测试
-- `tests/agentRuntime.test.ts`：Agent 生命周期测试
-- 更新 `tests/projector.test.ts`：测试 checkpoint 机制
-
-### M1 验收标准
-
-✅ **通过以下测试即认为 M1 完成：**
-
-```bash
-# 1. 启动 Agent（手动模式）
-npm run dev -- agent start
-# 输出：[Agent default-agent] Started
-
-# 2. 创建任务
-npm run dev -- task create "改进导论第一段" --file chapters/01_intro.tex
-# 输出：taskId=xyz
-
-# 3. 手动触发 Agent
-npm run dev -- agent handle xyz
-# 输出：
-#   [Agent] Handling task xyz
-#   [Agent] Generated plan:
-#   1. 分析当前段落结构
-#   2. 识别需要改进的点
-#   3. 生成改进建议
-
-# 4. 验证性能优化
-npm run dev -- task list
-# 使用 checkpoint，事件量大时性能明显提升
-
-# 5. 所有测试通过
-npm test
-```
-
-### M1 与 M2 的分界线
-
-| 功能 | M1 状态 | M2 目标 |
-|------|---------|--------|
-| LLM 调用 | ✅ 可用 | 增强（流式输出） |
-| Agent 任务处理 | ✅ 手动触发 | 自动订阅 |
-| Plan 生成 | ✅ 打印到控制台 | 写入 `AgentPlanPosted` 事件 |
-| Patch 生成 | ❌ 无 | 完整实现 |
-| 用户确认流程 | ❌ 无 | `/accept` `/reject` 命令 |
-| 文件更新 | ❌ 无 | 自动 apply patch |
-
-**关键设计原则：**
-- M1 验证基础设施可用性（LLM + Context + Agent 框架）
-- M2 实现完整业务流程（Task → Plan → Patch → Review → Apply）
-
-### 实施建议
-
-1. **先做 Task 1-3**（LLMClient + ContextBuilder）
-   - 这是最核心的基础设施
-   - 完成后可以单独测试 LLM 调用
-
-2. **再做 Task 4**（AgentRuntime）
-   - 整合前面的组件
-   - 验证端到端链路
-
-3. **最后做 Task 5-7**（优化 + 补充）
-   - Checkpoint 可以解决性能问题
-   - 新增事件为 M2 做准备
-   - 测试保证质量
-
-**预估总工时：** 13-19 小时（约 2-3 个工作日）
-
-### 风险评估
-
-| 风险 | 影响 | 缓解措施 |
-|------|------|----------|
-| Anthropic API 不稳定 | M1 进度受阻 | 使用 Mock LLMClient 开发 |
-| Context 构建复杂 | ContextBuilder 实现耗时 | M1 只读整个文件，不做裁剪 |
-| Checkpoint 实现困难 | 性能优化失败 | 可延后到 M2，不影响核心功能 |
-
----
-
-*文档版本: 2026-02-02*  
-*相关文档: ARCHITECTURE.md, DOMAIN.md, MILESTONES.md*
+| EventStore | ✅ Completed | No change | - |
+| Projector | ✅ Basic | Needs checkpoint | TD-3 |
+| TaskService | ✅ Completed | No change | - |
+| PatchService | ✅ Completed | No change | - |
+| Actor Types | ✅ Defined | Needs permission validation | P1 |
+| LLMClient | ❌ None | Need to add | M1 scope |
+| AgentRuntime | ❌ None | Need to add | M1 scope |

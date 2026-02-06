@@ -19,21 +19,21 @@ export type TaskView = {
   title: string
   intent: string
   createdBy: string
-  agentId: string                 // V0: 创建时直接指定的处理 Agent
+  agentId: string                 // V0: Specify processing Agent directly upon creation
   priority: TaskPriority
   status: 'open' | 'in_progress' | 'awaiting_user' | 'paused' | 'done' | 'failed' | 'canceled'
   artifactRefs?: ArtifactRef[]
   
-  // UIP 交互状态
-  pendingInteractionId?: string   // 当前等待响应的交互 ID
-  lastInteractionId?: string      // 最后一次交互的 ID
+  // UIP Interaction State
+  pendingInteractionId?: string   // ID of the interaction currently awaiting a response
+  lastInteractionId?: string      // ID of the last interaction
   
-  // V1 预留：子任务支持
+  // V1 Reserved: Subtask support
   parentTaskId?: string
   childTaskIds?: string[]
   
   createdAt: string
-  updatedAt: string               // 最后事件时间
+  updatedAt: string               // Time of the last event
 }
 
 export type TasksProjectionState = {
