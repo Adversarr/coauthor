@@ -187,7 +187,7 @@ export class ConversationManager {
     baseDir: string,
     history: LLMMessage[]
   ): Promise<void> {
-    console.log('[DEBUG] repairing history for', taskId, 'length:', history.length)
+    // console.log('[DEBUG] repairing history for', taskId, 'length:', history.length)
 
     // Collect existing tool-result IDs
     const existingToolResults = new Set<string>()

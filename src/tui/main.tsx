@@ -416,6 +416,21 @@ function getStatusIcon(status: string): string {
   }
 }
 
+const toolFormatters: Record<string, (output: any) => string | null> = {
+  readFile: (output: any) => {
+    if (output && typeof output.path === 'string' && typeof output.lineCount === 'number') {
+      return `Read ${output.path} (${output.lineCount} lines)`
+    }
+    return null
+  },
+  listFiles: (output: any) => {
+    if (output && typeof output.path === 'string' && typeof output.count === 'number') {
+      return `List ${output.path} (${output.count} entries)`
+    }
+    return null
+  }
+}
+
 function formatAuditEntry(entry: StoredAuditEntry): {
   line: string
   color?: string
@@ -430,7 +445,17 @@ function formatAuditEntry(entry: StoredAuditEntry): {
       dim: true
     }
   }
-  const output = formatToolPayload(entry.payload.output, 200)
+
+  let output: string
+  const formatter = toolFormatters[entry.payload.toolName]
+  const formattedCustom = formatter ? formatter(entry.payload.output) : null
+
+  if (formattedCustom) {
+    output = formattedCustom
+  } else {
+    output = formatToolPayload(entry.payload.output, 200)
+  }
+
   if (entry.payload.isError) {
     return {
       line: ` ✖ ${entry.payload.toolName} error (${entry.payload.durationMs}ms) ${output}`,
