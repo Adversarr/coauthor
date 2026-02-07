@@ -1,7 +1,7 @@
 # CoAuthor Domain Model Specification
 
-> Version: V0.1  
-> Last Updated: 2026-02-03  
+> Version: V0.2  
+> Last Updated: 2026-02-07  
 > Status: Normative
 
 This document defines the domain model for CoAuthor: Event Schema, Entity definitions, and Policy rules. All code implementations must remain consistent with this document.
@@ -14,7 +14,7 @@ This specification has been updated according to the direction reset in [ARCHITE
 
 | Feature | V0 Status | V1 Plan |
 |------|---------|---------|
-| Task Lifecycle Events | ✅ 5 types (Created/Started/Completed/Failed/Canceled) | Possible addition of Claim/Subtask events |
+| Task Lifecycle Events | ✅ 8 types (Created/Started/Paused/Resumed/InstructionAdded/Completed/Failed/Canceled) | Possible addition of Claim/Subtask events |
 | UIP General Interaction | ✅ Fully implemented | - |
 | Tool Use + AuditLog | ✅ Fully implemented | - |
 | ConversationStore | ✅ Persistence of conversation history | - |
@@ -104,9 +104,39 @@ type TaskCanceledEvent = {
     authorActorId: string
   }
 }
+
+// Task Paused
+type TaskPausedEvent = {
+  type: 'TaskPaused'
+  payload: {
+    taskId: string
+    reason?: string
+    authorActorId: string
+  }
+}
+
+// Task Resumed
+type TaskResumedEvent = {
+  type: 'TaskResumed'
+  payload: {
+    taskId: string
+    reason?: string
+    authorActorId: string
+  }
+}
+
+// Instruction Added (refinement)
+type TaskInstructionAddedEvent = {
+  type: 'TaskInstructionAdded'
+  payload: {
+    taskId: string
+    instruction: string
+    authorActorId: string
+  }
+}
 ```
 
-> **V0.1 Note**: Plan/Patch events are no longer used to express the collaboration process; stages such as "waiting for user confirmation/supplementary information" are unified under UIP.
+> **V0.2 Note**: Plan/Patch events are no longer used to express the collaboration process; stages such as "waiting for user confirmation/supplementary information" are unified under UIP.
 
 #### 1.3.2 General Interaction Events (UIP)
 
@@ -162,13 +192,16 @@ type UserInteractionRespondedEvent = {
 }
 ```
 
-### 1.4 Full DomainEvent Union (V0.1)
+### 1.4 Full DomainEvent Union (V0.2)
 
 ```typescript
 type DomainEvent =
   // Task Lifecycle
   | TaskCreatedEvent
   | TaskStartedEvent
+  | TaskPausedEvent
+  | TaskResumedEvent
+  | TaskInstructionAddedEvent
   | TaskCompletedEvent
   | TaskFailedEvent
   | TaskCanceledEvent
@@ -179,12 +212,15 @@ type DomainEvent =
 type EventType = DomainEvent['type']
 ```
 
-### 1.5 V0.1 Event Set (7 types)
+### 1.5 V0.2 Event Set (10 types)
 
 | Event | Description |
 |------|------|
 | `TaskCreated` | User initiates a task request (including designated agentId) |
 | `TaskStarted` | Task execution begins |
+| `TaskPaused` | Task execution is paused (cooperative pause) |
+| `TaskResumed` | Task execution resumes after a pause |
+| `TaskInstructionAdded` | A new refinement/instruction is added to a task |
 | `UserInteractionRequested` | System initiates an interaction request (unified protocol) |
 | `UserInteractionResponded` | User responds to an interaction request |
 | `TaskCompleted` | Task successfully completed |

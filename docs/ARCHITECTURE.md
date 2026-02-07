@@ -1,7 +1,7 @@
 # CoAuthor Architecture Design Document
 
-> Version: V0.1  
-> Last Updated: 2026-02-03  
+> Version: V0.2  
+> Last Updated: 2026-02-07  
 > Status: Normative Specification
 
 This document defines the architectural design principles, layered structure, and core concepts of CoAuthor. It serves as the "constitution" for system design, and all implementations must comply with it.
@@ -356,6 +356,8 @@ All writing agents follow a unified skeleton:
      - Tool call records written to AuditLog (not DomainEvent)
      - If info is missing/decision needed: UserInteractionRequested(purpose=request_info|choose_strategy) → UserInteractionResponded
      - If high-risk tool action imminent: UserInteractionRequested(purpose=confirm_risky_action)
+     - If user issues `/pause` or `/continue`: TaskPaused / TaskResumed
+     - If user adds refinement during execution: TaskInstructionAdded
 3. Done/Fail/Cancel → emit TaskCompleted | TaskFailed | TaskCanceled
 ```
 
