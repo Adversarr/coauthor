@@ -140,6 +140,11 @@ export class OpenAILLMClient implements LLMClient {
       messages: toModelMessages(opts.messages),
       tools,
       maxOutputTokens: opts.maxTokens,
+      providerOptions: {
+        openai: {
+          enable_thinking: true
+        }
+      }
     })
 
     // Convert tool calls to our format

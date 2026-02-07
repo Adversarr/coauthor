@@ -453,11 +453,17 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   test('auto-repairs dangling tool calls on resume', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { conversationStore, manager, taskService } = createTestInfra(dir)
+    const { store, conversationStore, manager, taskService } = createTestInfra(dir)
 
     // 1. Manually create a broken history
     const { taskId: realTaskId } = taskService.createTask({ title: 'Broken', agentId: DEFAULT_AGENT_ACTOR_ID })
     
+    // Fix: Move to paused state so resumeTask is valid
+    store.append(realTaskId, [
+      { type: 'TaskStarted', payload: { taskId: realTaskId, agentId: DEFAULT_AGENT_ACTOR_ID, authorActorId: DEFAULT_AGENT_ACTOR_ID } },
+      { type: 'TaskPaused', payload: { taskId: realTaskId, authorActorId: DEFAULT_USER_ACTOR_ID } }
+    ])
+
     conversationStore.append(realTaskId, { 
       role: 'assistant', 
       toolCalls: [{ toolCallId: 'call_x', toolName: 'risky_tool', arguments: {} }] 
@@ -500,9 +506,16 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
       recordRejection: (call) => ({ toolCallId: call.toolCallId, output: { isError: true, error: 'User rejected the request' }, isError: true })
     }
 
-    const { conversationStore, manager, taskService } = createTestInfra(dir, { llm: mockLLM, toolExecutor: mockToolExecutor })
+    const { store, conversationStore, manager, taskService } = createTestInfra(dir, { llm: mockLLM, toolExecutor: mockToolExecutor })
 
     const { taskId } = taskService.createTask({ title: 'Safe Repair', agentId: DEFAULT_AGENT_ACTOR_ID })
+    
+    // Fix: Move to paused state
+    store.append(taskId, [
+      { type: 'TaskStarted', payload: { taskId, agentId: DEFAULT_AGENT_ACTOR_ID, authorActorId: DEFAULT_AGENT_ACTOR_ID } },
+      { type: 'TaskPaused', payload: { taskId, authorActorId: DEFAULT_USER_ACTOR_ID } }
+    ])
+
     conversationStore.append(taskId, {
       role: 'assistant',
       toolCalls: [{ toolCallId: 'call_safe', toolName: 'dummy_tool', arguments: {} }]
@@ -523,7 +536,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   test('does not inject interrupted error for dangling risky tools on resume', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { conversationStore, manager, taskService, toolRegistry } = createTestInfra(dir)
+    const { store, conversationStore, manager, taskService, toolRegistry } = createTestInfra(dir)
     
     // Register risky tool
     toolRegistry.register({
@@ -536,6 +549,12 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
 
     const { taskId } = taskService.createTask({ title: 'Risky Resume', agentId: DEFAULT_AGENT_ACTOR_ID })
     
+    // Fix: Move to paused
+    store.append(taskId, [
+      { type: 'TaskStarted', payload: { taskId, agentId: DEFAULT_AGENT_ACTOR_ID, authorActorId: DEFAULT_AGENT_ACTOR_ID } },
+      { type: 'TaskPaused', payload: { taskId, authorActorId: DEFAULT_USER_ACTOR_ID } }
+    ])
+
     // Manually inject dangling risky tool call
     conversationStore.append(taskId, { 
       role: 'assistant', 
@@ -793,9 +812,9 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
       } else if (r < 0.55) {
         taskService.addInstruction(taskId, `instruction-${i}`)
       } else if (r < 0.7) {
-        taskService.pauseTask(taskId, `pause-${i}`)
+        try { taskService.pauseTask(taskId, `pause-${i}`) } catch {}
       } else if (r < 0.85) {
-        taskService.resumeTask(taskId, `resume-${i}`)
+        try { taskService.resumeTask(taskId, `resume-${i}`) } catch {}
       }
       await vi.advanceTimersByTimeAsync(30)
     }
@@ -804,7 +823,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
     if (pendingFinal) {
       interactionService.respondToInteraction(taskId, pendingFinal.interactionId, { selectedOptionId: 'approve' })
     }
-    taskService.resumeTask(taskId, 'final-resume')
+    try { taskService.resumeTask(taskId, 'final-resume') } catch {}
     await vi.advanceTimersByTimeAsync(200)
 
     const messages = conversationStore.getMessages(taskId)

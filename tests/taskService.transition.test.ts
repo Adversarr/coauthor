@@ -201,3 +201,67 @@ describe('TaskService State Transitions', () => {
       expect(service.getTask(taskId)?.status).toBe('in_progress')
   })
 })
+
+describe('TaskService Command Validation', () => {
+  const setup = () => {
+    const store = new InMemoryEventStore()
+    const service = new TaskService(store, DEFAULT_USER_ACTOR_ID)
+    return { store, service }
+  }
+
+  const createTask = (service: TaskService) => {
+    return service.createTask({
+      title: 'Test Task',
+      agentId: DEFAULT_AGENT_ACTOR_ID
+    }).taskId
+  }
+
+  test('throws when cancelling a task that cannot be canceled', () => {
+    const { store, service } = setup()
+    const taskId = createTask(service)
+
+    // open -> canceled (Valid)
+    service.cancelTask(taskId)
+    expect(service.getTask(taskId)?.status).toBe('canceled')
+
+    // canceled -> canceled (Invalid? Actually TaskCanceled is not in allowed transitions for canceled)
+    // canTransition('canceled', 'TaskCanceled') -> false
+    expect(() => service.cancelTask(taskId)).toThrow(/Invalid transition/)
+  })
+
+  test('throws when pausing a task that is not in progress', () => {
+    const { store, service } = setup()
+    const taskId = createTask(service)
+
+    // open -> paused (Invalid, must be in_progress?)
+    // canTransition('open', 'TaskPaused') -> false
+    expect(() => service.pauseTask(taskId)).toThrow(/Invalid transition/)
+  })
+
+  test('throws when resuming a task that is not paused', () => {
+    const { store, service } = setup()
+    const taskId = createTask(service)
+
+    // open -> resumed (Invalid)
+    expect(() => service.resumeTask(taskId)).toThrow(/Invalid transition/)
+  })
+
+  test('throws when adding instruction to task that forbids it (none currently forbid it)', () => {
+    const { store, service } = setup()
+    const taskId = createTask(service)
+    
+    // TaskInstructionAdded is always allowed
+    service.addInstruction(taskId, 'inst')
+    expect(service.getTask(taskId)?.status).toBe('in_progress') // open -> in_progress implicit?
+    // Wait, TaskInstructionAdded returns true in canTransition.
+    // And reducer sets status to 'in_progress'.
+    // So this should work.
+    
+    service.cancelTask(taskId)
+    expect(service.getTask(taskId)?.status).toBe('canceled')
+    
+    // canceled -> in_progress (via TaskInstructionAdded)
+    service.addInstruction(taskId, 'wake up')
+    expect(service.getTask(taskId)?.status).toBe('in_progress')
+  })
+})

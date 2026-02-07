@@ -29,7 +29,7 @@ Risk: The architecture defines `ArtifactStore` as the abstraction for file acces
 Paths: `src/domain/ports/eventStore.ts`, `src/domain/ports/auditLog.ts`, `src/domain/ports/uiBus.ts`.
 Risk: The domain layer is no longer independent of infrastructure concerns. Any effort to replace RxJS or run in environments without it requires touching domain interfaces and rippling changes across the system, raising the cost of architectural change.
 
-4. [P1] Event validation and state transitions are enforced only in projections.
+4. [P1] Event validation and state transitions are enforced only in projections. [Resolved 2026-02-07]
 Paths: `src/application/taskService.ts`, `src/application/projector.ts`, `src/agents/runtime.ts`, `src/infra/jsonlEventStore.ts`, `src/domain/events.ts`.
 Risk: Invalid events can be appended (for example repeated `TaskStarted` in disallowed states), and projections silently ignore them. This allows the event log to drift from the read models, breaking replay, testing, and any future projections. Debugging becomes expensive because the source of truth no longer matches observed state.
 

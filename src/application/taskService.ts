@@ -101,6 +101,12 @@ export class TaskService {
    * Cancel a task.
    */
   cancelTask(taskId: string, reason?: string): void {
+    const task = this.getTask(taskId)
+    if (!task) throw new Error(`Task not found: ${taskId}`)
+    if (!this.canTransition(task.status, 'TaskCanceled')) {
+      throw new Error(`Invalid transition: cannot cancel task in state ${task.status}`)
+    }
+
     this.#store.append(taskId, [
       {
         type: 'TaskCanceled',
@@ -117,6 +123,12 @@ export class TaskService {
    * Pause a task.
    */
   pauseTask(taskId: string, reason?: string): void {
+    const task = this.getTask(taskId)
+    if (!task) throw new Error(`Task not found: ${taskId}`)
+    if (!this.canTransition(task.status, 'TaskPaused')) {
+      throw new Error(`Invalid transition: cannot pause task in state ${task.status}`)
+    }
+
     this.#store.append(taskId, [
       {
         type: 'TaskPaused',
@@ -133,6 +145,12 @@ export class TaskService {
    * Resume a task.
    */
   resumeTask(taskId: string, reason?: string): void {
+    const task = this.getTask(taskId)
+    if (!task) throw new Error(`Task not found: ${taskId}`)
+    if (!this.canTransition(task.status, 'TaskResumed')) {
+      throw new Error(`Invalid transition: cannot resume task in state ${task.status}`)
+    }
+
     this.#store.append(taskId, [
       {
         type: 'TaskResumed',
@@ -149,6 +167,12 @@ export class TaskService {
    * Add an instruction to a task (refinement).
    */
   addInstruction(taskId: string, instruction: string): void {
+    const task = this.getTask(taskId)
+    if (!task) throw new Error(`Task not found: ${taskId}`)
+    if (!this.canTransition(task.status, 'TaskInstructionAdded')) {
+      throw new Error(`Invalid transition: cannot add instruction to task in state ${task.status}`)
+    }
+
     this.#store.append(taskId, [
       {
         type: 'TaskInstructionAdded',
@@ -166,7 +190,7 @@ export class TaskService {
   // ============================================================================
 
   // Check if state transition is valid
-  #canTransition(currentStatus: string, eventType: string): boolean {
+  canTransition(currentStatus: string, eventType: string): boolean {
     // TaskInstructionAdded is a universal wake-up signal (7.1 requirement)
     if (eventType === 'TaskInstructionAdded') return true 
     
@@ -181,6 +205,7 @@ export class TaskService {
       case 'paused':
         return ['TaskResumed', 'TaskCanceled'].includes(eventType)
       case 'done':
+        return ['TaskStarted'].includes(eventType)
       case 'failed':
       case 'canceled':
         // Allow restart via TaskStarted (re-execution)
@@ -219,7 +244,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
         
         task.status = 'in_progress'
         task.updatedAt = event.createdAt
@@ -229,7 +254,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'awaiting_user'
         task.pendingInteractionId = event.payload.interactionId
@@ -241,7 +266,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         // Only clear if this response is for the pending interaction
         if (task.pendingInteractionId === event.payload.interactionId) {
@@ -256,7 +281,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'done'
         task.pendingInteractionId = undefined
@@ -267,7 +292,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'failed'
         task.pendingInteractionId = undefined
@@ -278,7 +303,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'canceled'
         task.pendingInteractionId = undefined
@@ -289,7 +314,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'paused'
         task.updatedAt = event.createdAt
@@ -299,7 +324,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         task.status = 'in_progress'
         task.updatedAt = event.createdAt
@@ -309,7 +334,7 @@ export class TaskService {
         const idx = findTaskIndex(event.payload.taskId)
         if (idx === -1) return state
         const task = tasks[idx]!
-        if (!this.#canTransition(task.status, event.type)) return state
+        if (!this.canTransition(task.status, event.type)) return state
 
         // If task was done/failed/canceled/paused, move back to in_progress
         // If already in_progress, stay in_progress

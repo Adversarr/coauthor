@@ -173,6 +173,10 @@ export class AgentRuntime {
       throw new Error(`Task ${this.#taskId} assigned to ${task.agentId}, not ${this.#agent.id}`)
     }
 
+    if (!this.#taskService.canTransition(task.status, 'TaskStarted')) {
+      throw new Error(`Invalid transition: cannot start task in state ${task.status}`)
+    }
+
     const startedEvent: DomainEvent = {
       type: 'TaskStarted',
       payload: { taskId: this.#taskId, agentId: this.#agent.id, authorActorId: this.#agent.id }
@@ -314,6 +318,13 @@ export class AgentRuntime {
         const result = await this.#outputHandler.handle(output, outputCtx)
 
         if (result.event) {
+          const currentTask = this.#taskService.getTask(taskId)
+          if (!currentTask) throw new Error(`Task not found: ${taskId}`)
+
+          if (!this.#taskService.canTransition(currentTask.status, result.event.type)) {
+             throw new Error(`Invalid transition: cannot emit ${result.event.type} in state ${currentTask.status}`)
+          }
+
           this.#store.append(taskId, [result.event])
           emittedEvents.push(result.event)
         }
@@ -322,16 +333,20 @@ export class AgentRuntime {
         if (result.terminal) break
       }
     } catch (error) {
-      const failureEvent: DomainEvent = {
-        type: 'TaskFailed',
-        payload: {
-          taskId,
-          reason: error instanceof Error ? error.message || String(error) : String(error),
-          authorActorId: this.#agent.id
+      const currentTask = this.#taskService.getTask(taskId)
+      
+      if (currentTask && this.#taskService.canTransition(currentTask.status, 'TaskFailed')) {
+        const failureEvent: DomainEvent = {
+          type: 'TaskFailed',
+          payload: {
+            taskId,
+            reason: error instanceof Error ? error.message || String(error) : String(error),
+            authorActorId: this.#agent.id
+          }
         }
+        this.#store.append(taskId, [failureEvent])
+        emittedEvents.push(failureEvent)
       }
-      this.#store.append(taskId, [failureEvent])
-      emittedEvents.push(failureEvent)
       throw error
     }
 
