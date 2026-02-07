@@ -34,6 +34,10 @@ export const editFileTool: Tool = {
   },
   riskLevel: 'risky',
 
+  async canExecute(args: Record<string, unknown>, ctx: ToolContext): Promise<void> {
+    await validateRequest(args, ctx)
+  },
+
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const toolCallId = `tool_${nanoid(12)}`
     const path = args.path as string
@@ -41,18 +45,10 @@ export const editFileTool: Tool = {
     const newString = args.newString as string
 
     try {
-      const absolutePath = resolve(ctx.baseDir, path)
+      const { absolutePath, currentContent } = await validateRequest(args, ctx)
 
       // Handle new file creation
       if (oldString === '') {
-        const fileAlreadyExists = await pathExists(absolutePath)
-        if (fileAlreadyExists) {
-          return {
-            toolCallId,
-            output: { error: `File already exists: ${path}. Use non-empty oldString to edit.` },
-            isError: true
-          }
-        }
         await mkdir(dirname(absolutePath), { recursive: true })
         await writeFile(absolutePath, newString, 'utf8')
         return {
@@ -66,37 +62,9 @@ export const editFileTool: Tool = {
         }
       }
 
-      // Read existing file
-      const fileExists = await pathExists(absolutePath)
-      if (!fileExists) {
-        return {
-          toolCallId,
-          output: { error: `File not found: ${path}` },
-          isError: true
-        }
-      }
-
-      const currentContent = await readFile(absolutePath, 'utf8')
-
-      // Check that oldString exists exactly once
-      const occurrences = currentContent.split(oldString).length - 1
-      if (occurrences === 0) {
-        return {
-          toolCallId,
-          output: { error: `oldString not found in file: ${path}` },
-          isError: true
-        }
-      }
-      if (occurrences > 1) {
-        return {
-          toolCallId,
-          output: { error: `oldString found ${occurrences} times in file: ${path}. Must be unique.` },
-          isError: true
-        }
-      }
-
       // Apply the replacement
-      const newContent = currentContent.replace(oldString, newString)
+      // currentContent is guaranteed to be defined if oldString !== ''
+      const newContent = currentContent!.replace(oldString, newString)
       await writeFile(absolutePath, newContent, 'utf8')
 
       return {
@@ -116,6 +84,43 @@ export const editFileTool: Tool = {
       }
     }
   }
+}
+
+async function validateRequest(
+  args: Record<string, unknown>, 
+  ctx: ToolContext
+): Promise<{ absolutePath: string; currentContent?: string }> {
+  const path = args.path as string
+  const oldString = args.oldString as string
+  const absolutePath = resolve(ctx.baseDir, path)
+
+  // Handle new file creation check
+  if (oldString === '') {
+    const fileAlreadyExists = await pathExists(absolutePath)
+    if (fileAlreadyExists) {
+      throw new Error(`File already exists: ${path}. Use non-empty oldString to edit.`)
+    }
+    return { absolutePath }
+  }
+
+  // Handle existing file check
+  const fileExists = await pathExists(absolutePath)
+  if (!fileExists) {
+    throw new Error(`File not found: ${path}`)
+  }
+
+  const currentContent = await readFile(absolutePath, 'utf8')
+  
+  // Check that oldString exists exactly once
+  const occurrences = currentContent.split(oldString).length - 1
+  if (occurrences === 0) {
+    throw new Error(`oldString not found in file: ${path}`)
+  }
+  if (occurrences > 1) {
+    throw new Error(`oldString found ${occurrences} times in file: ${path}. Must be unique.`)
+  }
+
+  return { absolutePath, currentContent }
 }
 
 async function pathExists(absolutePath: string): Promise<boolean> {

@@ -140,9 +140,17 @@ Uses the **Hexagonal Architecture (Ports-and-Adapters)** + **Event Sourcing** + 
 │  │                     Agents Layer                         │   │
 │  │           (Parallel to Infrastructure, uses Ports)       │   │
 │  │                                                          │   │
-│  │  AgentRuntime:                                           │
-│  │  - WorkflowRunner: Executes Agent workflow               │
-│  │  - ConcurrencyControl: Concurrency control (Writing=1)   │
+│  │  RuntimeManager (central event router):                  │
+│  │  - Subscribes to EventStore.events$                      │
+│  │  - Routes events by taskId to task-scoped runtimes       │
+│  │  - Manages AgentRuntime lifecycle (create/destroy)       │
+│  │  - Agent catalogue (multi-agent registration)            │
+│  │                                                          │
+│  │  AgentRuntime (task-scoped executor):                    │
+│  │  - One runtime per task (scalar state, no Maps/Sets)     │
+│  │  - Agent loop orchestration + output handling            │
+│  │  - Cooperative pause/cancel signalling                   │
+│  │  - Instruction queueing during unsafe states             │
 │  │                                                          │
 │  │  Agents:                                                 │
 │  │  - DefaultCoAuthorAgent: V0 default general agent        │
@@ -359,7 +367,18 @@ Agents choose different models based on the step:
 - **writer**: High-quality LaTeX text generation
 - **reasoning**: Strategy selection, consistency checks, extracting descriptions from code
 
-### 5.4 Concurrency & State Management
+### 5.4 Architecture: RuntimeManager + Task-Scoped AgentRuntime
+
+`RuntimeManager` is the single subscriber to `EventStore.events$`. It owns a
+`Map<taskId, AgentRuntime>` and routes events to the correct task-scoped runtime.
+Runtimes are created on `TaskCreated` / `TaskResumed` and destroyed when tasks
+reach terminal states (`done`, `failed`, `canceled`).
+
+`AgentRuntime` manages exactly ONE task. All state is scalar (booleans, arrays) —
+no Maps or Sets. This eliminates multi-task bugs (key collisions, stale entries,
+memory leaks).
+
+### 5.5 Concurrency & State Management
 
 To ensure conversation history integrity (Tool Use Protocol), the Runtime enforces:
 
@@ -368,9 +387,10 @@ To ensure conversation history integrity (Tool Use Protocol), the Runtime enforc
     - If a tool batch is running, the Runtime waits for all tool results to be persisted before pausing.
 
 2.  **Instruction Queueing**:
-    - New instructions (`/continue`, `/refine`) arriving during unsafe states (e.g., while tools are executing) are queued.
+    - New instructions (`/continue`, `/refine`) arriving during unsafe states (e.g., while tools are executing) are queued in `AgentRuntime.#pendingInstructions`.
     - They are injected into history only when the state becomes safe (after tool results are written).
     - This prevents User messages from interleaving between Tool Calls and Tool Results.
+    - After `execute()` completes, `RuntimeManager` drains any remaining queued instructions via a drain loop.
 
 3.  **Auto-Repair**:
     - On resume/start, the Runtime scans for "dangling" tool calls (missing results).
@@ -421,7 +441,11 @@ src/
 │
 ├── agents/                  # Agent Layer
 │   ├── agent.ts            # Agent interface + AgentOutput/AgentContext
-│   ├── runtime.ts          # AgentRuntime (UIP + tool loop)
+│   ├── runtimeManager.ts   # RuntimeManager (event routing + lifecycle)
+│   ├── runtime.ts          # AgentRuntime (task-scoped executor)
+│   ├── conversationManager.ts # Conversation history management
+│   ├── outputHandler.ts    # Agent output → side-effects
+│   ├── displayBuilder.ts   # TUI display message builder
 │   └── defaultAgent.ts     # DefaultCoAuthorAgent
 │
 ├── cli/                     # CLI Interface Layer

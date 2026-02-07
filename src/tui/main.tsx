@@ -184,7 +184,7 @@ export function MainTui(props: Props) {
   }
 
   useEffect(() => {
-    app.agentRuntime.start()
+    app.runtimeManager.start()
     refresh().catch((e) => setStatus(e instanceof Error ? e.message : String(e)))
     addPlainLog('Welcome to CoAuthor. Type /help for commands.', { color: 'cyan', dim: true })
 
@@ -218,7 +218,7 @@ export function MainTui(props: Props) {
     return () => {
       uiBusSub.unsubscribe()
       storeSub.unsubscribe()
-      app.agentRuntime.stop()
+      app.runtimeManager.stop()
     }
   }, [])
 

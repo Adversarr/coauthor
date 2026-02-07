@@ -7,7 +7,7 @@ import { JsonlAuditLog } from '../../src/infra/jsonlAuditLog.js'
 import { JsonlConversationStore } from '../../src/infra/jsonlConversationStore.js'
 import { TaskService } from '../../src/application/taskService.js'
 import { ContextBuilder } from '../../src/application/contextBuilder.js'
-import { AgentRuntime } from '../../src/agents/runtime.js'
+import { RuntimeManager } from '../../src/agents/runtimeManager.js'
 import { ConversationManager } from '../../src/agents/conversationManager.js'
 import { OutputHandler } from '../../src/agents/outputHandler.js'
 import { DefaultCoAuthorAgent } from '../../src/agents/defaultAgent.js'
@@ -58,27 +58,27 @@ function createTestInfra(dir: string) {
     conversationManager
   })
 
-  const runtime = new AgentRuntime({
+  const manager = new RuntimeManager({
     store,
     taskService,
-    agent,
     llm,
     toolRegistry,
     baseDir: dir,
     conversationManager,
     outputHandler
   })
+  manager.registerAgent(agent)
 
-  return { store, conversationStore, taskService, runtime, llm }
+  return { store, conversationStore, taskService, manager, llm }
 }
 
 describe('Task Control & Session', () => {
   test('Pause and Resume updates status and triggers execution', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-control-'))
-    const { store, taskService, runtime } = createTestInfra(dir)
+    const { store, taskService, manager } = createTestInfra(dir)
 
-    runtime.start()
+    manager.start()
 
     // 1. Create task
     const { taskId } = taskService.createTask({
@@ -107,7 +107,7 @@ describe('Task Control & Session', () => {
     const events = store.readStream(taskId)
     expect(events.some(e => e.type === 'TaskCompleted')).toBe(true)
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -115,9 +115,9 @@ describe('Task Control & Session', () => {
   test('Add Instruction to Done task resumes it', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-session-'))
-    const { store, conversationStore, taskService, runtime } = createTestInfra(dir)
+    const { store, conversationStore, taskService, manager } = createTestInfra(dir)
 
-    runtime.start()
+    manager.start()
 
     // 1. Create and finish task
     const { taskId } = taskService.createTask({
@@ -159,7 +159,7 @@ describe('Task Control & Session', () => {
     const instructionMsg = userMessages.find(m => m.content === newInstruction)
     expect(instructionMsg).toBeDefined()
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })

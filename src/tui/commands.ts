@@ -48,7 +48,7 @@ export async function handleCommand(line: string, ctx: CommandContext) {
           ctx.setStatus('Usage: /new <title>')
           return
         }
-        const task = await ctx.app.taskService.createTask({ title, agentId: ctx.app.agent.id })
+        const task = await ctx.app.taskService.createTask({ title, agentId: ctx.app.runtimeManager.defaultAgentId })
         ctx.setFocusedTaskId(task.taskId)
         await ctx.refresh()
         ctx.setStatus(`Task created and focused: ${task.taskId}`)

@@ -34,7 +34,7 @@ describe('TUI', () => {
           title: 'hello',
           intent: '',
           priority: 'foreground' as const,
-          agentId: app.agent.id,
+          agentId: app.runtimeManager.defaultAgentId,
           authorActorId: DEFAULT_USER_ACTOR_ID,
         },
       },

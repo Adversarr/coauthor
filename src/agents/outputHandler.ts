@@ -79,23 +79,54 @@ export class OutputHandler {
   async handle(output: AgentOutput, ctx: OutputContext): Promise<OutputResult> {
     switch (output.kind) {
       case 'text':
-        this.#emitUi(ctx.taskId, 'text', output.content)
+        this.#emitUi(ctx, 'text', output.content)
         return {}
 
       case 'verbose':
-        this.#emitUi(ctx.taskId, 'verbose', output.content)
+        this.#emitUi(ctx, 'verbose', output.content)
         return {}
 
       case 'error':
-        this.#emitUi(ctx.taskId, 'error', output.content)
+        this.#emitUi(ctx, 'error', output.content)
         return {}
 
       case 'reasoning':
-        this.#emitUi(ctx.taskId, 'reasoning', output.content)
+        this.#emitUi(ctx, 'reasoning', output.content)
         return {}
 
       case 'tool_call': {
         const tool = this.#toolRegistry.get(output.call.toolName)
+        
+        const toolContext = {
+          taskId: ctx.taskId,
+          actorId: ctx.agentId,
+          baseDir: ctx.baseDir,
+          confirmedInteractionId: ctx.confirmedInteractionId,
+          artifactStore: this.#artifactStore
+        }
+
+        // Universal Pre-Execution Check
+        // If the tool implements canExecute, run it first.
+        // If it fails, we skip risk checks and execution, returning the error immediately.
+        if (tool?.canExecute) {
+          try {
+            await tool.canExecute(output.call.arguments, toolContext)
+          } catch (error) {
+            const errMessage = error instanceof Error ? error.message : String(error)
+            
+            this.#conversationManager.persistToolResultIfMissing(
+              ctx.taskId,
+              output.call.toolCallId,
+              output.call.toolName,
+              { error: errMessage },
+              true,
+              ctx.conversationHistory,
+              ctx.persistMessage
+            )
+            return {}
+          }
+        }
+
         const isRisky = tool?.riskLevel === 'risky'
 
         // Risky tool without confirmation → emit UIP request, pause execution
@@ -117,13 +148,6 @@ export class OutputHandler {
           return { event, pause: true }
         }
 
-        const toolContext = {
-          taskId: ctx.taskId,
-          actorId: ctx.agentId,
-          baseDir: ctx.baseDir,
-          confirmedInteractionId: ctx.confirmedInteractionId,
-          artifactStore: this.#artifactStore
-        }
         const result: ToolResult = await this.#toolExecutor.execute(output.call, toolContext)
 
         // Persist into conversation (idempotent)
@@ -194,10 +218,10 @@ export class OutputHandler {
 
   // ---------- internals ----------
 
-  #emitUi(taskId: string, kind: 'text' | 'verbose' | 'error' | 'reasoning', content: string): void {
+  #emitUi(ctx: OutputContext, kind: 'text' | 'verbose' | 'error' | 'reasoning', content: string): void {
     this.#uiBus?.emit({
       type: 'agent_output',
-      payload: { taskId, kind, content }
+      payload: { taskId: ctx.taskId, agentId: ctx.agentId, kind, content }
     })
   }
 }

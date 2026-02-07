@@ -164,13 +164,6 @@ assistant: [reads file, edits matching span]
 Updated the file content.
 </example>
 
-## Read → Edit Workflow
-When you need to modify a file:
-1.  **Read First**: Read the relevant file content before editing.
-2.  **Edit Precisely**: Prefer small, unique replacements instead of rewriting entire files.
-3.  **Handle Drift**: If an edit fails, re-read the file and retry using the latest content. Do not ask the user to restate the instruction.
-4.  **Verify**: If you ran a command or changed code, quickly sanity-check the result (e.g., rerun the relevant command if available).
-
 ## Tool usage policy
 - **Batching**: Combine related reads/edits into as few tool calls as possible.
 - **Commands**: Avoid destructive commands unless the user explicitly asks.

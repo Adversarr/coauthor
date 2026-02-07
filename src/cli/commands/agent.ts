@@ -15,12 +15,12 @@ export function registerAgentCommand(parser: Argv, app: App, io: IO): Argv {
       const positionalArgs = (args.args as unknown as string[] | undefined) ?? []
 
       if (action === 'start') {
-        app.agentRuntime.start()
+        app.runtimeManager.start()
         io.stdout('agent started\n')
         return
       }
       if (action === 'stop') {
-        app.agentRuntime.stop()
+        app.runtimeManager.stop()
         io.stdout('agent stopped\n')
         return
       }
@@ -34,7 +34,7 @@ export function registerAgentCommand(parser: Argv, app: App, io: IO): Argv {
         const { taskId } = app.taskService.createTask({
           title: 'Test Agent Task',
           intent: prompt,
-          agentId: app.agent.id
+          agentId: app.runtimeManager.defaultAgentId
         })
         
         io.stdout(`Task created: ${taskId}\n`)
@@ -59,7 +59,7 @@ export function registerAgentCommand(parser: Argv, app: App, io: IO): Argv {
 
 async function executeTask(app: App, io: IO, taskId: string) {
   // Execute task with spinner feedback
-  const res = await app.agentRuntime.executeTask(taskId)
+  const res = await app.runtimeManager.executeTask(taskId)
   
   // Check final task state
   const task = app.taskService.getTask(taskId)

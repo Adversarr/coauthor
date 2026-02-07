@@ -80,4 +80,32 @@ describe('editFileTool', () => {
     expect(result.isError).toBe(true)
     expect((result.output as any).error).toContain('File not found')
   })
+
+  describe('canExecute', () => {
+    it('should pass for valid creation', async () => {
+      await expect(editFileTool.canExecute!({
+        path: 'newfile.txt',
+        oldString: '',
+        newString: 'Hello'
+      }, { baseDir, taskId: 't1', actorId: 'a1' } as any)).resolves.toBeUndefined()
+    })
+
+    it('should throw if file already exists for creation', async () => {
+      writeFileSync(join(baseDir, 'file.txt'), 'Hello')
+      await expect(editFileTool.canExecute!({
+        path: 'file.txt',
+        oldString: '',
+        newString: 'Hello'
+      }, { baseDir, taskId: 't1', actorId: 'a1' } as any)).rejects.toThrow('File already exists')
+    })
+
+    it('should throw if oldString not found', async () => {
+      writeFileSync(join(baseDir, 'file.txt'), 'Hello World')
+      await expect(editFileTool.canExecute!({
+        path: 'file.txt',
+        oldString: 'Universe',
+        newString: 'CoAuthor'
+      }, { baseDir, taskId: 't1', actorId: 'a1' } as any)).rejects.toThrow('oldString not found')
+    })
+  })
 })

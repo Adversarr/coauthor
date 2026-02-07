@@ -8,7 +8,7 @@ import { JsonlConversationStore } from '../src/infra/jsonlConversationStore.js'
 import { TaskService } from '../src/application/taskService.js'
 import { InteractionService } from '../src/application/interactionService.js'
 import { ContextBuilder } from '../src/application/contextBuilder.js'
-import { AgentRuntime } from '../src/agents/runtime.js'
+import { RuntimeManager } from '../src/agents/runtimeManager.js'
 import { ConversationManager } from '../src/agents/conversationManager.js'
 import { OutputHandler } from '../src/agents/outputHandler.js'
 import { DefaultCoAuthorAgent } from '../src/agents/defaultAgent.js'
@@ -23,6 +23,9 @@ import type { ArtifactStore } from '../src/domain/ports/artifactStore.js'
 
 /**
  * Helper to create test infrastructure in a temp directory.
+ *
+ * Returns a RuntimeManager (which owns task-scoped AgentRuntime instances)
+ * instead of a bare AgentRuntime.
  */
 function createTestInfra(dir: string, opts?: { llm?: LLMClient, toolExecutor?: ToolExecutor }) {
   const store = new JsonlEventStore({
@@ -77,24 +80,24 @@ function createTestInfra(dir: string, opts?: { llm?: LLMClient, toolExecutor?: T
     conversationManager
   })
 
-  const runtime = new AgentRuntime({
+  const manager = new RuntimeManager({
     store,
     taskService,
-    agent,
     llm,
     toolRegistry,
     baseDir: dir,
     conversationManager,
     outputHandler
   })
+  manager.registerAgent(agent)
 
-  return { store, conversationStore, taskService, interactionService, runtime, llm, agent, toolRegistry }
+  return { store, conversationStore, taskService, interactionService, manager, llm, agent, toolRegistry }
 }
 
-describe('AgentRuntime', () => {
+describe('AgentRuntime (via RuntimeManager)', () => {
   test('executeTask writes TaskStarted and completes without confirm_task', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { store, taskService, runtime } = createTestInfra(dir)
+    const { store, taskService, manager } = createTestInfra(dir)
 
     store.append('t1', [
       {
@@ -110,7 +113,7 @@ describe('AgentRuntime', () => {
       }
     ])
 
-    const res = await runtime.executeTask('t1')
+    const res = await manager.executeTask('t1')
     expect(res.taskId).toBe('t1')
 
     const events = store.readStream('t1', 1)
@@ -140,9 +143,9 @@ describe('AgentRuntime', () => {
     vi.useFakeTimers()
 
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { store, runtime } = createTestInfra(dir)
+    const { store, manager } = createTestInfra(dir)
 
-    runtime.start()
+    manager.start()
 
     // Create a task assigned to this agent
     store.append('t2', [
@@ -160,7 +163,7 @@ describe('AgentRuntime', () => {
     ])
 
     await vi.advanceTimersByTimeAsync(50)
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
 
     const events = store.readStream('t2', 1)
@@ -187,9 +190,9 @@ describe('AgentRuntime', () => {
       }
     }
 
-    const { store, taskService, runtime } = createTestInfra(dir, { llm: delayedLLM })
+    const { store, taskService, manager } = createTestInfra(dir, { llm: delayedLLM })
 
-    runtime.start()
+    manager.start()
 
     const { taskId } = taskService.createTask({
       title: 'Queue Instruction',
@@ -201,7 +204,7 @@ describe('AgentRuntime', () => {
     taskService.addInstruction(taskId, 'Please apply this while running')
 
     await vi.advanceTimersByTimeAsync(200)
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
 
     const completedCount = store.readStream(taskId).filter((e) => e.type === 'TaskCompleted').length
@@ -214,9 +217,9 @@ describe('AgentRuntime', () => {
     vi.useFakeTimers()
 
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { store, runtime } = createTestInfra(dir)
+    const { store, manager } = createTestInfra(dir)
 
-    runtime.start()
+    manager.start()
 
     // Create a task assigned to a DIFFERENT agent
     store.append('t3', [
@@ -234,7 +237,7 @@ describe('AgentRuntime', () => {
     ])
 
     await vi.advanceTimersByTimeAsync(50)
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
 
     const events = store.readStream('t3', 1)
@@ -246,14 +249,14 @@ describe('AgentRuntime', () => {
   })
 })
 
-describe('AgentRuntime - Conversation Persistence', () => {
+describe('Conversation Persistence (via RuntimeManager)', () => {
   test('conversation history is persisted during automatic task execution', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { store, conversationStore, runtime } = createTestInfra(dir)
+    const { store, conversationStore, manager } = createTestInfra(dir)
 
-    // Start runtime first (to subscribe to events)
-    runtime.start()
+    // Start manager first (to subscribe to events)
+    manager.start()
 
     // Then create task (triggers event handler)
     store.append('t1', [
@@ -273,7 +276,7 @@ describe('AgentRuntime - Conversation Persistence', () => {
     await vi.advanceTimersByTimeAsync(50)
 
     await vi.advanceTimersByTimeAsync(100)
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
 
     // Conversation should have system + user prompts and at least one assistant message
@@ -311,7 +314,7 @@ describe('AgentRuntime - Conversation Persistence', () => {
   })
 })
 
-describe('AgentRuntime - Concurrency & State Management', () => {
+describe('Concurrency & State Management (via RuntimeManager)', () => {
   test('pause waits for pending tool calls to complete', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
@@ -332,14 +335,6 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       stream: vi.fn()
     }
 
-    // 2. Mock ToolExecutor to be slow/controllable
-    // We want to pause AFTER call_1 is started but BEFORE call_2 is finished (or started)
-    // Actually runtime executes tools sequentially in the loop if yielded sequentially.
-    // DefaultAgent yields them sequentially.
-    // So: Yield Tool 1 -> Runtime Exec 1 -> Yield Tool 2 -> Runtime Exec 2.
-    // We want to trigger pause during Tool 1 execution.
-    // And verify that Tool 2 is ALSO executed because "safe point" is only after all calls.
-    
     let toolExecCount = 0
     const mockToolExecutor: ToolExecutor = {
       execute: async (call) => {
@@ -349,12 +344,12 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       }
     }
 
-    const { conversationStore, taskService, runtime } = createTestInfra(dir, { 
+    const { conversationStore, taskService, manager } = createTestInfra(dir, { 
       llm: mockLLM, 
       toolExecutor: mockToolExecutor 
     })
 
-    runtime.start()
+    manager.start()
 
     // Start task
     const { taskId } = taskService.createTask({
@@ -364,8 +359,6 @@ describe('AgentRuntime - Concurrency & State Management', () => {
 
     // Advance to start execution
     await vi.advanceTimersByTimeAsync(10) 
-    // LLM returned. Agent yields call_1. Runtime calls execute.
-    // Executor is waiting 50ms.
     
     // Trigger Pause NOW (while tool 1 is running)
     taskService.pauseTask(taskId, 'User paused')
@@ -386,7 +379,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(messages.some(m => m.role === 'tool' && m.toolCallId === 'call_2')).toBe(true)
     
     // Cleanup
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -417,12 +410,12 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       }
     }
 
-    const { conversationStore, taskService, runtime } = createTestInfra(dir, { 
+    const { conversationStore, taskService, manager } = createTestInfra(dir, { 
       llm: mockLLM, 
       toolExecutor: mockToolExecutor 
     })
 
-    runtime.start()
+    manager.start()
     const { taskId } = taskService.createTask({ title: 'Queue', agentId: DEFAULT_AGENT_ACTOR_ID })
     
     await vi.advanceTimersByTimeAsync(10) // Start task, LLM returns, Tool starts waiting
@@ -450,7 +443,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(userMsgIndex).toBeGreaterThan(-1)
     expect(userMsgIndex).toBeGreaterThan(toolMsgIndex)
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -458,10 +451,9 @@ describe('AgentRuntime - Concurrency & State Management', () => {
   test('auto-repairs dangling tool calls on resume', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { conversationStore, runtime, taskService } = createTestInfra(dir)
+    const { conversationStore, manager, taskService } = createTestInfra(dir)
 
     // 1. Manually create a broken history
-    // Note: We need to ensure these messages are persisted before runtime loads them
     const { taskId: realTaskId } = taskService.createTask({ title: 'Broken', agentId: DEFAULT_AGENT_ACTOR_ID })
     
     conversationStore.append(realTaskId, { 
@@ -469,8 +461,8 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       toolCalls: [{ toolCallId: 'call_x', toolName: 'risky_tool', arguments: {} }] 
     })
     
-    // 2. Start runtime
-    runtime.start()
+    // 2. Start manager
+    manager.start()
     taskService.resumeTask(realTaskId)
     
     // 3. Allow processing
@@ -483,7 +475,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(toolMsg).toBeDefined()
     expect(toolMsg?.content).toContain('interrupted')
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -505,7 +497,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       execute: toolExec
     }
 
-    const { conversationStore, runtime, taskService } = createTestInfra(dir, { llm: mockLLM, toolExecutor: mockToolExecutor })
+    const { conversationStore, manager, taskService } = createTestInfra(dir, { llm: mockLLM, toolExecutor: mockToolExecutor })
 
     const { taskId } = taskService.createTask({ title: 'Safe Repair', agentId: DEFAULT_AGENT_ACTOR_ID })
     conversationStore.append(taskId, {
@@ -513,14 +505,14 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       toolCalls: [{ toolCallId: 'call_safe', toolName: 'dummy_tool', arguments: {} }]
     })
 
-    runtime.start()
+    manager.start()
     taskService.resumeTask(taskId)
     await vi.advanceTimersByTimeAsync(100)
 
     expect(toolExec).toHaveBeenCalled()
     expect(conversationStore.getMessages(taskId).some(m => m.role === 'tool' && m.toolCallId === 'call_safe')).toBe(true)
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -528,7 +520,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
   test('does not inject interrupted error for dangling risky tools on resume', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const { conversationStore, runtime, taskService, toolRegistry } = createTestInfra(dir)
+    const { conversationStore, manager, taskService, toolRegistry } = createTestInfra(dir)
     
     // Register risky tool
     toolRegistry.register({
@@ -547,7 +539,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       toolCalls: [{ toolCallId: 'call_risky', toolName: 'risky_tool', arguments: {} }] 
     })
     
-    runtime.start()
+    manager.start()
     
     // Trigger resume to force repair
     taskService.resumeTask(taskId)
@@ -561,7 +553,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     
     expect(toolMsg).toBeUndefined()
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -578,7 +570,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       execute: toolExec as any
     }
 
-    const { conversationStore, runtime, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
+    const { conversationStore, manager, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
       toolExecutor: mockToolExecutor
     })
 
@@ -596,7 +588,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       toolCalls: [{ toolCallId: 'call_risky', toolName: 'risky_tool_approve', arguments: {} }]
     })
 
-    runtime.start()
+    manager.start()
     interactionService.respondToInteraction(taskId, 'ui_test', { selectedOptionId: 'approve' })
     await vi.advanceTimersByTimeAsync(200)
 
@@ -607,7 +599,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(toolMsg?.content).toContain('ok')
     expect(toolMsg?.content).not.toContain('interrupted')
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -624,7 +616,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       execute: toolExec as any
     }
 
-    const { conversationStore, runtime, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
+    const { conversationStore, manager, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
       toolExecutor: mockToolExecutor
     })
 
@@ -642,7 +634,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       toolCalls: [{ toolCallId: 'call_risky', toolName: 'risky_tool_reject', arguments: {} }]
     })
 
-    runtime.start()
+    manager.start()
     interactionService.respondToInteraction(taskId, 'ui_test', { selectedOptionId: 'reject' })
     await vi.advanceTimersByTimeAsync(200)
 
@@ -652,7 +644,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(toolMsg).toBeDefined()
     expect(toolMsg?.content).toContain('User rejected the request')
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -684,7 +676,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       execute: toolExec as any
     }
 
-    const { store, conversationStore, runtime, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
+    const { store, conversationStore, manager, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
       llm: mockLLM,
       toolExecutor: mockToolExecutor
     })
@@ -697,7 +689,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       execute: async () => ({ toolCallId: 'placeholder', isError: false, output: 'done' })
     })
 
-    runtime.start()
+    manager.start()
     const { taskId } = taskService.createTask({ title: 'Risky + Instruction', agentId: DEFAULT_AGENT_ACTOR_ID })
 
     await vi.advanceTimersByTimeAsync(50)
@@ -724,7 +716,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     expect(instructionIndex).toBeGreaterThan(toolIndex)
     expect(after.some(m => m.role === 'tool' && typeof m.content === 'string' && m.content.includes('interrupted'))).toBe(false)
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -761,7 +753,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
       }
     }
 
-    const { conversationStore, runtime, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
+    const { conversationStore, manager, taskService, interactionService, toolRegistry } = createTestInfra(dir, {
       llm: mockLLM,
       toolExecutor: toolExec
     })
@@ -775,7 +767,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     })
 
     const { taskId } = taskService.createTask({ title: 'Stress', agentId: DEFAULT_AGENT_ACTOR_ID })
-    runtime.start()
+    manager.start()
 
     let seed = 1729
     const rand = () => {
@@ -820,7 +812,7 @@ describe('AgentRuntime - Concurrency & State Management', () => {
     }
     expect(messages.some(m => m.role === 'tool' && typeof m.content === 'string' && m.content.includes('interrupted'))).toBe(false)
 
-    runtime.stop()
+    manager.stop()
     vi.useRealTimers()
     rmSync(dir, { recursive: true, force: true })
   })

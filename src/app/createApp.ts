@@ -7,6 +7,7 @@ import type { ConversationStore } from '../domain/ports/conversationStore.js'
 import type { LLMClient } from '../domain/ports/llmClient.js'
 import type { UiBus } from '../domain/ports/uiBus.js'
 import type { Agent } from '../agents/agent.js'
+import { RuntimeManager } from '../agents/runtimeManager.js'
 import { JsonlEventStore } from '../infra/jsonlEventStore.js'
 import { FsArtifactStore } from '../infra/fsArtifactStore.js'
 import { JsonlAuditLog } from '../infra/jsonlAuditLog.js'
@@ -17,7 +18,6 @@ import { DefaultToolExecutor } from '../infra/toolExecutor.js'
 import { createUiBus } from '../infra/subjectUiBus.js'
 import { TaskService, EventService, InteractionService, AuditService } from '../application/index.js'
 import { ContextBuilder } from '../application/contextBuilder.js'
-import { AgentRuntime } from '../agents/runtime.js'
 import { ConversationManager } from '../agents/conversationManager.js'
 import { OutputHandler } from '../agents/outputHandler.js'
 import { DefaultCoAuthorAgent } from '../agents/defaultAgent.js'
@@ -48,8 +48,7 @@ import { ConsoleTelemetrySink, NoopTelemetrySink, type TelemetrySink } from '../
  * - contextBuilder: LLM context building
  * 
  * Agent:
- * - agent: Agent implementation
- * - agentRuntime: Agent orchestration
+ * - runtimeManager: Agent runtime orchestration (owns task-scoped AgentRuntimes)
  */
 export type App = {
   baseDir: string
@@ -76,8 +75,7 @@ export type App = {
   contextBuilder: ContextBuilder
   
   // Agent
-  agent: Agent
-  agentRuntime: AgentRuntime
+  runtimeManager: RuntimeManager
 }
 
 // ============================================================================
@@ -189,16 +187,16 @@ export function createApp(opts: CreateAppOptions): App {
     telemetry
   })
 
-  const agentRuntime = new AgentRuntime({
+  const runtimeManager = new RuntimeManager({
     store,
     taskService,
-    agent,
     llm,
     toolRegistry,
     baseDir,
     conversationManager,
     outputHandler
   })
+  runtimeManager.registerAgent(agent)
 
   return {
     baseDir,
@@ -222,7 +220,6 @@ export function createApp(opts: CreateAppOptions): App {
     auditService,
     contextBuilder,
     // Agent
-    agent,
-    agentRuntime
+    runtimeManager
   }
 }

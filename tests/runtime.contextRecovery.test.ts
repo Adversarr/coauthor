@@ -96,6 +96,7 @@ describe('AgentRuntime - context recovery', () => {
     })
 
     const runtime = new AgentRuntime({
+      taskId: 't1',
       store,
       taskService,
       agent,
@@ -139,7 +140,7 @@ describe('AgentRuntime - context recovery', () => {
       },
     })
 
-    await runtime.executeTask('t1')
+    await runtime.execute()
 
     const repairedMessages = conversationStore.getMessages('t1')
     expect(repairedMessages.some((m) => m.role === 'tool' && m.toolCallId === 'tc_missing')).toBe(true)
@@ -204,6 +205,7 @@ describe('AgentRuntime - context recovery', () => {
     })
 
     const runtime = new AgentRuntime({
+      taskId: 't1',
       store,
       taskService,
       agent,
@@ -228,7 +230,7 @@ describe('AgentRuntime - context recovery', () => {
       },
     ])
 
-    await runtime.executeTask('t1')
+    await runtime.execute()
 
     const messages = conversationStore.getMessages('t1')
     expect(messages.some((m) => m.role === 'tool' && m.toolCallId === 'tc_1')).toBe(true)

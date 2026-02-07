@@ -86,7 +86,7 @@ See [docs/MILESTONES.md](docs/MILESTONES.md) for milestone planning.
 ```
 src/
 ├── index.ts              # CLI entry point
-├── agents/               # Agent runtime + output handling
+├── agents/               # Agent layer: RuntimeManager + task-scoped runtimes
 ├── app/
 │   └── createApp.ts      # App initialization with services
 ├── application/          # Application services (Use Cases)
@@ -169,7 +169,8 @@ docs/                     # Documentation
 1. **Domain** (`src/domain/`): Pure types, event schemas, port interfaces. Zero external dependencies.
 2. **Application** (`src/application/`): Use case services implementing business logic.
 3. **Infrastructure** (`src/infra/`): EventStore adapter (JSONL), logger, external dependencies.
-4. **Interface** (`src/cli/`, `src/tui/`): User-facing CLI and TUI adapters.
+4. **Agents** (`src/agents/`): RuntimeManager + task-scoped AgentRuntime. RuntimeManager is the single subscriber to `EventStore.events$`, routes events by taskId to task-scoped `AgentRuntime` instances. Each runtime manages exactly ONE task with scalar state (no Maps/Sets). Supports multi-agent via agent registration catalogue.
+5. **Interface** (`src/cli/`, `src/tui/`): User-facing CLI and TUI adapters.
 
 ### Dependency Flow
 ```

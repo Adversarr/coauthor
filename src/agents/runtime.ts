@@ -1,30 +1,35 @@
-import type { Subscription } from 'rxjs'
 import type { EventStore } from '../domain/ports/eventStore.js'
 import type { LLMClient, LLMMessage } from '../domain/ports/llmClient.js'
 import type { ToolRegistry } from '../domain/ports/tool.js'
-import type { DomainEvent, StoredEvent, UserInteractionRespondedPayload } from '../domain/events.js'
+import type { DomainEvent, UserInteractionRespondedPayload } from '../domain/events.js'
 import type { TaskService, TaskView } from '../application/taskService.js'
-import type { Agent, AgentContext, AgentOutput } from './agent.js'
+import type { Agent, AgentContext } from './agent.js'
 import type { ConversationManager } from './conversationManager.js'
 import type { OutputHandler, OutputContext } from './outputHandler.js'
 
 // ============================================================================
-// Agent Runtime
+// Agent Runtime — Task-Scoped Executor
 // ============================================================================
 
 /**
- * AgentRuntime manages the execution of agents with UIP + Tool Use.
+ * AgentRuntime manages the execution of exactly ONE task by ONE agent.
  *
- * Responsibilities (after decomposition):
- * - Event subscription and routing (TaskCreated, UIP responses, pause/resume, instructions)
- * - Concurrency control (in-flight deduplication, pause tracking)
- * - Task lifecycle (executeTask, resumeTask)
+ * Each runtime instance is created for a specific task and discarded
+ * when the task reaches a terminal state. This eliminates all multi-task
+ * state (Maps, Sets) and the bugs they caused (key collisions, stale
+ * entries, memory leaks).
+ *
+ * Responsibilities:
  * - Agent loop orchestration (delegates output handling to OutputHandler)
+ * - Pause / cancel signalling (cooperative, checked at safe yield points)
+ * - Instruction queueing during unsafe conversation states
  *
+ * Event routing and runtime lifecycle → RuntimeManager
  * Conversation management → ConversationManager
  * Output processing / tool execution → OutputHandler
  */
 export class AgentRuntime {
+  readonly #taskId: string
   readonly #store: EventStore
   readonly #taskService: TaskService
   readonly #agent: Agent
@@ -34,14 +39,15 @@ export class AgentRuntime {
   readonly #conversationManager: ConversationManager
   readonly #outputHandler: OutputHandler
 
-  #isRunning = false
-  #subscription: Subscription | null = null
-  #inFlight = new Set<string>()
-  #pausedTasks = new Set<string>()
-  #queuedInstructionTasks = new Set<string>()
-  #pendingInstructions = new Map<string, string[]>()
+  // All state is scalar — no Maps or Sets needed for a single task.
+  #isExecuting = false
+  #isPaused = false
+  #isCanceled = false
+  #hasQueuedInstruction = false
+  #pendingInstructions: string[] = []
 
   constructor(opts: {
+    taskId: string
     store: EventStore
     taskService: TaskService
     agent: Agent
@@ -51,6 +57,7 @@ export class AgentRuntime {
     conversationManager: ConversationManager
     outputHandler: OutputHandler
   }) {
+    this.#taskId = opts.taskId
     this.#store = opts.store
     this.#taskService = opts.taskService
     this.#agent = opts.agent
@@ -61,204 +68,175 @@ export class AgentRuntime {
     this.#outputHandler = opts.outputHandler
   }
 
-  /** The agent ID this runtime is responsible for */
+  // ======================== getters ========================
+
+  get taskId(): string {
+    return this.#taskId
+  }
+
   get agentId(): string {
     return this.#agent.id
   }
 
-  // ======================== lifecycle ========================
-
-  start(): void {
-    if (this.#isRunning) return
-    this.#isRunning = true
-
-    this.#subscription = this.#store.events$.subscribe({
-      next: (event) => {
-        void this.#handleEvent(event)
-      }
-    })
+  get isExecuting(): boolean {
+    return this.#isExecuting
   }
 
-  stop(): void {
-    this.#isRunning = false
-    if (this.#subscription) {
-      this.#subscription.unsubscribe()
-      this.#subscription = null
-    }
+  get hasPendingWork(): boolean {
+    return this.#hasQueuedInstruction || this.#pendingInstructions.length > 0
   }
 
-  get isRunning(): boolean {
-    return this.#isRunning
+  // ======================== imperative control (called by RuntimeManager) ========================
+
+  /**
+   * Signal that the task should pause at the next safe point.
+   * Cooperative: the agent loop checks this flag between yields.
+   */
+  onPause(): void {
+    this.#isPaused = true
   }
 
-  // ======================== event routing ========================
+  /**
+   * Clear the pause signal and trigger re-execution.
+   */
+  async onResume(): Promise<void> {
+    this.#isPaused = false
 
-  async #handleEvent(event: StoredEvent): Promise<void> {
-    if (!this.#isRunning) return
+    if (this.#isExecuting) return
 
-    // --- TaskCreated ---
-    if (event.type === 'TaskCreated' && event.payload.agentId === this.#agent.id) {
-      const taskId = event.payload.taskId
-      if (this.#inFlight.has(taskId)) return
-      this.#inFlight.add(taskId)
+    await this.#executeAndDrainQueuedInstructions()
+  }
 
-      try {
-        await this.#executeTaskAndDrainQueuedInstructions(taskId)
-      } catch (error) {
-        console.error(`[AgentRuntime] Task handling failed for task ${taskId}:`, error)
-      } finally {
-        this.#inFlight.delete(taskId)
-      }
+  /**
+   * Signal cancellation. The agent loop will break at the next safe point.
+   */
+  onCancel(): void {
+    this.#isCanceled = true
+  }
+
+  /**
+   * Handle a new instruction for this task.
+   *
+   * During execution: always queued in #pendingInstructions (drained at safe
+   * points by the agent loop). This fixes the old bug where "safe" injection
+   * wrote to the durable store but not the in-memory conversationHistory.
+   *
+   * When idle AND conversation is safe: written to conversation store and
+   * triggers re-execution.
+   *
+   * When idle BUT conversation is unsafe (dangling tool calls): queued in
+   * #pendingInstructions until the next execution drains them at a safe point.
+   */
+  async onInstruction(instruction: string): Promise<void> {
+    this.#isPaused = false
+
+    if (this.#isExecuting) {
+      // Always queue during execution — the running loop drains at safe points
+      this.#pendingInstructions.push(instruction)
+      this.#hasQueuedInstruction = true
+      return
     }
 
-    // --- UserInteractionResponded ---
-    if (event.type === 'UserInteractionResponded') {
-      const task = this.#taskService.getTask(event.payload.taskId)
-      if (task && task.agentId === this.#agent.id) {
-        const taskId = task.taskId
-        const resumeKey = `resume:${taskId}:${event.id}`
-        if (this.#inFlight.has(resumeKey)) return
-        this.#inFlight.add(resumeKey)
-
-        try {
-          await this.resumeTask(task.taskId, event.payload)
-        } catch (error) {
-          console.error(`[AgentRuntime] Resume failed for task ${task.taskId}:`, error)
-        } finally {
-          this.#inFlight.delete(resumeKey)
-        }
-      }
+    // Check conversation safety: if there are dangling tool calls, we must
+    // queue the instruction so it gets injected AFTER the tool results.
+    const history = this.#conversationManager.store.getMessages(this.#taskId)
+    if (!this.#conversationManager.isSafeToInject(history)) {
+      this.#pendingInstructions.push(instruction)
+      this.#hasQueuedInstruction = true
+      // Don't re-execute now — a UIP response or resume will drain the queue
+      return
     }
 
-    // --- TaskPaused ---
-    if (event.type === 'TaskPaused') {
-      const task = this.#taskService.getTask(event.payload.taskId)
-      if (task && task.agentId === this.#agent.id) {
-        this.#pausedTasks.add(task.taskId)
-      }
-    }
+    // Safe to inject directly and re-execute
+    this.#conversationManager.store.append(this.#taskId, {
+      role: 'user',
+      content: instruction
+    } as LLMMessage)
 
-    // --- TaskResumed ---
-    if (event.type === 'TaskResumed') {
-      const task = this.#taskService.getTask(event.payload.taskId)
-      if (task && task.agentId === this.#agent.id) {
-        const taskId = task.taskId
-        this.#pausedTasks.delete(taskId)
-
-        if (this.#inFlight.has(taskId)) return
-        this.#inFlight.add(taskId)
-
-        try {
-          await this.#executeTaskAndDrainQueuedInstructions(taskId)
-        } catch (error) {
-          console.error(`[AgentRuntime] Resume failed for task ${taskId}:`, error)
-        } finally {
-          this.#inFlight.delete(taskId)
-        }
-      }
-    }
-
-    // --- TaskInstructionAdded ---
-    if (event.type === 'TaskInstructionAdded') {
-      const task = this.#taskService.getTask(event.payload.taskId)
-      if (task && task.agentId === this.#agent.id) {
-        const taskId = task.taskId
-        this.#pausedTasks.delete(taskId)
-
-        const history = this.#conversationManager.store.getMessages(taskId)
-        if (this.#conversationManager.isSafeToInject(history)) {
-          this.#conversationManager.store.append(taskId, {
-            role: 'user',
-            content: event.payload.instruction
-          } as LLMMessage)
-        } else {
-          const queue = this.#pendingInstructions.get(taskId) ?? []
-          queue.push(event.payload.instruction)
-          this.#pendingInstructions.set(taskId, queue)
-        }
-
-        if (task.status === 'awaiting_user') return
-
-        if (this.#inFlight.has(taskId)) {
-          this.#queuedInstructionTasks.add(taskId)
-          return
-        }
-        this.#inFlight.add(taskId)
-
-        try {
-          await this.#executeTaskAndDrainQueuedInstructions(taskId)
-        } catch (error) {
-          console.error(`[AgentRuntime] Resume failed for task ${taskId}:`, error)
-        } finally {
-          this.#inFlight.delete(taskId)
-        }
-      }
-    }
+    await this.#executeAndDrainQueuedInstructions()
   }
 
   // ======================== task execution ========================
 
-  async #executeTaskAndDrainQueuedInstructions(taskId: string): Promise<void> {
-    while (true) {
-      await this.executeTask(taskId)
-
-      const task = this.#taskService.getTask(taskId)
-      if (!task) return
-      if (task.status === 'awaiting_user' || task.status === 'paused') return
-
-      const hasQueuedTask = this.#queuedInstructionTasks.has(taskId)
-      const hasPendingInstructions = (this.#pendingInstructions.get(taskId)?.length ?? 0) > 0
-
-      if (!hasQueuedTask && !hasPendingInstructions) return
-
-      this.#queuedInstructionTasks.delete(taskId)
-
-      if (!this.#isRunning) return
-      if (this.#pausedTasks.has(taskId)) return
-    }
-  }
-
   /**
-   * Execute an agent workflow for a task.
+   * Execute the agent workflow for this task.
    *
-   * This is the main entry point for task execution.
-   * It can be called directly (for manual execution) or via subscription.
+   * Main entry point — emits TaskStarted, runs the agent loop.
+   * Can be called directly (manual execution) or by RuntimeManager.
    */
-  async executeTask(taskId: string): Promise<{ taskId: string; events: DomainEvent[] }> {
-    const task = this.#taskService.getTask(taskId)
+  async execute(): Promise<{ taskId: string; events: DomainEvent[] }> {
+    const task = this.#taskService.getTask(this.#taskId)
     if (!task) {
-      throw new Error(`Task not found: ${taskId}`)
+      throw new Error(`Task not found: ${this.#taskId}`)
     }
     if (task.agentId !== this.#agent.id) {
-      throw new Error(`Task ${taskId} assigned to ${task.agentId}, not ${this.#agent.id}`)
+      throw new Error(`Task ${this.#taskId} assigned to ${task.agentId}, not ${this.#agent.id}`)
     }
 
     const startedEvent: DomainEvent = {
       type: 'TaskStarted',
-      payload: { taskId, agentId: this.#agent.id, authorActorId: this.#agent.id }
+      payload: { taskId: this.#taskId, agentId: this.#agent.id, authorActorId: this.#agent.id }
     }
-    this.#store.append(taskId, [startedEvent])
+    this.#store.append(this.#taskId, [startedEvent])
 
     const emittedEvents: DomainEvent[] = [startedEvent]
-    return this.#runAgentLoop(task, emittedEvents)
+    // Clear the sentinel — actual instructions are tracked in #pendingInstructions.
+    // New instructions arriving during this execute() will re-set the flag.
+    this.#hasQueuedInstruction = false
+    this.#isExecuting = true
+    try {
+      return await this.#runAgentLoop(task, emittedEvents)
+    } finally {
+      this.#isExecuting = false
+    }
   }
 
   /**
-   * Resume an agent workflow after user interaction response.
+   * Resume the agent workflow after a user interaction response.
    */
-  async resumeTask(
-    taskId: string,
+  async resume(
     response: UserInteractionRespondedPayload
   ): Promise<{ taskId: string; events: DomainEvent[] }> {
-    const task = this.#taskService.getTask(taskId)
+    const task = this.#taskService.getTask(this.#taskId)
     if (!task) {
-      throw new Error(`Task not found: ${taskId}`)
+      throw new Error(`Task not found: ${this.#taskId}`)
     }
     if (task.agentId !== this.#agent.id) {
-      throw new Error(`Task ${taskId} assigned to ${task.agentId}, not ${this.#agent.id}`)
+      throw new Error(`Task ${this.#taskId} assigned to ${task.agentId}, not ${this.#agent.id}`)
     }
 
-    return this.#runAgentLoop(task, [], response)
+    this.#isExecuting = true
+    try {
+      return await this.#runAgentLoop(task, [], response)
+    } finally {
+      this.#isExecuting = false
+    }
+  }
+
+  // ======================== internal: drain loop ========================
+
+  async #executeAndDrainQueuedInstructions(): Promise<void> {
+    if (this.#isExecuting) return
+
+    this.#isExecuting = true
+    try {
+      while (true) {
+        await this.execute()
+
+        const task = this.#taskService.getTask(this.#taskId)
+        if (!task) return
+        if (task.status === 'awaiting_user' || task.status === 'paused') return
+
+        if (!this.#hasQueuedInstruction && this.#pendingInstructions.length === 0) return
+
+        this.#hasQueuedInstruction = false
+
+        if (this.#isPaused) return
+        if (this.#isCanceled) return
+      }
+    } finally {
+      this.#isExecuting = false
+    }
   }
 
   // ======================== agent loop ========================
@@ -274,7 +252,7 @@ export class AgentRuntime {
     emittedEvents: DomainEvent[],
     pendingResponse?: UserInteractionRespondedPayload
   ): Promise<{ taskId: string; events: DomainEvent[] }> {
-    const taskId = task.taskId
+    const taskId = this.#taskId
 
     // Load & repair conversation history
     const conversationHistory = await this.#conversationManager.loadAndRepair(
@@ -313,16 +291,22 @@ export class AgentRuntime {
     }
 
     try {
-      // Drain any instructions queued while task was in-flight
-      const queue = this.#pendingInstructions.get(taskId) ?? []
-      this.#conversationManager.drainPendingInstructions(queue, conversationHistory, persistMessage)
+      // Drain any instructions queued before this loop started
+      this.#conversationManager.drainPendingInstructions(
+        this.#pendingInstructions, conversationHistory, persistMessage
+      )
 
       for await (const output of this.#agent.run(task, context)) {
         // Drain pending instructions between yields (if safe)
-        this.#conversationManager.drainPendingInstructions(queue, conversationHistory, persistMessage)
+        this.#conversationManager.drainPendingInstructions(
+          this.#pendingInstructions, conversationHistory, persistMessage
+        )
+
+        // Check for cancel signal
+        if (this.#isCanceled) break
 
         // Check for pause signal — only at safe conversation state
-        if (this.#pausedTasks.has(taskId) && this.#conversationManager.isSafeToInject(conversationHistory)) {
+        if (this.#isPaused && this.#conversationManager.isSafeToInject(conversationHistory)) {
           break
         }
 

@@ -98,6 +98,20 @@ export interface Tool {
   readonly riskLevel: ToolRiskLevel
 
   /**
+   * Optional pre-execution check to verify if the tool *can* be executed successfully.
+   * This is called by the runtime BEFORE any risk assessment or execution.
+   * 
+   * Useful for:
+   * - "Risky" tools to fail fast before asking for user confirmation (e.g. merge conflicts).
+   * - "Safe" tools to validate preconditions without triggering execution side-effects.
+   * 
+   * @param args - Parsed arguments matching parameters schema
+   * @param ctx - Execution context
+   * @throws Error if the tool cannot be executed (e.g. preconditions failed).
+   */
+  canExecute?(args: Record<string, unknown>, ctx: ToolContext): Promise<void>
+
+  /**
    * Execute the tool with given arguments.
    *
    * @param args - Parsed arguments matching parameters schema

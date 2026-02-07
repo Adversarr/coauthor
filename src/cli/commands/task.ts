@@ -39,7 +39,7 @@ export function registerTaskCommand(parser: Argv, app: App, io: IO): Argv {
               })()
             : undefined
 
-        const { taskId } = app.taskService.createTask({ title, artifactRefs, agentId: app.agent.id })
+        const { taskId } = app.taskService.createTask({ title, artifactRefs, agentId: app.runtimeManager.defaultAgentId })
         io.stdout(`${taskId}\n`)
         return
       }
