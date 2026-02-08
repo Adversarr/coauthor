@@ -43,7 +43,6 @@ export class AgentRuntime {
   #isExecuting = false
   #isPaused = false
   #isCanceled = false
-  #hasQueuedInstruction = false
   #pendingInstructions: string[] = []
 
   constructor(opts: {
@@ -83,7 +82,7 @@ export class AgentRuntime {
   }
 
   get hasPendingWork(): boolean {
-    return this.#hasQueuedInstruction || this.#pendingInstructions.length > 0
+    return this.#pendingInstructions.length > 0
   }
 
   // ======================== imperative control (called by RuntimeManager) ========================
@@ -133,7 +132,6 @@ export class AgentRuntime {
     if (this.#isExecuting) {
       // Always queue during execution — the running loop drains at safe points
       this.#pendingInstructions.push(instruction)
-      this.#hasQueuedInstruction = true
       return
     }
 
@@ -142,7 +140,6 @@ export class AgentRuntime {
     const history = await this.#conversationManager.store.getMessages(this.#taskId)
     if (!this.#conversationManager.isSafeToInject(history)) {
       this.#pendingInstructions.push(instruction)
-      this.#hasQueuedInstruction = true
       // Don't re-execute now — a UIP response or resume will drain the queue
       return
     }
@@ -186,7 +183,6 @@ export class AgentRuntime {
     const emittedEvents: DomainEvent[] = [startedEvent]
     // Clear the sentinel — actual instructions are tracked in #pendingInstructions.
     // New instructions arriving during this execute() will re-set the flag.
-    this.#hasQueuedInstruction = false
     this.#isExecuting = true
     try {
       return await this.#runAgentLoop(task, emittedEvents)
@@ -231,9 +227,7 @@ export class AgentRuntime {
         if (!task) return
         if (task.status === 'awaiting_user' || task.status === 'paused') return
 
-        if (!this.#hasQueuedInstruction && this.#pendingInstructions.length === 0) return
-
-        this.#hasQueuedInstruction = false
+        if (this.#pendingInstructions.length === 0) return
 
         if (this.#isPaused) return
         if (this.#isCanceled) return
