@@ -5,9 +5,7 @@
  * Risk level: risky (requires UIP confirmation)
  */
 
-import { constants } from 'node:fs'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve, dirname } from 'node:path'
+import { dirname } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
 
@@ -45,12 +43,13 @@ export const editFileTool: Tool = {
     const newString = args.newString as string
 
     try {
-      const { absolutePath, currentContent } = await validateRequest(args, ctx)
+      const { currentContent } = await validateRequest(args, ctx)
 
       // Handle new file creation
       if (oldString === '') {
-        await mkdir(dirname(absolutePath), { recursive: true })
-        await writeFile(absolutePath, newString, 'utf8')
+        // Ensure parent directory exists
+        await ctx.artifactStore.mkdir(dirname(path))
+        await ctx.artifactStore.writeFile(path, newString)
         return {
           toolCallId,
           output: { 
@@ -65,7 +64,7 @@ export const editFileTool: Tool = {
       // Apply the replacement
       // currentContent is guaranteed to be defined if oldString !== ''
       const newContent = currentContent!.replace(oldString, newString)
-      await writeFile(absolutePath, newContent, 'utf8')
+      await ctx.artifactStore.writeFile(path, newContent)
 
       return {
         toolCallId,
@@ -89,27 +88,27 @@ export const editFileTool: Tool = {
 async function validateRequest(
   args: Record<string, unknown>, 
   ctx: ToolContext
-): Promise<{ absolutePath: string; currentContent?: string }> {
+): Promise<{ currentContent?: string }> {
   const path = args.path as string
   const oldString = args.oldString as string
-  const absolutePath = resolve(ctx.baseDir, path)
+  
+  // Use ArtifactStore to check existence
+  const exists = await ctx.artifactStore.exists(path)
 
   // Handle new file creation check
   if (oldString === '') {
-    const fileAlreadyExists = await pathExists(absolutePath)
-    if (fileAlreadyExists) {
+    if (exists) {
       throw new Error(`File already exists: ${path}. Use non-empty oldString to edit.`)
     }
-    return { absolutePath }
+    return {}
   }
 
   // Handle existing file check
-  const fileExists = await pathExists(absolutePath)
-  if (!fileExists) {
+  if (!exists) {
     throw new Error(`File not found: ${path}`)
   }
 
-  const currentContent = await readFile(absolutePath, 'utf8')
+  const currentContent = await ctx.artifactStore.readFile(path)
   
   // Check that oldString exists exactly once
   const occurrences = currentContent.split(oldString).length - 1
@@ -120,14 +119,5 @@ async function validateRequest(
     throw new Error(`oldString found ${occurrences} times in file: ${path}. Must be unique.`)
   }
 
-  return { absolutePath, currentContent }
-}
-
-async function pathExists(absolutePath: string): Promise<boolean> {
-  try {
-    await access(absolutePath, constants.F_OK)
-    return true
-  } catch {
-    return false
-  }
+  return { currentContent }
 }

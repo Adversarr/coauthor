@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { ContextBuilder } from '../src/application/contextBuilder.js'
+import { FsArtifactStore } from '../src/infra/fsArtifactStore.js'
 import type { TaskView } from '../src/application/taskService.js'
 import { DEFAULT_USER_ACTOR_ID } from '../src/domain/actor.js'
 
@@ -24,7 +25,8 @@ function createTestTask(overrides: Partial<TaskView> = {}): TaskView {
 describe('ContextBuilder', () => {
   test('buildTaskMessages returns system and user message', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask()
 
@@ -58,7 +60,8 @@ describe('ContextBuilder', () => {
       'utf8'
     )
 
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask({
       title: 'Improve methods section',
@@ -98,7 +101,8 @@ describe('ContextBuilder', () => {
     writeFileSync(join(dir, 'file1.tex'), 'Content of file 1\nSecond line', 'utf8')
     writeFileSync(join(dir, 'file2.tex'), 'Content of file 2\nAnother line', 'utf8')
 
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask({
       title: 'Cross-file refactor',
@@ -122,7 +126,8 @@ describe('ContextBuilder', () => {
 
   test('buildTaskMessages skips non-file_range artifact kinds', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask({
       title: 'Task with asset ref',
@@ -144,7 +149,8 @@ describe('ContextBuilder', () => {
 
   test('buildTaskMessages works with task without artifactRefs', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask({
       title: 'General task',
@@ -167,7 +173,8 @@ describe('ContextBuilder', () => {
     const filePath = join(dir, 'boundary.tex')
     writeFileSync(filePath, 'L1\nL2\nL3\nL4\nL5', 'utf8')
 
-    const builder = new ContextBuilder(dir)
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
 
     // Test first line only
     let task = createTestTask({

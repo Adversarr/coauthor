@@ -163,7 +163,7 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   const eventService = new EventService(store)
   const interactionService = new InteractionService(store, currentActorId)
   const auditService = new AuditService(auditLog)
-  const contextBuilder = new ContextBuilder(baseDir)
+  const contextBuilder = new ContextBuilder(baseDir, artifactStore)
 
   // === Agent Layer ===
   

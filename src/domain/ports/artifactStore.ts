@@ -8,7 +8,10 @@
 export interface ArtifactStore {
   readFile(path: string): Promise<string>
   readFileRange(path: string, lineStart: number, lineEnd: number): Promise<string>
-  listDir(path: string): Promise<string[]>
   writeFile(path: string, content: string): Promise<void>
+  exists(path: string): Promise<boolean>
+  mkdir(path: string): Promise<void>
+  listDir(path: string): Promise<string[]>
+  stat(path: string): Promise<{ isDirectory: boolean } | null>
 }
 

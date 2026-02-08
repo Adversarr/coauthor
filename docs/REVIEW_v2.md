@@ -215,11 +215,6 @@ The architecture largely follows the intended hexagonal/Event Sourcing design, b
 
 ### Active Technical Debt (Remaining)
 
-#### [P2] Port boundary bypass for filesystem access
-
-**Paths**: `src/domain/ports/artifactStore.ts`, `src/infra/fsArtifactStore.ts`, `src/application/contextBuilder.ts`, `src/infra/tools/readFile.ts`, `src/infra/tools/editFile.ts`, `src/infra/tools/listFiles.ts`  
-**Risk**: The architecture defines `ArtifactStore` as the abstraction for file access, but core workflows and tools directly use `fs`. This creates high coupling to Node’s filesystem APIs, makes it hard to swap adapters (e.g., remote or sandboxed storage), and complicates testing. As new adapters are added, logic duplication will grow.
-
 #### [P2] Event store and projections assume single-process execution
 
 **Paths**: `src/infra/jsonlEventStore.ts`, `src/application/projector.ts`, `src/agents/runtimeManager.ts`, `src/tui/main.tsx`  
@@ -249,6 +244,11 @@ The architecture largely follows the intended hexagonal/Event Sourcing design, b
 <a id="part-b-resolved--informational-p4"></a>
 
 ### Resolved / Informational (P4)
+
+#### [P4] Port boundary bypass for filesystem access (Resolved 2026-02-08)
+
+**Paths**: `src/domain/ports/artifactStore.ts`, `src/infra/fsArtifactStore.ts`, `src/application/contextBuilder.ts`, `src/infra/tools/readFile.ts`, `src/infra/tools/editFile.ts`, `src/infra/tools/listFiles.ts`  
+**Resolution**: Refactored `ArtifactStore` to support `exists`, `mkdir`, `stat`. Updated `FsArtifactStore` to implement strict path validation (preventing traversal) and replaced all direct `fs` usage in `ContextBuilder` and Tools with `ArtifactStore` methods. Added `docs/SECURITY.md` and security tests.
 
 #### [P4] Architectural spec drift between docs and implementation (Resolved 2026-02-07)
 

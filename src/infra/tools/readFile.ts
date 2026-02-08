@@ -5,8 +5,6 @@
  * Risk level: safe
  */
 
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
 
@@ -40,8 +38,9 @@ export const readFileTool: Tool = {
     const endLine = args.endLine as number | undefined
 
     try {
-      const absolutePath = resolve(ctx.baseDir, path)
-      const content = await readFile(absolutePath, 'utf8')
+      // We read the full file to calculate total line count and handle slicing manually
+      // This preserves the behavior of reporting total line count in the output
+      const content = await ctx.artifactStore.readFile(path)
 
       let result: string
       if (startLine !== undefined && endLine !== undefined) {

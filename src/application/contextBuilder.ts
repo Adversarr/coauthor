@@ -1,48 +1,15 @@
-import { readFile, access } from 'node:fs/promises'
-import { constants } from 'node:fs'
-import { resolve } from 'node:path'
 import type { LLMMessage } from '../domain/ports/llmClient.js'
 import type { ArtifactRef } from '../domain/task.js'
 import type { TaskView } from './taskService.js'
-
-async function readFileRange(absolutePath: string, lineStart: number, lineEnd: number): Promise<string> {
-  const raw = await readFile(absolutePath, 'utf8')
-  const lines = raw.split('\n')
-  const startIdx = Math.max(0, lineStart - 1)
-  const endIdx = Math.min(lines.length - 1, lineEnd - 1)
-  const slice = lines.slice(startIdx, endIdx + 1)
-  const numbered = slice.map((line, i) => `${String(lineStart + i).padStart(4, ' ')}|${line}`)
-  return numbered.join('\n')
-}
-
-async function renderArtifactRef(baseDir: string, ref: ArtifactRef): Promise<string> {
-  if (ref.kind === 'file_range') {
-    const abs = resolve(baseDir, ref.path)
-    try {
-      const content = await readFileRange(abs, ref.lineStart, ref.lineEnd)
-      return `## File: ${ref.path} (L${ref.lineStart}-L${ref.lineEnd})\n\`\`\`\n${content}\n\`\`\``
-    } catch {
-      return `## File: ${ref.path} (L${ref.lineStart}-L${ref.lineEnd})\n(file not found)`
-    }
-  }
-
-  return `## Ref: ${ref.kind}\n(skipped)`
-}
-
-async function tryReadFile(path: string): Promise<string | null> {
-  try {
-    await access(path, constants.F_OK)
-    return await readFile(path, 'utf8')
-  } catch {
-    return null
-  }
-}
+import type { ArtifactStore } from '../domain/ports/artifactStore.js'
 
 export class ContextBuilder {
   readonly #baseDir: string
+  readonly #store: ArtifactStore
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, store: ArtifactStore) {
     this.#baseDir = baseDir
+    this.#store = store
   }
 
   /**
@@ -62,20 +29,18 @@ export class ContextBuilder {
     parts.push(systemPrompt)
 
     // Try to load project-specific context files
-    const outlinePath = resolve(this.#baseDir, 'OUTLINE.md')
-    const outline = await tryReadFile(outlinePath)
+    // Note: We use relative paths here, ArtifactStore handles resolution
+    const outline = await this.#tryReadFile('OUTLINE.md')
     if (outline) {
       parts.push(`\n## Project Outline\n${outline}`)
     }
 
-    const briefPath = resolve(this.#baseDir, 'BRIEF.md')
-    const brief = await tryReadFile(briefPath)
+    const brief = await this.#tryReadFile('BRIEF.md')
     if (brief) {
       parts.push(`\n## Project Brief\n${brief}`)
     }
 
-    const stylePath = resolve(this.#baseDir, 'STYLE.md')
-    const style = await tryReadFile(stylePath)
+    const style = await this.#tryReadFile('STYLE.md')
     if (style) {
       parts.push(`\n## Style Guide\n${style}`)
     }
@@ -106,7 +71,7 @@ export class ContextBuilder {
     if (task.artifactRefs && task.artifactRefs.length > 0) {
       taskParts.push('\n## Referenced Files')
       for (const ref of task.artifactRefs) {
-        taskParts.push(await renderArtifactRef(this.#baseDir, ref))
+        taskParts.push(await this.#renderArtifactRef(ref))
       }
     }
 
@@ -116,6 +81,37 @@ export class ContextBuilder {
     })
 
     return messages
+  }
+
+  async #tryReadFile(path: string): Promise<string | null> {
+    try {
+      if (await this.#store.exists(path)) {
+        return await this.#store.readFile(path)
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  async #renderArtifactRef(ref: ArtifactRef): Promise<string> {
+    if (ref.kind === 'file_range') {
+      try {
+        const content = await this.#store.readFileRange(ref.path, ref.lineStart, ref.lineEnd)
+        
+        // Add line numbers to the content for LLM context
+        const lines = content.split('\n')
+        const numbered = lines.map((line, i) => 
+          `${String(ref.lineStart + i).padStart(4, ' ')}|${line}`
+        ).join('\n')
+
+        return `## File: ${ref.path} (L${ref.lineStart}-L${ref.lineEnd})\n\`\`\`\n${numbered}\n\`\`\``
+      } catch {
+        return `## File: ${ref.path} (L${ref.lineStart}-L${ref.lineEnd})\n(file not found)`
+      }
+    }
+
+    return `## Ref: ${ref.kind}\n(skipped)`
   }
 }
 

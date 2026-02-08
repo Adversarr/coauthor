@@ -5,10 +5,10 @@
  * Risk level: safe
  */
 
-import { readdir, stat } from 'node:fs/promises'
-import { resolve, join, relative } from 'node:path'
+import { join } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
+import type { ArtifactStore } from '../../domain/ports/artifactStore.js'
 
 export const listFilesTool: Tool = {
   name: 'listFiles',
@@ -40,8 +40,7 @@ export const listFilesTool: Tool = {
     const maxDepth = (args.maxDepth as number) ?? 3
 
     try {
-      const absolutePath = resolve(ctx.baseDir, path)
-      const entries = await listDirectory(absolutePath, ctx.baseDir, recursive, maxDepth, 0)
+      const entries = await listDirectory(path, ctx.artifactStore, recursive, maxDepth, 0)
 
       return {
         toolCallId,
@@ -59,14 +58,16 @@ export const listFilesTool: Tool = {
 }
 
 async function listDirectory(
-  absolutePath: string,
-  baseDir: string,
+  currentPath: string,
+  store: ArtifactStore,
   recursive: boolean,
   maxDepth: number,
   currentDepth: number
 ): Promise<string[]> {
   const entries: string[] = []
-  const items = await readdir(absolutePath)
+  
+  // listDir returns file/directory names, not full paths
+  const items = await store.listDir(currentPath)
 
   for (const item of items) {
     // Skip hidden files and common ignored directories
@@ -74,21 +75,23 @@ async function listDirectory(
       continue
     }
 
-    const itemPath = join(absolutePath, item)
-    const relativePath = relative(baseDir, itemPath) + (itemPath.endsWith('/') ? '/' : '')
+    // Construct relative path for the item
+    // Note: join handles '.' correctly (join('.', 'foo') => 'foo')
+    const itemPath = join(currentPath, item)
 
     try {
-      const itemStat = await stat(itemPath)
-      if (itemStat.isDirectory()) {
-        entries.push(relativePath + '/')
+      const itemStat = await store.stat(itemPath)
+      
+      if (itemStat && itemStat.isDirectory) {
+        entries.push(itemPath + '/')
         if (recursive && currentDepth < maxDepth) {
-          entries.push(...await listDirectory(itemPath, baseDir, recursive, maxDepth, currentDepth + 1))
+          entries.push(...await listDirectory(itemPath, store, recursive, maxDepth, currentDepth + 1))
         }
       } else {
-        entries.push(relativePath)
+        entries.push(itemPath)
       }
     } catch {
-      // Skip items we can't stat
+      // Skip items we can't stat (e.g. broken symlinks or permission issues)
     }
   }
 

@@ -43,7 +43,10 @@ async function createTestInfra(dir: string, opts?: { llm?: LLMClient, toolExecut
     readFile: async () => '',
     readFileRange: async () => '',
     listDir: async () => [],
-    writeFile: async () => {}
+    writeFile: async () => {},
+    exists: async () => false,
+    mkdir: async () => {},
+    stat: async () => null
   }
 
   const auditLog = new JsonlAuditLog({ auditPath: join(dir, 'audit.jsonl') })
