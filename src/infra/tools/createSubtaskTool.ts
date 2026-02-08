@@ -101,13 +101,14 @@ async function extractFinalAssistantMessage(
 export function createSubtaskTool(
   agentId: string,
   agentDisplayName: string,
+  agentDescription: string,
   deps: SubtaskToolDeps
 ): Tool {
   const { store, taskService, conversationStore, runtimeManager, maxSubtaskDepth } = deps
 
   return {
     name: `create_subtask_${agentId}`,
-    description: `Delegate a subtask to the "${agentDisplayName}" agent. Creates a child task, waits for it to complete, and returns the result. Use this when the subtask requires the specialized capabilities of the ${agentDisplayName} agent.`,
+    description: `Delegate a subtask to the "${agentDisplayName}" agent. ${agentDescription} Creates a child task, waits for it to complete, and returns the result.`,
     parameters: {
       type: 'object',
       properties: {
@@ -315,7 +316,7 @@ export function registerSubtaskTools(
   const { runtimeManager } = deps
 
   for (const [agentId, agent] of runtimeManager.agents) {
-    const tool = createSubtaskTool(agentId, agent.displayName, deps)
+    const tool = createSubtaskTool(agentId, agent.displayName, agent.description, deps)
     toolRegistry.register(tool)
   }
 }

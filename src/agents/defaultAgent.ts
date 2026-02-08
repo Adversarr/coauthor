@@ -22,6 +22,8 @@ import type { ToolCallRequest } from '../domain/ports/tool.js'
 export class DefaultCoAuthorAgent implements Agent {
   readonly id = 'agent_coauthor_default'
   readonly displayName = 'CoAuthor Default Agent'
+  readonly description =
+    'General-purpose agent that uses available tools to analyze tasks, edit files, and execute commands.'
 
   readonly #contextBuilder: ContextBuilder
   readonly #maxIterations: number
@@ -180,4 +182,3 @@ export class DefaultCoAuthorAgent implements Agent {
     return prompt
   }
 }
-

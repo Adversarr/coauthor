@@ -10,25 +10,21 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, test, afterEach } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { Subject } from 'rxjs'
 import { JsonlEventStore } from '../src/infra/jsonlEventStore.js'
 import { JsonlAuditLog } from '../src/infra/jsonlAuditLog.js'
 import { JsonlConversationStore } from '../src/infra/jsonlConversationStore.js'
 import { TaskService } from '../src/application/taskService.js'
-import { InteractionService } from '../src/application/interactionService.js'
-import { ContextBuilder } from '../src/application/contextBuilder.js'
 import { RuntimeManager } from '../src/agents/runtimeManager.js'
 import { ConversationManager } from '../src/agents/conversationManager.js'
 import { OutputHandler } from '../src/agents/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../src/agents/defaultAgent.js'
 import { FakeLLMClient } from '../src/infra/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../src/infra/toolRegistry.js'
 import { DefaultToolExecutor } from '../src/infra/toolExecutor.js'
 import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/domain/actor.js'
 import { createSubtaskTool, registerSubtaskTools } from '../src/infra/tools/createSubtaskTool.js'
-import type { Agent, AgentContext, AgentOutput } from '../src/agents/agent.js'
-import type { TaskView as AppTaskView } from '../src/application/taskService.js'
+import type { Agent, AgentOutput } from '../src/agents/agent.js'
 import type { DomainEvent, StoredEvent, EventStore } from '../src/domain/index.js'
 import type { ArtifactStore } from '../src/domain/ports/artifactStore.js'
 
@@ -248,7 +244,8 @@ describe('createSubtaskTool', () => {
   const completingAgent: Agent = {
     id: 'agent_completer',
     displayName: 'Completer',
-    async *run(task, ctx) {
+    description: 'Test agent that completes and returns a summary.',
+    async *run(task, _context) {
       yield { kind: 'done', summary: `Completed subtask: ${task.title}` } as AgentOutput
     }
   }
@@ -257,7 +254,8 @@ describe('createSubtaskTool', () => {
   const failingAgent: Agent = {
     id: 'agent_failer',
     displayName: 'Failer',
-    async *run(task, ctx) {
+    description: 'Test agent that fails intentionally.',
+    async *run(_task, _context) {
       yield { kind: 'failed', reason: 'Intentional failure' } as AgentOutput
     }
   }
@@ -280,8 +278,6 @@ describe('createSubtaskTool', () => {
     const toolExecutor = new DefaultToolExecutor({ registry: toolRegistry, auditLog })
     const taskService = new TaskService(store, DEFAULT_USER_ACTOR_ID)
     const llm = new FakeLLMClient()
-    const contextBuilder = new ContextBuilder(dir)
-
     const conversationManager = new ConversationManager({
       conversationStore,
       auditLog,
@@ -324,12 +320,12 @@ describe('createSubtaskTool', () => {
   }
 
   test('returns Success when child completes', async () => {
-    const { dir, store, conversationStore, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
 
     runtimeManager.start()
     try {
       // Create parent task
-      const { taskId: parentId } = await taskService.createTask({
+      await taskService.createTask({
         title: 'Parent task', agentId: completingAgent.id
       })
 
@@ -374,7 +370,7 @@ describe('createSubtaskTool', () => {
   })
 
   test('returns Error when child fails', async () => {
-    const { dir, store, conversationStore, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
 
     runtimeManager.start()
     try {
@@ -411,13 +407,11 @@ describe('createSubtaskTool', () => {
   })
 
   test('rejects when max depth exceeded', async () => {
-    const { dir, store, conversationStore, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
+    const { dir, store, conversationStore, taskService, runtimeManager } = await createIntegrationEnv([completingAgent])
 
     // Override with max depth 0 to test limit
-    const toolName = `create_subtask_${completingAgent.id}`
-    
     // Create a custom tool with maxSubtaskDepth=0
-    const shallowTool = createSubtaskTool(completingAgent.id, completingAgent.displayName, {
+    const shallowTool = createSubtaskTool(completingAgent.id, completingAgent.displayName, completingAgent.description, {
       store,
       taskService,
       conversationStore,
@@ -456,13 +450,14 @@ describe('createSubtaskTool', () => {
     const slowAgent: Agent = {
       id: 'agent_slow',
       displayName: 'Slow',
+      description: 'Test agent that blocks indefinitely.',
       async *run() {
         // Yield nothing and never complete — simulate a long-running task
         await new Promise(() => {})
       }
     }
 
-    const { dir, store, conversationStore, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, slowAgent])
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, slowAgent])
 
     runtimeManager.start()
     try {
@@ -503,7 +498,7 @@ describe('createSubtaskTool', () => {
   })
 
   test('tool has correct parameter schema', async () => {
-    const { dir, toolRegistry, runtimeManager } = await createIntegrationEnv([completingAgent])
+    const { dir, toolRegistry } = await createIntegrationEnv([completingAgent])
     try {
       const tool = toolRegistry.get(`create_subtask_${completingAgent.id}`)!
       expect(tool.parameters.type).toBe('object')
@@ -522,12 +517,13 @@ describe('createSubtaskTool', () => {
     const blockingAgent: Agent = {
       id: 'agent_blocker',
       displayName: 'Blocker',
+      description: 'Test agent that never completes.',
       async *run() {
         await new Promise(() => {}) // never resolves
       }
     }
 
-    const { dir, store, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, blockingAgent])
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, blockingAgent])
 
     runtimeManager.start()
     try {
@@ -572,7 +568,7 @@ describe('createSubtaskTool', () => {
   })
 
   test('returns Cancel immediately when signal already aborted', async () => {
-    const { dir, store, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
 
     runtimeManager.start()
     try {
@@ -612,7 +608,7 @@ describe('createSubtaskTool', () => {
   })
 
   test('auto-starts RuntimeManager when not running', async () => {
-    const { dir, store, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
+    const { dir, store, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent])
 
     // Do NOT call runtimeManager.start()
     expect(runtimeManager.isRunning).toBe(false)

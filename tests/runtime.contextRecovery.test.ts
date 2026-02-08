@@ -18,6 +18,7 @@ import { DEFAULT_USER_ACTOR_ID } from '../src/domain/actor.js'
 class ImmediateDoneAgent implements Agent {
   readonly id: string
   readonly displayName = 'Immediate Done Agent'
+  readonly description = 'Test agent that completes immediately.'
 
   constructor(id: string) {
     this.id = id
@@ -31,6 +32,7 @@ class ImmediateDoneAgent implements Agent {
 class SingleToolCallAgent implements Agent {
   readonly id: string
   readonly displayName = 'Single ToolCall Agent'
+  readonly description = 'Test agent that yields a single tool call.'
 
   constructor(id: string) {
     this.id = id
@@ -75,7 +77,10 @@ describe('AgentRuntime - context recovery', () => {
       readFile: async () => '',
       readFileRange: async () => '',
       listDir: async () => [],
-      writeFile: async () => {}
+      writeFile: async () => {},
+      exists: async () => false,
+      mkdir: async () => {},
+      stat: async () => null
     }
 
     const agent = new ImmediateDoneAgent('agent_repair')
@@ -184,7 +189,10 @@ describe('AgentRuntime - context recovery', () => {
       readFile: async () => '',
       readFileRange: async () => '',
       listDir: async () => [],
-      writeFile: async () => {}
+      writeFile: async () => {},
+      exists: async () => false,
+      mkdir: async () => {},
+      stat: async () => null
     }
 
     const agent = new SingleToolCallAgent('agent_toolpersist')
@@ -238,4 +246,3 @@ describe('AgentRuntime - context recovery', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 })
-

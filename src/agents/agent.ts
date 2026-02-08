@@ -108,6 +108,9 @@ export interface Agent {
   /** Human-readable display name */
   readonly displayName: string
 
+  /** Human-readable description of agent capabilities */
+  readonly description: string
+
   /**
    * Execute the task workflow.
    *
