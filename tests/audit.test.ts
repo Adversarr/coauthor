@@ -72,4 +72,72 @@ describe('Audit System', () => {
     expect(recent[0].id).toBe(2) // Sorted descending
     expect(recent[1].id).toBe(1)
   })
+
+  it('should observe new entries', async () => {
+    const log = await createAuditLog(auditPath)
+    const service = new AuditService(log)
+
+    const entry1: AuditLogEntry = {
+      type: 'ToolCallRequested',
+      payload: {
+        toolCallId: '1',
+        toolName: 'test',
+        authorActorId: 'user',
+        taskId: 't1',
+        input: { foo: 'bar' },
+        timestamp: Date.now()
+      }
+    }
+
+    await log.append(entry1)
+
+    const observable = await service.observeEntries('t1')
+    const received: any[] = []
+
+    const sub = observable.subscribe(e => received.push(e))
+
+    // Should receive initial history
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.toolCallId).toBe('1')
+
+    // Append new entry
+    const entry2: AuditLogEntry = {
+      type: 'ToolCallCompleted',
+      payload: {
+        toolCallId: '1',
+        toolName: 'test',
+        authorActorId: 'user',
+        taskId: 't1', // Same task
+        output: { result: 'ok' },
+        isError: false,
+        durationMs: 10,
+        timestamp: Date.now() + 10
+      }
+    }
+    await log.append(entry2)
+
+    // Append entry for different task
+    const entry3: AuditLogEntry = {
+        type: 'ToolCallRequested',
+        payload: {
+          toolCallId: '2',
+          toolName: 'other',
+          authorActorId: 'user',
+          taskId: 't2', // Different task
+          input: {},
+          timestamp: Date.now() + 20
+        }
+      }
+      await log.append(entry3)
+
+    // Allow observable to fire
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    sub.unsubscribe()
+
+    // Should have received entry2 but NOT entry3
+    expect(received).toHaveLength(2)
+    expect(received[1].payload.toolCallId).toBe('1')
+    expect(received[1].type).toBe('ToolCallCompleted')
+  })
 })

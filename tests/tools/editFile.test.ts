@@ -1,23 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
+import { vol } from 'memfs'
 import { join } from 'node:path'
 import { editFileTool } from '../../src/infra/tools/editFile.js'
-import { FsArtifactStore } from '../../src/infra/fsArtifactStore.js'
-import { tmpdir } from 'node:os'
-import { nanoid } from 'nanoid'
+import { MemFsArtifactStore } from '../../src/infra/memFsArtifactStore.js'
 
 describe('editFileTool', () => {
-  let baseDir: string
-  let store: FsArtifactStore
+  const baseDir = '/test-workspace'
+  let store: MemFsArtifactStore
 
   beforeEach(() => {
-    baseDir = join(tmpdir(), `coauthor-test-${nanoid()}`)
-    mkdirSync(baseDir, { recursive: true })
-    store = new FsArtifactStore(baseDir)
-  })
-
-  afterEach(() => {
-    rmSync(baseDir, { recursive: true, force: true })
+    vol.reset()
+    store = new MemFsArtifactStore(baseDir)
+    vol.mkdirSync(baseDir, { recursive: true })
   })
 
   it('should create a new file when oldString is empty', async () => {
@@ -29,11 +23,13 @@ describe('editFileTool', () => {
 
     expect(result.isError).toBe(false)
     expect(result.output).toMatchObject({ success: true, action: 'created' })
-    expect(readFileSync(join(baseDir, 'newfile.txt'), 'utf8')).toBe('Hello World')
+    expect(vol.readFileSync(join(baseDir, 'newfile.txt'), 'utf8')).toBe('Hello World')
   })
 
   it('should edit an existing file', async () => {
-    writeFileSync(join(baseDir, 'file.txt'), 'Hello World')
+    vol.fromJSON({
+      'file.txt': 'Hello World'
+    }, baseDir)
 
     const result = await editFileTool.execute({
       path: 'file.txt',
@@ -43,11 +39,13 @@ describe('editFileTool', () => {
 
     expect(result.isError).toBe(false)
     expect(result.output).toMatchObject({ success: true, action: 'edited' })
-    expect(readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello CoAuthor')
+    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello CoAuthor')
   })
 
   it('should fail if oldString is not found', async () => {
-    writeFileSync(join(baseDir, 'file.txt'), 'Hello World')
+    vol.fromJSON({
+      'file.txt': 'Hello World'
+    }, baseDir)
 
     const result = await editFileTool.execute({
       path: 'file.txt',
@@ -57,11 +55,13 @@ describe('editFileTool', () => {
 
     expect(result.isError).toBe(true)
     expect((result.output as any).error).toContain('oldString not found')
-    expect(readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello World')
+    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello World')
   })
 
   it('should fail if oldString is ambiguous (multiple matches)', async () => {
-    writeFileSync(join(baseDir, 'file.txt'), 'Hello World World')
+    vol.fromJSON({
+      'file.txt': 'Hello World World'
+    }, baseDir)
 
     const result = await editFileTool.execute({
       path: 'file.txt',
@@ -94,7 +94,10 @@ describe('editFileTool', () => {
     })
 
     it('should throw if file already exists for creation', async () => {
-      writeFileSync(join(baseDir, 'file.txt'), 'Hello')
+      vol.fromJSON({
+        'file.txt': 'Hello'
+      }, baseDir)
+
       await expect(editFileTool.canExecute!({
         path: 'file.txt',
         oldString: '',
@@ -103,7 +106,10 @@ describe('editFileTool', () => {
     })
 
     it('should throw if oldString not found', async () => {
-      writeFileSync(join(baseDir, 'file.txt'), 'Hello World')
+      vol.fromJSON({
+        'file.txt': 'Hello World'
+      }, baseDir)
+
       await expect(editFileTool.canExecute!({
         path: 'file.txt',
         oldString: 'Universe',
