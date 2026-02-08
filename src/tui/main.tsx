@@ -38,10 +38,18 @@ export function MainTui(props: Props) {
   const logSequence = useRef(0)
   const hasAutoOpenedTasks = useRef(false)
   const showVerboseRef = useRef(false)
+  
+  // Refs to track state in closures (like refresh)
+  const focusedTaskIdRef = useRef<string | null>(null)
+  const lastTasksRef = useRef<TaskView[]>([])
 
   useEffect(() => {
     showVerboseRef.current = showVerbose
   }, [showVerbose])
+
+  useEffect(() => {
+    focusedTaskIdRef.current = focusedTaskId
+  }, [focusedTaskId])
 
   const addPlainLog = (
     content: string,
@@ -130,14 +138,35 @@ export function MainTui(props: Props) {
       const taskList = sortTasksAsTree(rawTasks)
       setTasks(taskList)
 
-      if (focusedTaskId) {
-        const stillExists = taskList.some((task) => task.taskId === focusedTaskId)
+      // --- 1. Detect new subtasks and auto-focus ---
+      // If a new task is created and its parent is currently focused, switch focus to the child.
+      const currentFocusedId = focusedTaskIdRef.current
+      if (currentFocusedId) {
+        const previousTaskIds = new Set(lastTasksRef.current.map(t => t.taskId))
+        const newChildTask = taskList.find(t => 
+          !previousTaskIds.has(t.taskId) && // It is new
+          t.parentTaskId === currentFocusedId // Parent is currently focused
+        )
+        
+        if (newChildTask) {
+          setFocusedTaskId(newChildTask.taskId)
+          // Update ref immediately for subsequent logic in this tick
+          focusedTaskIdRef.current = newChildTask.taskId 
+        }
+      }
+      
+      // Update lastTasksRef for next refresh
+      lastTasksRef.current = taskList
+
+      // --- 2. Check if focused task still exists ---
+      if (focusedTaskIdRef.current) {
+        const stillExists = taskList.some((task) => task.taskId === focusedTaskIdRef.current)
         if (!stillExists) setFocusedTaskId(null)
       }
 
       if (showTasks) {
-        const currentIndex = focusedTaskId
-          ? Math.max(0, taskList.findIndex((t) => t.taskId === focusedTaskId))
+        const currentIndex = focusedTaskIdRef.current
+          ? Math.max(0, taskList.findIndex((t) => t.taskId === focusedTaskIdRef.current))
           : 0
         setSelectedTaskIndex((prev) => {
           const clamped = Math.min(Math.max(prev, 0), Math.max(0, taskList.length - 1))
@@ -152,7 +181,7 @@ export function MainTui(props: Props) {
       if (awaitingTask) {
         const pending = await app.interactionService.getPendingInteraction(awaitingTask.taskId)
         setPendingInteraction(pending)
-        if (pending && focusedTaskId !== awaitingTask.taskId) {
+        if (pending && focusedTaskIdRef.current !== awaitingTask.taskId) {
           // Push current focus before switching (implicit stack via parentTaskId)
           setFocusedTaskId(awaitingTask.taskId)
         }
@@ -160,7 +189,7 @@ export function MainTui(props: Props) {
         setPendingInteraction(null)
 
         // If the currently focused task just completed and has a parent, pop back
-        const focusedTask = taskList.find((t) => t.taskId === focusedTaskId)
+        const focusedTask = taskList.find((t) => t.taskId === focusedTaskIdRef.current)
         if (
           focusedTask &&
           focusedTask.parentTaskId &&
@@ -170,7 +199,7 @@ export function MainTui(props: Props) {
         }
 
         // If no task focused, auto-focus the first in_progress subtask (or root task)
-        if (!focusedTaskId || !taskList.some((t) => t.taskId === focusedTaskId)) {
+        if (!focusedTaskIdRef.current || !taskList.some((t) => t.taskId === focusedTaskIdRef.current)) {
           const active = taskList.find(
             (t) => t.status === 'in_progress' || t.status === 'awaiting_user'
           )
@@ -183,8 +212,8 @@ export function MainTui(props: Props) {
       if (!awaitingTask && !hasAutoOpenedTasks.current && taskList.length > 0) {
         hasAutoOpenedTasks.current = true
         setShowTasks(true)
-        const initialIndex = focusedTaskId
-          ? Math.max(0, taskList.findIndex((t) => t.taskId === focusedTaskId))
+        const initialIndex = focusedTaskIdRef.current
+          ? Math.max(0, taskList.findIndex((t) => t.taskId === focusedTaskIdRef.current))
           : 0
         setSelectedTaskIndex(initialIndex)
       }

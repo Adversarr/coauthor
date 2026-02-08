@@ -176,7 +176,6 @@ export function createSubtaskTool(
       // The subscription activates immediately; the childTaskId filter is set
       // once createTask() returns.
       let childTaskId = ''
-      // eslint-disable-next-line prefer-const
       let cleanupWatcher: () => void = () => {}
 
       const terminalPromise = new Promise<StoredEvent>((resolve, reject) => {
