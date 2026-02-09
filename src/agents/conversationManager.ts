@@ -1,6 +1,6 @@
 import type { ConversationStore } from '../domain/ports/conversationStore.js'
 import type { AuditLog } from '../domain/ports/auditLog.js'
-import type { ToolRegistry, ToolExecutor } from '../domain/ports/tool.js'
+import type { ToolRegistry, ToolExecutor, ToolCallRequest } from '../domain/ports/tool.js'
 import type { ArtifactStore } from '../domain/ports/artifactStore.js'
 import type { TelemetrySink } from '../domain/ports/telemetry.js'
 import type { LLMMessage } from '../domain/ports/llmClient.js'
@@ -103,6 +103,47 @@ export class ConversationManager {
       }
     }
     return true
+  }
+
+  // ---------- pending tool calls ----------
+
+  /**
+   * Identify pending tool calls in the conversation history.
+   *
+   * A tool call is pending if:
+   * 1. It belongs to the last assistant message in the history.
+   * 2. It does not have a corresponding tool result in the subsequent messages.
+   */
+  getPendingToolCalls(history: readonly LLMMessage[]): ToolCallRequest[] {
+    let lastAssistantMessage: LLMMessage | undefined
+    let lastAssistantIndex = -1
+
+    // Find the last assistant message
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'assistant') {
+        lastAssistantMessage = history[i]
+        lastAssistantIndex = i
+        break
+      }
+    }
+
+    if (!lastAssistantMessage || lastAssistantMessage.role !== 'assistant' || !lastAssistantMessage.toolCalls || lastAssistantMessage.toolCalls.length === 0) {
+      return []
+    }
+
+    // Collect IDs of tools that have already run (appear after the assistant message)
+    const handledToolCallIds = new Set<string>()
+    for (let i = lastAssistantIndex + 1; i < history.length; i++) {
+      const msg = history[i]
+      if (msg.role === 'tool') {
+        handledToolCallIds.add(msg.toolCallId)
+      }
+    }
+
+    // Return only the unhandled ones
+    return lastAssistantMessage.toolCalls.filter(
+      (tc) => !handledToolCallIds.has(tc.toolCallId)
+    )
   }
 
   // ---------- persist callback factory ----------

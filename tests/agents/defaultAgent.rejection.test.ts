@@ -7,7 +7,15 @@ import type { ToolRegistry, Tool } from '../../src/domain/ports/tool.js'
 import type { LLMClient, LLMMessage } from '../../src/domain/ports/llmClient.js'
 
 describe('DefaultCoAuthorAgent - Risk-Unaware Behavior', () => {
-  const contextBuilder = new ContextBuilder('/tmp')
+  const contextBuilder = new ContextBuilder('/tmp', {
+    readFile: async () => '',
+    readFileRange: async () => '',
+    listDir: async () => [],
+    writeFile: async () => {},
+    exists: async () => false,
+    mkdir: async () => {},
+    stat: async () => null
+  })
   const agent = new DefaultCoAuthorAgent({ contextBuilder })
 
   const mockTask: TaskView = {
@@ -111,18 +119,9 @@ describe('DefaultCoAuthorAgent - Risk-Unaware Behavior', () => {
 
     const generator = agent.run(mockTask, mockContext)
 
-    // 1. Expect "Executing tool" verbose
+    // Pending tool calls are handled by AgentRuntime, not by the agent.
+    // When invoked directly, the agent proceeds to the LLM loop.
     const result1 = await generator.next()
-    expect(result1.value).toMatchObject({ 
-      kind: 'verbose',
-      content: expect.stringContaining('Executing tool')
-    })
-
-    // 2. Expect tool_call — agent doesn't know it's risky
-    const result2 = await generator.next()
-    expect(result2.value).toMatchObject({ 
-      kind: 'tool_call',
-      call: { toolCallId: 'call_1' }
-    })
+    expect(result1.value).toMatchObject({ kind: 'verbose', content: expect.stringContaining('Iteration') })
   })
 })

@@ -30,6 +30,7 @@ describe('OutputHandler Tool Lifecycle', () => {
       recordRejection: vi.fn((call) => ({ toolCallId: call.toolCallId, output: { isError: true, error: 'User rejected the request' }, isError: true }))
     }
     mockConversationManager = {
+      getPendingToolCalls: vi.fn(),
       persistToolResultIfMissing: vi.fn()
     }
 
@@ -130,7 +131,7 @@ describe('OutputHandler Tool Lifecycle', () => {
     expect(mockExecutor.execute).toHaveBeenCalled()
   })
 
-  it('should record rejection audit entries via handleRejections', () => {
+  it('should record rejection audit entries via handleRejections', async () => {
     const persistMessage = vi.fn()
     const rejectionCtx = {
       taskId: 't1',
@@ -147,7 +148,19 @@ describe('OutputHandler Tool Lifecycle', () => {
       persistMessage
     }
 
-    handler.handleRejections(rejectionCtx)
+    const riskyTool: Tool = {
+      name: 'risky-tool',
+      description: 'risky',
+      parameters: { type: 'object', properties: {} },
+      riskLevel: 'risky',
+      execute: vi.fn()
+    }
+    vi.mocked(mockRegistry.get).mockReturnValue(riskyTool)
+    vi.mocked(mockConversationManager.getPendingToolCalls).mockReturnValue([
+      { toolCallId: 'tc1', toolName: 'risky-tool', arguments: { path: 'f.txt' } }
+    ])
+
+    await handler.handleRejections(rejectionCtx, 'tc1')
 
     // recordRejection should be called for the dangling tool call
     expect(mockExecutor.recordRejection).toHaveBeenCalledWith(
@@ -165,7 +178,7 @@ describe('OutputHandler Tool Lifecycle', () => {
     )
   })
 
-  it('should not call recordRejection when tool result already exists', () => {
+  it('should not call recordRejection when tool result already exists', async () => {
     vi.mocked(mockExecutor.recordRejection).mockClear()
 
     const rejectionCtx = {
@@ -188,7 +201,8 @@ describe('OutputHandler Tool Lifecycle', () => {
       persistMessage: vi.fn()
     }
 
-    handler.handleRejections(rejectionCtx)
+    vi.mocked(mockConversationManager.getPendingToolCalls).mockReturnValue([])
+    await handler.handleRejections(rejectionCtx, 'tc2')
 
     // No rejection needed — result already exists
     expect(mockExecutor.recordRejection).not.toHaveBeenCalled()

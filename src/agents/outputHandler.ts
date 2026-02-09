@@ -238,55 +238,36 @@ export class OutputHandler {
    * Record rejection results for dangling risky tool calls.
    *
    * Called before agent.run() when the user rejected a risky tool confirmation.
-   * For each dangling tool call (no matching tool-result in history):
-   * 1. Calls toolExecutor.recordRejection() → emits audit entries → TUI displays them.
-   * 2. Persists a synthetic tool-result message to conversation history.
-   *
-   * This ensures live TUI shows the same request + rejection lines that /replay does.
+   * Only the tool call bound to the rejected interaction should be rejected.
    */
-  async handleRejections(ctx: OutputContext): Promise<void> {
-    const history = ctx.conversationHistory
+  async handleRejections(ctx: OutputContext, targetToolCallId?: string): Promise<void> {
+    if (!targetToolCallId) return
 
-    // Walk backwards to find the last assistant message with tool calls
-    for (let i = history.length - 1; i >= 0; i--) {
-      const msg = history[i]
-      if (msg.role !== 'assistant') continue
-      if (!msg.toolCalls || msg.toolCalls.length === 0) break
+    const pendingCalls = this.#conversationManager.getPendingToolCalls(ctx.conversationHistory)
+    const rejectedCalls = pendingCalls.filter((call) => call.toolCallId === targetToolCallId)
+    if (rejectedCalls.length === 0) return
 
-      const toolContext = {
-        taskId: ctx.taskId,
-        actorId: ctx.agentId,
-        baseDir: ctx.baseDir,
-        artifactStore: this.#artifactStore
-      }
+    const toolContext = {
+      taskId: ctx.taskId,
+      actorId: ctx.agentId,
+      baseDir: ctx.baseDir,
+      artifactStore: this.#artifactStore
+    }
 
-      for (const tc of msg.toolCalls) {
-        const hasResult = history.some(
-          m => m.role === 'tool' && m.toolCallId === tc.toolCallId
-        )
-        if (hasResult) continue
+    for (const call of rejectedCalls) {
+      const tool = this.#toolRegistry.get(call.toolName)
+      if (tool?.riskLevel !== 'risky') continue
 
-        const call: ToolCallRequest = {
-          toolCallId: tc.toolCallId,
-          toolName: tc.toolName,
-          arguments: tc.arguments
-        }
-
-        // Emit audit entries (ToolCallRequested + ToolCallCompleted with rejection)
-        const result = this.#toolExecutor.recordRejection(call, toolContext)
-
-        // Persist rejection into conversation history
-        await this.#conversationManager.persistToolResultIfMissing(
-          ctx.taskId,
-          tc.toolCallId,
-          tc.toolName,
-          result.output,
-          result.isError,
-          history,
-          ctx.persistMessage
-        )
-      }
-      break // Only process the last assistant message
+      const result = this.#toolExecutor.recordRejection(call, toolContext)
+      await this.#conversationManager.persistToolResultIfMissing(
+        ctx.taskId,
+        call.toolCallId,
+        call.toolName,
+        result.output,
+        result.isError,
+        ctx.conversationHistory,
+        ctx.persistMessage
+      )
     }
   }
 

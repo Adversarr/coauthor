@@ -37,40 +37,6 @@ export class DefaultCoAuthorAgent implements Agent {
     yield* this.#toolLoop(task, context)
   }
 
-  // ---------- pending tool calls (resume after pause / UIP) ----------
-
-  /**
-   * Process any pending tool calls from previous execution (e.g. after resume).
-   *
-   * The agent is risk-unaware — it simply yields `tool_call` for every
-   * pending call. The Runtime/OutputHandler handles UIP confirmation.
-   * Rejection results are already injected into history by Runtime before
-   * agent.run() is called, so we only re-execute calls with no result.
-   */
-  async *#processPendingToolCalls(context: AgentContext): AsyncGenerator<AgentOutput> {
-    const lastMessage = context.conversationHistory[context.conversationHistory.length - 1]
-    if (!lastMessage || lastMessage.role !== 'assistant' || !lastMessage.toolCalls || lastMessage.toolCalls.length === 0) {
-      return
-    }
-
-    const pendingCalls = lastMessage.toolCalls.filter(tc =>
-      !context.conversationHistory.some(
-        m => m.role === 'tool' && m.toolCallId === tc.toolCallId
-      )
-    )
-    if (pendingCalls.length === 0) return
-
-    for (const toolCall of pendingCalls) {
-      const tool = context.tools.get(toolCall.toolName)
-      if (!tool) {
-        yield { kind: 'error', content: `Unknown tool in pending call: ${toolCall.toolName}` }
-        continue
-      }
-
-      yield* this.#executeToolCall(toolCall)
-    }
-  }
-
   // ---------- main tool loop ----------
 
   /**
@@ -83,9 +49,6 @@ export class DefaultCoAuthorAgent implements Agent {
       await context.persistMessage({ role: 'system', content: await this.#contextBuilder.buildSystemPrompt() })
       await context.persistMessage({ role: 'user', content: this.#buildTaskPrompt(task) })
     }
-
-    // Process any pending tool calls from previous execution
-    yield* this.#processPendingToolCalls(context)
 
     let iteration = 0
     while (iteration < this.#maxIterations) {

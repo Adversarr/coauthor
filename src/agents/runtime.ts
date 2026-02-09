@@ -1,6 +1,6 @@
 import type { EventStore } from '../domain/ports/eventStore.js'
 import type { LLMClient, LLMMessage } from '../domain/ports/llmClient.js'
-import type { ToolRegistry } from '../domain/ports/tool.js'
+import type { ToolRegistry, ToolCallRequest } from '../domain/ports/tool.js'
 import type { DomainEvent, UserInteractionRespondedPayload } from '../domain/events.js'
 import type { TaskService, TaskView } from '../application/taskService.js'
 import type { Agent, AgentContext } from './agent.js'
@@ -313,26 +313,15 @@ export class AgentRuntime {
       this.#baseDir
     )
 
-    const confirmedInteractionId = pendingResponse?.selectedOptionId === 'approve'
-      ? pendingResponse.interactionId
+    const isApproved = pendingResponse?.selectedOptionId === 'approve'
+    const interactionId = pendingResponse?.interactionId
+
+    const interactionToolCallId = interactionId
+      ? await this.#resolveToolCallIdForInteraction(interactionId)
       : undefined
 
-    // Extract the toolCallId that the confirmation was bound to (SA-001).
-    // This is stored in the interaction display metadata by buildConfirmInteraction.
-    let confirmedToolCallId: string | undefined
-    if (confirmedInteractionId && pendingResponse) {
-      // The metadata is available from the original interaction request in the store.
-      // We read the task's stream to find the matching request event.
-      const events = await this.#store.readStream(this.#taskId)
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i]
-        if (ev.type === 'UserInteractionRequested' &&
-            ev.payload.interactionId === confirmedInteractionId) {
-          confirmedToolCallId = (ev.payload.display?.metadata as Record<string, string> | undefined)?.toolCallId
-          break
-        }
-      }
-    }
+    const confirmedInteractionId = isApproved ? interactionId : undefined
+    const confirmedToolCallId = isApproved ? interactionToolCallId : undefined
 
     const persistMessage = this.#conversationManager.createPersistCallback(taskId, conversationHistory)
 
@@ -353,8 +342,8 @@ export class AgentRuntime {
 
     // If user rejected a risky tool, record rejection via OutputHandler
     // (emits audit entries for live TUI display + persists to conversation)
-    if (pendingResponse && pendingResponse.selectedOptionId !== 'approve') {
-      await this.#outputHandler.handleRejections(outputCtx)
+    if (pendingResponse && !isApproved) {
+      await this.#outputHandler.handleRejections(outputCtx, interactionToolCallId)
     }
 
     const context: AgentContext = {
@@ -371,6 +360,42 @@ export class AgentRuntime {
       await this.#conversationManager.drainPendingInstructions(
         this.#pendingInstructions, conversationHistory, persistMessage
       )
+
+      // Process pending tool calls from previous turn (e.g. multi-tool batch)
+      const pendingCalls = this.#conversationManager.getPendingToolCalls(conversationHistory)
+      for (const call of pendingCalls) {
+        // Check for cancel signal
+        if (this.#isCanceled) break
+
+        // Check for pause signal — only at safe conversation state
+        if (this.#isPaused && this.#conversationManager.isSafeToInject(conversationHistory)) {
+          break
+        }
+
+        const result = await this.#outputHandler.handle(
+          { kind: 'tool_call', call },
+          outputCtx
+        )
+
+        if (result.event) {
+          const currentTask = await this.#taskService.getTask(taskId)
+          if (!currentTask) throw new Error(`Task not found: ${taskId}`)
+
+          if (!this.#taskService.canTransition(currentTask.status, result.event.type)) {
+            console.warn(
+              `[AgentRuntime] Skipping ${result.event.type}: task ${taskId} ` +
+              `is in state ${currentTask.status}, breaking loop gracefully`
+            )
+            break
+          }
+
+          await this.#store.append(taskId, [result.event])
+          emittedEvents.push(result.event)
+        }
+
+        if (result.pause) return { taskId, events: emittedEvents }
+        if (result.terminal) return { taskId, events: emittedEvents }
+      }
 
       for await (const output of this.#agent.run(task, context)) {
         // Drain pending instructions between yields (if safe)
@@ -429,6 +454,17 @@ export class AgentRuntime {
     }
 
     return { taskId, events: emittedEvents }
+  }
+
+  async #resolveToolCallIdForInteraction(interactionId: string): Promise<string | undefined> {
+    const events = await this.#store.readStream(this.#taskId)
+    for (let i = events.length - 1; i >= 0; i--) {
+      const event = events[i]
+      if (event.type !== 'UserInteractionRequested') continue
+      if (event.payload.interactionId !== interactionId) continue
+      return (event.payload.display?.metadata as Record<string, string> | undefined)?.toolCallId
+    }
+    return undefined
   }
 
 }
