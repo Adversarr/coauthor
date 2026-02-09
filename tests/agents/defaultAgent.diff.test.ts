@@ -7,7 +7,18 @@ import type { ToolRegistry, Tool } from '../../src/domain/ports/tool.js'
 import type { LLMClient } from '../../src/domain/ports/llmClient.js'
 
 describe('DefaultCoAuthorAgent Diff Generation', () => {
-  const contextBuilder = new ContextBuilder('/tmp')
+  const mockStore = {
+    readFile: async () => '',
+    readFileRange: async () => '',
+    listDir: async () => [],
+    writeFile: async () => {},
+    exists: async () => false,
+    mkdir: async () => {},
+    stat: async () => null,
+    deleteFile: async () => {}
+  }
+  // @ts-ignore
+  const contextBuilder = new ContextBuilder('/tmp', mockStore)
   const agent = new DefaultCoAuthorAgent({ contextBuilder })
 
   const mockTask: TaskView = {

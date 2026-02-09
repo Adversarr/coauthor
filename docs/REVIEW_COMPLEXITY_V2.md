@@ -774,7 +774,6 @@ This section documents the results of a comprehensive investigation into each fi
 | [PR-001] | **RESOLVED** | `runCommand` now handles `AbortSignal` with early check and `SIGTERM` |
 | [PR-002] | **PARTIALLY VALID** | Cycle detection added; expensive O(depth × projectionCost) remains |
 | [PR-003] | **PARTIALLY RESOLVED** | Executor enforces pre-execution abort check; tools must still cooperate mid-flight |
-| [DC-001] | **STILL VALID** | Architectural inconsistency: `RuntimeManager` claims single-subscriber but tool subscribes directly |
 | [DC-002] | **RESOLVED** | Both `onPause()` and `onCancel()` now abort via `AbortController` |
 
 ### Detailed Investigation Notes

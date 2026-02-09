@@ -23,26 +23,55 @@ function createTestTask(overrides: Partial<TaskView> = {}): TaskView {
 }
 
 describe('ContextBuilder', () => {
-  test('buildTaskMessages returns system and user message', async () => {
+  test('getContextData returns correct structure', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
+
+    const data = await builder.getContextData()
+
+    expect(data.env.workingDirectory).toBe(dir)
+    expect(data.env.platform).toBe(process.platform)
+    expect(data.env.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(data.project.outline).toBeUndefined()
+    expect(data.project.brief).toBeUndefined()
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('getContextData loads project files', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    writeFileSync(join(dir, 'OUTLINE.md'), '# Outline', 'utf8')
+    writeFileSync(join(dir, 'STYLE.md'), '# Style', 'utf8')
+    
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
+
+    const data = await builder.getContextData()
+
+    expect(data.project.outline).toBe('# Outline')
+    expect(data.project.style).toBe('# Style')
+    expect(data.project.brief).toBeUndefined()
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('buildUserTaskContent returns task details', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
     const task = createTestTask()
 
-    const messages = await builder.buildTaskMessages(task)
+    const content = await builder.buildUserTaskContent(task)
 
-    expect(messages).toHaveLength(2)
-    expect(messages[0]?.role).toBe('system')
-    expect(messages[0]?.content).toContain('CoAuthor')
-    expect(messages[1]?.role).toBe('user')
-    expect(messages[1]?.content).toContain('Test Task')
-    expect(messages[1]?.content).toContain('Do something useful')
+    expect(content).toContain('# Task: Test Task')
+    expect(content).toContain('Do something useful')
 
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('buildTaskMessages includes file range content when artifactRefs provided', async () => {
+  test('buildUserTaskContent includes file range content when artifactRefs provided', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const testDir = join(dir, 'docs')
     mkdirSync(testDir, { recursive: true })
@@ -76,10 +105,8 @@ describe('ContextBuilder', () => {
       ]
     })
 
-    const messages = await builder.buildTaskMessages(task)
+    const userContent = await builder.buildUserTaskContent(task)
 
-    expect(messages).toHaveLength(2)
-    const userContent = messages[1]?.content ?? ''
     expect(userContent).toContain('Referenced Files')
     expect(userContent).toContain('## File: docs/test.tex (L2-L4)')
     expect(userContent).toContain('Line 2: Background')
@@ -94,7 +121,7 @@ describe('ContextBuilder', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('buildTaskMessages handles multiple artifact refs', async () => {
+  test('buildUserTaskContent handles multiple artifact refs', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     mkdirSync(dir, { recursive: true })
 
@@ -113,8 +140,7 @@ describe('ContextBuilder', () => {
       ]
     })
 
-    const messages = await builder.buildTaskMessages(task)
-    const userContent = messages[1]?.content ?? ''
+    const userContent = await builder.buildUserTaskContent(task)
 
     expect(userContent).toContain('## File: file1.tex (L1-L2)')
     expect(userContent).toContain('Content of file 1')
@@ -124,7 +150,7 @@ describe('ContextBuilder', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('buildTaskMessages skips non-file_range artifact kinds', async () => {
+  test('buildUserTaskContent skips non-file_range artifact kinds', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
@@ -137,8 +163,7 @@ describe('ContextBuilder', () => {
       ]
     })
 
-    const messages = await builder.buildTaskMessages(task)
-    const userContent = messages[1]?.content ?? ''
+    const userContent = await builder.buildUserTaskContent(task)
 
     expect(userContent).toContain('Referenced Files')
     expect(userContent).toContain('## Ref: asset')
@@ -147,7 +172,7 @@ describe('ContextBuilder', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('buildTaskMessages works with task without artifactRefs', async () => {
+  test('buildUserTaskContent works with task without artifactRefs', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
@@ -158,8 +183,7 @@ describe('ContextBuilder', () => {
       artifactRefs: undefined
     })
 
-    const messages = await builder.buildTaskMessages(task)
-    const userContent = messages[1]?.content ?? ''
+    const userContent = await builder.buildUserTaskContent(task)
 
     expect(userContent).toContain('# Task: General task')
     expect(userContent).toContain('No specific file')
@@ -182,7 +206,7 @@ describe('ContextBuilder', () => {
       intent: '',
       artifactRefs: [{ kind: 'file_range', path: 'boundary.tex', lineStart: 1, lineEnd: 1 }]
     })
-    let userContent = (await builder.buildTaskMessages(task))[1]?.content ?? ''
+    let userContent = await builder.buildUserTaskContent(task)
     expect(userContent).toMatch(/\s+1\|L1/)
     expect(userContent).not.toContain('2|L2')
 
@@ -190,7 +214,7 @@ describe('ContextBuilder', () => {
     task = createTestTask({
       artifactRefs: [{ kind: 'file_range', path: 'boundary.tex', lineStart: 5, lineEnd: 5 }]
     })
-    userContent = (await builder.buildTaskMessages(task))[1]?.content ?? ''
+    userContent = await builder.buildUserTaskContent(task)
     expect(userContent).toMatch(/\s+5\|L5/)
     expect(userContent).not.toContain('4|L4')
 
@@ -198,7 +222,7 @@ describe('ContextBuilder', () => {
     task = createTestTask({
       artifactRefs: [{ kind: 'file_range', path: 'boundary.tex', lineStart: 4, lineEnd: 100 }]
     })
-    userContent = (await builder.buildTaskMessages(task))[1]?.content ?? ''
+    userContent = await builder.buildUserTaskContent(task)
     expect(userContent).toMatch(/\s+4\|L4/)
     expect(userContent).toMatch(/\s+5\|L5/)
 

@@ -3,6 +3,8 @@ import type { TaskView } from '../application/taskService.js'
 import type { ContextBuilder } from '../application/contextBuilder.js'
 import type { LLMMessage } from '../domain/ports/llmClient.js'
 import type { ToolCallRequest } from '../domain/ports/tool.js'
+import { DEFAULT_COAUTHOR_SYSTEM_PROMPT } from './templates.js'
+import type { ContextData } from '../domain/context.js'
 
 // ============================================================================
 // Default CoAuthor Agent - Tool Use Workflow
@@ -27,10 +29,12 @@ export class DefaultCoAuthorAgent implements Agent {
 
   readonly #contextBuilder: ContextBuilder
   readonly #maxIterations: number
+  readonly #systemPromptTemplate: string
 
-  constructor(opts: { contextBuilder: ContextBuilder; maxIterations?: number }) {
+  constructor(opts: { contextBuilder: ContextBuilder; maxIterations?: number; systemPromptTemplate?: string }) {
     this.#contextBuilder = opts.contextBuilder
     this.#maxIterations = opts.maxIterations ?? 50
+    this.#systemPromptTemplate = opts.systemPromptTemplate ?? DEFAULT_COAUTHOR_SYSTEM_PROMPT
   }
 
   async *run(task: TaskView, context: AgentContext): AsyncGenerator<AgentOutput> {
@@ -46,8 +50,16 @@ export class DefaultCoAuthorAgent implements Agent {
   async *#toolLoop(task: TaskView, context: AgentContext): AsyncGenerator<AgentOutput> {
     // Seed conversation if fresh
     if (context.conversationHistory.length === 0) {
-      await context.persistMessage({ role: 'system', content: await this.#contextBuilder.buildSystemPrompt() })
-      await context.persistMessage({ role: 'user', content: this.#buildTaskPrompt(task) })
+      // 1. System Prompt (rendered from template + context data)
+      const contextData = await this.#contextBuilder.getContextData()
+      const systemContent = this.#renderSystemPrompt(contextData)
+      await context.persistMessage({ role: 'system', content: systemContent })
+
+      // 2. User Task (content from builder + specific instructions)
+      const taskContent = await this.#contextBuilder.buildUserTaskContent(task)
+      const userContent = `${taskContent}\n\nPlease analyze this task and use the available tools to complete it. When done, provide a summary of what was accomplished.`
+      
+      await context.persistMessage({ role: 'user', content: userContent })
     }
 
     let iteration = 0
@@ -120,28 +132,31 @@ export class DefaultCoAuthorAgent implements Agent {
     yield { kind: 'tool_call', call: toolCall }
   }
 
-  // ---------- prompt building ----------
+  // ---------- prompt rendering ----------
 
-  #buildTaskPrompt(task: TaskView): string {
-    let prompt = `# Task\n\n**Title:** ${task.title}\n\n`
+  #renderSystemPrompt(data: ContextData): string {
+    const parts: string[] = []
 
-    if (task.intent) {
-      prompt += `**Intent:**\n${task.intent}\n\n`
+    // Replace environment placeholders
+    const rendered = this.#systemPromptTemplate
+      .replace('{{WORKING_DIRECTORY}}', data.env.workingDirectory)
+      .replace('{{PLATFORM}}', data.env.platform)
+      .replace('{{DATE}}', data.env.date)
+    
+    parts.push(rendered)
+
+    // Append project-specific context
+    if (data.project.outline) {
+      parts.push(`\n## Project Outline\n${data.project.outline}`)
+    }
+    if (data.project.brief) {
+      parts.push(`\n## Project Brief\n${data.project.brief}`)
+    }
+    if (data.project.style) {
+      parts.push(`\n## Style Guide\n${data.project.style}`)
     }
 
-    if (task.artifactRefs && task.artifactRefs.length > 0) {
-      prompt += `**Referenced Files:**\n`
-      for (const ref of task.artifactRefs) {
-        if (typeof ref === 'object' && 'path' in ref) {
-          prompt += `- ${ref.path}\n`
-        } else {
-          prompt += `- ${JSON.stringify(ref)}\n`
-        }
-      }
-      prompt += '\n'
-    }
-
-    prompt += `Please analyze this task and use the available tools to complete it. When done, provide a summary of what was accomplished.`
-    return prompt
+    return parts.join('\n')
   }
 }
+
