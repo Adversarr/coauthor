@@ -749,6 +749,84 @@ Each finding below includes:
 - “Pause = abort” is responsive but requires careful resume behavior.
 - “Pause = cooperative” is simpler but must ensure no unbounded blocking calls.
 
+## 5. Investigation Results (2025-02-09)
+
+This section documents the results of a comprehensive investigation into each finding's current status. For details, see the inline comments in the source code (e.g., `// CC-001`, `// RD-002`).
+
+### Summary Table
+
+| Finding | Status | Key Changes |
+|---------|--------|-------------|
+| [CC-001] | **RESOLVED** | Per-task `AsyncMutex` in `RuntimeManager` serializes all handlers per `taskId` |
+| [CC-002] | **MITIGATED** | External serialization via `RuntimeManager`; internal guards still minimal |
+| [CC-003] | **RESOLVED** | State machine relaxed + graceful degradation + per-task locks |
+| [CC-004] | **RESOLVED** | `TaskInstructionAdded` blocked from `paused`/`canceled` states |
+| [CC-005] | **PARTIALLY MITIGATED** | Per-task locks reduce impact; hot observable architecture unchanged |
+| [CC-006] | **RESOLVED** | Per-task `AsyncMutex` eliminates overlapping handler races |
+| [CC-007] | **RESOLVED** | `executeTask()` now uses per-task lock for serialization |
+| [CC-008] | **RESOLVED** | Outer `#isExecuting` flag spans entire drain cycle |
+| [RD-001] | **RESOLVED** | Pre-subscription, catch-up check, and timeout added |
+| [RD-002] | **RESOLVED** | Both `onPause()` and `onCancel()` now abort via `AbortController` |
+| [RD-003] | **RESOLVED** | `canceled` → `TaskStarted` transition now returns `false` |
+| [RD-004] | **RESOLVED** | Tool now requires `RuntimeManager` to be running; no implicit start |
+| [SA-001] | **PARTIALLY RESOLVED** | `OutputHandler` checks binding; `ToolExecutor` still has redundant check |
+| [SA-002] | **RESOLVED** | Three-layer validation (service, runtime, projection) prevents stale responses |
+| [PR-001] | **RESOLVED** | `runCommand` now handles `AbortSignal` with early check and `SIGTERM` |
+| [PR-002] | **PARTIALLY VALID** | Cycle detection added; expensive O(depth × projectionCost) remains |
+| [PR-003] | **PARTIALLY RESOLVED** | Executor enforces pre-execution abort check; tools must still cooperate mid-flight |
+| [DC-001] | **STILL VALID** | Architectural inconsistency: `RuntimeManager` claims single-subscriber but tool subscribes directly |
+| [DC-002] | **RESOLVED** | Both `onPause()` and `onCancel()` now abort via `AbortController` |
+
+### Detailed Investigation Notes
+
+#### Concurrency and Correctness ([CC-001] through [CC-008])
+
+**[CC-001]** The `RuntimeManager` now maintains a `Map<string, AsyncMutex>` for per-task locks. All event handlers are wrapped in `#withTaskLock()`, ensuring that for any given `taskId`, only one handler runs at a time. Tests in `tests/concurrency/perTaskSerialization.test.ts` verify this.
+
+**[CC-002]** While `execute()` and `resume()` still lack internal single-flight guards, the per-task lock in `RuntimeManager` provides external serialization. The JSDoc comments explicitly state that the `#isExecuting` flag is a "safety net," with the per-task lock being the primary guard.
+
+**[CC-003]** Multiple fixes: (1) `TaskFailed` is now allowed from `paused` state, (2) The runtime gracefully breaks the loop on concurrent state changes instead of throwing, (3) The `#runExecute()` helper catches and handles transition errors gracefully, (4) Per-task locks prevent overlapping handlers.
+
+**[CC-004]** The `canTransition()` method now explicitly blocks `TaskInstructionAdded` from `paused` and `canceled` states. The projection reducer also preserves this guard. Tests verify that adding instructions to paused/canceled tasks throws errors.
+
+**[CC-005]** The EventStore still uses synchronous hot observable emission. However, per-task locks in `RuntimeManager` serialize event handlers, reducing the risk of re-entrancy issues. The architectural concern remains, but the practical risk is mitigated.
+
+**[CC-006]** The per-task `AsyncMutex` eliminates the root cause: overlapping handlers for the same task. The drain logic complexity remains, but it cannot be triggered concurrently for the same task.
+
+**[CC-007]** The `executeTask()` method now uses `lock.runExclusive()` to serialize manual execution with event-driven execution. The comment explicitly references CC-007.
+
+**[CC-008]** The `#executeAndDrainQueuedInstructions()` method sets `#isExecuting = true` at the outer level before the loop, restores it after each inner `execute()` call, and only resets it to `false` in the `finally` block after the entire drain cycle completes.
+
+#### Reliability and Deadlocks ([RD-001] through [RD-004])
+
+**[RD-001]** Three-layer defense: (1) Subscribe to terminal events BEFORE creating child task, (2) Catch-up check reads child state after creation, (3) Configurable timeout prevents indefinite blocking. Tests verify fast-child scenario.
+
+**[RD-002]** Both `onPause()` and `onCancel()` now call `this.#abortController?.abort()`. The subtask tool catches `AbortError` and cascades cancel to child. Comment explicitly references RD-002.
+
+**[RD-003]** The `canTransition()` method now returns `false` for any transition from `canceled` state. Comment states: "To re-run, create a new task. This prevents zombie restarts." Also, drain loop exits early for canceled tasks, and `TaskCanceled` handler cleans up runtime.
+
+**[RD-004]** The subtask tool now checks `runtimeManager.isRunning` and returns an error if not running. The comment states: "Lifecycle ownership belongs to the application layer, not tools." No implicit start; requires explicit `runtimeManager.start()` at application initialization.
+
+#### Security and Authorization ([SA-001] through [SA-002])
+
+**[SA-001]** The `OutputHandler` correctly implements binding check: `confirmedToolCallId && confirmedToolCallId !== output.call.toolCallId`. The `displayBuilder` embeds `toolCallId` in metadata. However, `ToolExecutor` has a redundant, less strict check that only validates `confirmedInteractionId` presence. Recommendation: Align `ToolExecutor` with `OutputHandler` or remove redundant check.
+
+**[SA-002]** Three-layer validation: (1) `InteractionService.respondToInteraction()` validates against pending interaction before emitting event, (2) `RuntimeManager` double-checks interaction ID when handling `UserInteractionResponded`, (3) Projection reducer only clears pending interaction state when response matches. Tests verify stale/duplicate response rejection.
+
+#### Performance and Resource Control ([PR-001] through [PR-003])
+
+**[PR-001]** The `runCommand` tool now has explicit early abort check (`ctx.signal?.aborted`) and SIGTERM handling on abort (`child.kill('SIGTERM')`). Comment references PR-001.
+
+**[PR-002]** The `computeDepth` function includes cycle detection using a `visited` Set (returns `Infinity` if cycle detected). However, each `getTask()` call triggers a full projection rebuild via `listTasks()`, resulting in O(depth × projectionCost) complexity. For depth 10, this performs 10 full projections. Recommendation: Cache task views in a Map for O(1) lookup during depth computation.
+
+**[PR-003]** The `toolExecutor.ts` enforces a pre-execution abort check (`ctx.signal?.aborted`). However, once execution begins, tools must still cooperatively check `ctx.signal` to respond to cancellation mid-flight. The `runCommand` tool demonstrates this pattern.
+
+#### Documentation and Consistency Gaps ([DC-001] through [DC-002])
+
+**[DC-001]** Architectural inconsistency: `RuntimeManager` comments claim "single subscriber to `EventStore.events$`" but `createSubtaskTool` subscribes directly. Functional but breaks encapsulation. Recommendation: Either route subtask waiting through `RuntimeManager` or update documentation to reflect multiple subscribers.
+
+**[DC-002]** Both `onPause()` and `onCancel()` now abort via `AbortController`. Comment at `runtime.ts:L57-62` explicitly documents: "Controller for aborting blocked tool calls on cancel AND pause. Both pause and cancel now abort via this controller so that long-running tools (e.g. create_subtask) unblock promptly (RD-002)."
+
 ## 5. Recommended Priorities (Non-Implementation)
 
 1. **Per-task serialization**: enforce single-flight semantics per `taskId` to eliminate most timing-dependent failures.
