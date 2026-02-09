@@ -25,69 +25,31 @@ describe('listFilesTool', () => {
     }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
 
     expect(result.isError).toBe(false)
-    const entries = (result.output as any).entries
-    expect(entries).toContain('file1.txt')
-    expect(entries).toContain('file2.txt')
-    expect(entries).toContain('subdir/')
-    expect(entries).toHaveLength(3)
+    const output = result.output as any
+    expect(output.count).toBe(3)
+    expect(output.content).toContain('file1.txt')
+    expect(output.content).toContain('file2.txt')
+    expect(output.content).toContain('[DIR] subdir')
   })
 
-  it('should list files recursively', async () => {
+  it('should respect ignore patterns', async () => {
     vol.fromJSON({
-      'src/index.ts': 'content'
-    }, baseDir)
-    
-    const result = await listFilesTool.execute({
-      path: '.',
-      recursive: true
-    }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
-
-    expect(result.isError).toBe(false)
-    const entries = (result.output as any).entries
-    expect(entries).toContain('src/')
-    expect(entries).toContain('src/index.ts')
-  })
-
-  it('should respect maxDepth', async () => {
-    vol.fromJSON({
-      'a/b/c/d.txt': 'content'
+      'file1.txt': 'content',
+      'ignore.me': 'content',
+      'subdir/keep': 'content'
     }, baseDir)
 
     const result = await listFilesTool.execute({
       path: '.',
-      recursive: true,
-      maxDepth: 2
+      ignore: ['*.me']
     }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
 
     expect(result.isError).toBe(false)
-    const entries = (result.output as any).entries
-    expect(entries).toContain('a/')
-    expect(entries).toContain('a/b/')
-    // depth 0: ., depth 1: a/, depth 2: a/b/
-    // if maxDepth is 2, it lists up to depth 1 and maybe the children of depth 1?
-    // Implementation of listFilesTool handles this. 
-    // Previous test said: 'a/b/c/' is depth 2 (relative to root? a is 1, b is 2, c is 3?)
-    // In fs setup: a/b/c/d.txt
-    // entries: a/, a/b/, a/b/c/
-    
-    expect(entries).toContain('a/b/c/')
-    expect(entries).not.toContain('a/b/c/d.txt')
-  })
-
-  it('should filter hidden files and ignored dirs', async () => {
-    vol.fromJSON({
-      '.hidden': 'content',
-      'node_modules/pkg.json': '{}'
-    }, baseDir)
-
-    const result = await listFilesTool.execute({
-      path: '.'
-    }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
-
-    expect(result.isError).toBe(false)
-    const entries = (result.output as any).entries
-    expect(entries).not.toContain('.hidden')
-    expect(entries).not.toContain('node_modules/')
+    const output = result.output as any
+    expect(output.count).toBe(2) // file1.txt, subdir/
+    expect(output.content).toContain('file1.txt')
+    expect(output.content).not.toContain('ignore.me')
+    expect(output.ignored).toBe(1)
   })
 
   it('should handle non-existent path', async () => {

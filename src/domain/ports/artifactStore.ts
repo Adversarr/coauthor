@@ -12,6 +12,7 @@ export interface ArtifactStore {
   exists(path: string): Promise<boolean>
   mkdir(path: string): Promise<void>
   listDir(path: string): Promise<string[]>
-  stat(path: string): Promise<{ isDirectory: boolean } | null>
+  glob(pattern: string, options?: { ignore?: string[] }): Promise<string[]>
+  stat(path: string): Promise<{ isDirectory: boolean; size: number; mtime: Date } | null>
 }
 

@@ -1,6 +1,7 @@
 import { readFile, writeFile, readdir, mkdir, access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { resolve, sep } from 'node:path'
+import { glob } from 'glob'
 import type { ArtifactStore } from '../domain/ports/artifactStore.js'
 
 export class FsArtifactStore implements ArtifactStore {
@@ -65,12 +66,28 @@ export class FsArtifactStore implements ArtifactStore {
     await mkdir(this._resolve(path), { recursive: true })
   }
 
-  async stat(path: string): Promise<{ isDirectory: boolean } | null> {
+  async glob(pattern: string, options?: { ignore?: string[] }): Promise<string[]> {
+    // pattern is relative to baseDir
+    // we use glob package which supports cwd
+    // return paths relative to baseDir (as glob does by default when cwd is set)
+    const matches = await glob(pattern, { 
+      cwd: this.#baseDir,
+      nodir: false,
+      ignore: options?.ignore
+    })
+    return matches
+  }
+
+  async stat(path: string): Promise<{ isDirectory: boolean; size: number; mtime: Date } | null> {
     // Validate path first - throws if access denied
     const resolved = this._resolve(path)
     try {
       const s = await stat(resolved)
-      return { isDirectory: s.isDirectory() }
+      return { 
+        isDirectory: s.isDirectory(),
+        size: s.size,
+        mtime: s.mtime
+      }
     } catch {
       return null
     }

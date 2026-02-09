@@ -1,5 +1,6 @@
 import { fs } from 'memfs'
 import { resolve, sep } from 'node:path'
+import { glob } from 'glob'
 import type { ArtifactStore } from '../domain/ports/artifactStore.js'
 
 export class MemFsArtifactStore implements ArtifactStore {
@@ -62,11 +63,27 @@ export class MemFsArtifactStore implements ArtifactStore {
     await fs.promises.mkdir(resolved, { recursive: true })
   }
 
-  async stat(path: string): Promise<{ isDirectory: boolean } | null> {
+  async glob(pattern: string, options?: { ignore?: string[] }): Promise<string[]> {
+    // memfs volume is at this.#baseDir usually if configured right, or root.
+    // memfs.fs usually works on a global volume or we need to pass the volume?
+    // glob accepts 'fs' option.
+    const matches = await glob(pattern, {
+      cwd: this.#baseDir,
+      fs: fs as any, // Cast to any because types might mismatch slightly but runtime is compatible
+      ignore: options?.ignore
+    })
+    return matches
+  }
+
+  async stat(path: string): Promise<{ isDirectory: boolean; size: number; mtime: Date } | null> {
     const resolved = this._resolve(path)
     try {
       const s = await fs.promises.stat(resolved)
-      return { isDirectory: s.isDirectory() }
+      return { 
+        isDirectory: s.isDirectory(),
+        size: Number(s.size),
+        mtime: new Date(s.mtime)
+      }
     } catch {
       return null
     }

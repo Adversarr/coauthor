@@ -9,7 +9,7 @@
  * and the tool returns an error result indicating cancellation.
  */
 
-import { exec, type ChildProcess } from 'node:child_process'
+import { exec, spawn, type ChildProcess } from 'node:child_process'
 import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
 import { nanoid } from 'nanoid'
 
@@ -28,6 +28,10 @@ export const runCommandTool: Tool = {
       timeout: {
         type: 'number',
         description: 'Optional: Timeout in milliseconds (default: 30000)'
+      },
+      isBackground: {
+        type: 'boolean',
+        description: 'Optional: If true, run command in background and return PID immediately (default: false)'
       }
     },
     required: ['command']
@@ -38,6 +42,7 @@ export const runCommandTool: Tool = {
     const toolCallId = `tool_${nanoid(12)}`
     const command = args.command as string
     const timeout = (args.timeout as number) ?? 30000
+    const isBackground = (args.isBackground as boolean) ?? false
 
     // Early abort check (PR-001)
     if (ctx.signal?.aborted) {
@@ -49,6 +54,32 @@ export const runCommandTool: Tool = {
     }
 
     try {
+      if (isBackground) {
+        // Run in background using spawn
+        // We use 'sh -c' (or cmd on win) to execute string command
+        const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+        const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command]
+        
+        const child = spawn(shell, shellArgs, {
+          cwd: ctx.baseDir,
+          detached: true,
+          stdio: 'ignore' // Ignore output for background tasks? Or redirect? Reference gemini-cli says "Output hidden"
+        })
+        
+        child.unref()
+
+        return {
+          toolCallId,
+          output: {
+            pid: child.pid,
+            command,
+            message: 'Command started in background'
+          },
+          isError: false
+        }
+      }
+
+      // Foreground execution using exec
       const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
         const child: ChildProcess = exec(command, {
           cwd: ctx.baseDir,

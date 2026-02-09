@@ -10,7 +10,7 @@ import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
 
 export const readFileTool: Tool = {
   name: 'readFile',
-  description: 'Read the content of a file. Returns the file content as text.',
+  description: 'Read the content of a file. Returns the file content as text. Supports paging via offset and limit.',
   parameters: {
     type: 'object',
     properties: {
@@ -18,13 +18,13 @@ export const readFileTool: Tool = {
         type: 'string',
         description: 'Relative path to the file from workspace root'
       },
-      startLine: {
+      offset: {
         type: 'number',
-        description: 'Optional: Start line number (1-based, inclusive)'
+        description: 'Optional: 0-based line number to start reading from. (default: 0)'
       },
-      endLine: {
+      limit: {
         type: 'number',
-        description: 'Optional: End line number (1-based, inclusive)'
+        description: 'Optional: Maximum number of lines to read.'
       }
     },
     required: ['path']
@@ -34,29 +34,55 @@ export const readFileTool: Tool = {
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const toolCallId = `tool_${nanoid(12)}`
     const path = args.path as string
-    const startLine = args.startLine as number | undefined
-    const endLine = args.endLine as number | undefined
+    const offset = (args.offset as number) ?? 0
+    const limit = args.limit as number | undefined
 
     try {
-      // We read the full file to calculate total line count and handle slicing manually
-      // This preserves the behavior of reporting total line count in the output
+      // Read full file to get total count
       const content = await ctx.artifactStore.readFile(path)
+      const lines = content.split('\n')
+      const totalLines = lines.length
 
-      let result: string
-      if (startLine !== undefined && endLine !== undefined) {
-        const lines = content.split('\n')
-        const startIdx = Math.max(0, startLine - 1)
-        const endIdx = Math.min(lines.length - 1, endLine - 1)
-        const slice = lines.slice(startIdx, endIdx + 1)
-        const numbered = slice.map((line, i) => `${String(startLine + i).padStart(4, ' ')}|${line}`)
-        result = numbered.join('\n')
-      } else {
-        result = content
+      const startIdx = Math.max(0, offset)
+      let endIdx = lines.length
+      if (limit !== undefined) {
+        endIdx = Math.min(lines.length, startIdx + limit)
       }
+
+      const slice = lines.slice(startIdx, endIdx)
+      const isTruncated = slice.length < totalLines
+
+      let outputContent = slice.join('\n')
+      
+      // If truncated or paged, add context header
+      // Reference uses: "Status: Showing lines X-Y of Z total lines."
+      let status = ''
+      if (isTruncated || offset > 0) {
+        const shownCount = slice.length
+        const rangeEnd = startIdx + shownCount
+        status = `Status: Showing lines ${startIdx + 1}-${rangeEnd} of ${totalLines} total lines.`
+        
+        // Add line numbers for clarity when paged
+        const numbered = slice.map((line, i) => `${String(startIdx + i + 1).padStart(4, ' ')} | ${line}`)
+        outputContent = numbered.join('\n')
+
+        // Add hint for next page
+        if (rangeEnd < totalLines) {
+           status += `\nAction: To read more, use offset: ${rangeEnd}`
+        }
+      }
+
+      const finalOutput = status ? `${status}\n\n${outputContent}` : outputContent
 
       return {
         toolCallId,
-        output: { content: result, path, lineCount: content.split('\n').length },
+        output: { 
+          content: finalOutput, 
+          path, 
+          lineCount: totalLines,
+          linesShown: slice.length,
+          offset
+        },
         isError: false
       }
     } catch (error) {

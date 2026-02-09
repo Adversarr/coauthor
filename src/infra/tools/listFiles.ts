@@ -9,10 +9,11 @@ import { join } from 'node:path'
 import { nanoid } from 'nanoid'
 import type { Tool, ToolContext, ToolResult } from '../../domain/ports/tool.js'
 import type { ArtifactStore } from '../../domain/ports/artifactStore.js'
+import { minimatch } from 'minimatch'
 
 export const listFilesTool: Tool = {
   name: 'listFiles',
-  description: 'List files and directories in a given path. Returns names with / suffix for directories.',
+  description: 'List files and directories in a given path. Returns names with [DIR] prefix for directories, size, and modification time.',
   parameters: {
     type: 'object',
     properties: {
@@ -20,13 +21,10 @@ export const listFilesTool: Tool = {
         type: 'string',
         description: 'Relative path to the directory from workspace root. Use "." for root.'
       },
-      recursive: {
-        type: 'boolean',
-        description: 'Optional: If true, list files recursively (default: false)'
-      },
-      maxDepth: {
-        type: 'number',
-        description: 'Optional: Maximum depth for recursive listing (default: 3)'
+      ignore: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional: List of glob patterns to ignore'
       }
     },
     required: ['path']
@@ -36,15 +34,65 @@ export const listFilesTool: Tool = {
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const toolCallId = `tool_${nanoid(12)}`
     const path = args.path as string
-    const recursive = (args.recursive as boolean) ?? false
-    const maxDepth = (args.maxDepth as number) ?? 3
+    const ignore = (args.ignore as string[]) ?? []
 
     try {
-      const entries = await listDirectory(path, ctx.artifactStore, recursive, maxDepth, 0)
+      // Validate path exists and is directory
+      const stat = await ctx.artifactStore.stat(path)
+      if (!stat) {
+        throw new Error(`Directory not found: ${path}`)
+      }
+      if (!stat.isDirectory) {
+        throw new Error(`Path is not a directory: ${path}`)
+      }
+
+      const items = await ctx.artifactStore.listDir(path)
+      
+      const entries: string[] = []
+      let ignoredCount = 0
+
+      for (const item of items) {
+        // Skip common ignored directories hardcoded if not specified? 
+        // Better to rely on passed ignore patterns or defaults if any.
+        // Let's use minimatch for ignore patterns.
+        if (shouldIgnore(item, ignore)) {
+          ignoredCount++
+          continue
+        }
+
+        const itemPath = join(path, item)
+        try {
+          const itemStat = await ctx.artifactStore.stat(itemPath)
+          if (itemStat) {
+             const prefix = itemStat.isDirectory ? '[DIR] ' : ''
+             const size = itemStat.isDirectory ? '' : ` (${formatSize(itemStat.size)})`
+             // Format date: YYYY-MM-DD HH:MM
+             const date = itemStat.mtime.toISOString().replace('T', ' ').slice(0, 16)
+             entries.push(`${prefix}${item}${size} - ${date}`)
+          }
+        } catch {
+          // Skip items we can't stat
+        }
+      }
+
+      // Sort: directories first, then alphabetical
+      entries.sort((a, b) => {
+        const aIsDir = a.startsWith('[DIR]')
+        const bIsDir = b.startsWith('[DIR]')
+        if (aIsDir && !bIsDir) return -1
+        if (!aIsDir && bIsDir) return 1
+        return a.localeCompare(b)
+      })
+
+      const content = entries.join('\n')
+      let output = `Directory listing for ${path}:\n${content}`
+      if (ignoredCount > 0) {
+        output += `\n\n(${ignoredCount} ignored)`
+      }
 
       return {
         toolCallId,
-        output: { path, entries, count: entries.length },
+        output: { content: output, count: entries.length, ignored: ignoredCount },
         isError: false
       }
     } catch (error) {
@@ -57,43 +105,13 @@ export const listFilesTool: Tool = {
   }
 }
 
-async function listDirectory(
-  currentPath: string,
-  store: ArtifactStore,
-  recursive: boolean,
-  maxDepth: number,
-  currentDepth: number
-): Promise<string[]> {
-  const entries: string[] = []
-  
-  // listDir returns file/directory names, not full paths
-  const items = await store.listDir(currentPath)
+function shouldIgnore(name: string, patterns: string[]): boolean {
+  if (patterns.length === 0) return false
+  return patterns.some(pattern => minimatch(name, pattern))
+}
 
-  for (const item of items) {
-    // Skip hidden files and common ignored directories
-    if (item.startsWith('.') || item === 'node_modules' || item === '__pycache__') {
-      continue
-    }
-
-    // Construct relative path for the item
-    // Note: join handles '.' correctly (join('.', 'foo') => 'foo')
-    const itemPath = join(currentPath, item)
-
-    try {
-      const itemStat = await store.stat(itemPath)
-      
-      if (itemStat && itemStat.isDirectory) {
-        entries.push(itemPath + '/')
-        if (recursive && currentDepth < maxDepth) {
-          entries.push(...await listDirectory(itemPath, store, recursive, maxDepth, currentDepth + 1))
-        }
-      } else {
-        entries.push(itemPath)
-      }
-    } catch {
-      // Skip items we can't stat (e.g. broken symlinks or permission issues)
-    }
-  }
-
-  return entries
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }

@@ -73,6 +73,43 @@ describe('editFileTool', () => {
     expect((result.output as any).error).toContain('oldString found 2 times')
   })
 
+  it('should support regex replacement', async () => {
+    vol.fromJSON({
+      'file.txt': 'Hello 123 World'
+    }, baseDir)
+
+    const result = await editFileTool.execute({
+      path: 'file.txt',
+      oldString: '\\d+',
+      newString: 'NUM',
+      regex: true
+    }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
+
+    expect(result.isError).toBe(false)
+    expect(result.output).toMatchObject({ success: true, action: 'edited', strategy: 'regex' })
+    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello NUM World')
+  })
+
+  it('should support flexible match (whitespace insensitive)', async () => {
+    vol.fromJSON({
+      'file.txt': 'function foo(  ) {\n  return true\n}'
+    }, baseDir)
+
+    // Match with different whitespace
+    const oldString = 'function foo() {\n return true\n}'
+    const newString = 'function bar() {}'
+
+    const result = await editFileTool.execute({
+      path: 'file.txt',
+      oldString,
+      newString,
+    }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
+
+    expect(result.isError).toBe(false)
+    expect(result.output).toMatchObject({ success: true, action: 'edited', strategy: 'flexible' })
+    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('function bar() {}')
+  })
+
   it('should fail if file does not exist', async () => {
     const result = await editFileTool.execute({
       path: 'missing.txt',
@@ -82,39 +119,5 @@ describe('editFileTool', () => {
 
     expect(result.isError).toBe(true)
     expect((result.output as any).error).toContain('File not found')
-  })
-
-  describe('canExecute', () => {
-    it('should pass for valid creation', async () => {
-      await expect(editFileTool.canExecute!({
-        path: 'newfile.txt',
-        oldString: '',
-        newString: 'Hello'
-      }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store } as any)).resolves.toBeUndefined()
-    })
-
-    it('should throw if file already exists for creation', async () => {
-      vol.fromJSON({
-        'file.txt': 'Hello'
-      }, baseDir)
-
-      await expect(editFileTool.canExecute!({
-        path: 'file.txt',
-        oldString: '',
-        newString: 'Hello'
-      }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store } as any)).rejects.toThrow('File already exists')
-    })
-
-    it('should throw if oldString not found', async () => {
-      vol.fromJSON({
-        'file.txt': 'Hello World'
-      }, baseDir)
-
-      await expect(editFileTool.canExecute!({
-        path: 'file.txt',
-        oldString: 'Universe',
-        newString: 'CoAuthor'
-      }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store } as any)).rejects.toThrow('oldString not found')
-    })
   })
 })

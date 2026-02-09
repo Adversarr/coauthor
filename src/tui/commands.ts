@@ -1,6 +1,7 @@
 import { readFile, access } from 'node:fs/promises'
 import type { LLMMessage } from '../domain/ports/llmClient.js'
 import type { App } from '../app/createApp.js'
+import { formatToolOutput } from './utils.js'
 
 export type ReplayEntry = {
   variant: 'plain' | 'markdown'
@@ -10,9 +11,6 @@ export type ReplayEntry = {
   dim?: boolean
   bold?: boolean
 }
-
-const TOOL_OUTPUT_MAX = 200
-const TOOL_OUTPUT_SUFFIX = '...(truncated)'
 
 export type CommandContext = {
   app: App
@@ -333,34 +331,31 @@ function buildReplayEntries(message: LLMMessage): ReplayEntry[] {
   } else if (message.role === 'tool') {
     const toolName = message.toolName ?? 'unknown'
     const content = message.content ?? ''
-    const formatted = formatToolContent(content)
-    const prefix = formatted.isError ? ' ✖ ' : ' ✓ '
-    const color = formatted.isError ? 'red' : 'gray'
-    const bold = formatted.isError
+    const parsed = tryParseJson(content)
+    
+    // Determine if error
+    let isError = false
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as Record<string, unknown>
+      isError = record.isError === true || typeof record.error === 'string'
+    }
+
+    const display = formatToolOutput(toolName, parsed)
+    const prefix = isError ? ' ✖ ' : ' ✓ '
+    const color = isError ? 'red' : 'gray'
+    const bold = isError
+
     entries.push({
       variant: 'plain',
-      content: `${toolName} result: ${formatted.display}`,
+      content: `${toolName} result: ${display}`,
       prefix,
       color,
       bold,
-      dim: !formatted.isError
+      dim: !isError
     })
   }
 
   return entries
-}
-
-function formatToolContent(content: string): { display: string; isError: boolean } {
-  const parsed = tryParseJson(content)
-  if (typeof parsed === 'string') {
-    return { display: truncateLongString(parsed), isError: false }
-  }
-  if (parsed && typeof parsed === 'object') {
-    const record = parsed as Record<string, unknown>
-    const isError = record.isError === true || typeof record.error === 'string'
-    return { display: JSON.stringify(parsed), isError }
-  }
-  return { display: String(parsed), isError: false }
 }
 
 function tryParseJson(value: string): unknown {
@@ -369,12 +364,6 @@ function tryParseJson(value: string): unknown {
   } catch {
     return value
   }
-}
-
-function truncateLongString(value: string): string {
-  if (value.length <= TOOL_OUTPUT_MAX) return value
-  const sliceLength = Math.max(0, TOOL_OUTPUT_MAX - TOOL_OUTPUT_SUFFIX.length)
-  return value.slice(0, sliceLength) + TOOL_OUTPUT_SUFFIX
 }
 
 async function readConversationRawLines(path: string): Promise<string[]> {

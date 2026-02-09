@@ -183,18 +183,32 @@ function truncateLongString(value: string, maxLength: number): string {
   return value.slice(0, sliceLength) + suffix
 }
 
-function formatToolPayload(value: unknown, maxLength: number): string {
+export function formatToolPayload(value: unknown, maxLength: number): string {
   if (typeof value === 'string') {
     return truncateLongString(value, maxLength)
   }
-  const raw = JSON.stringify(value)
-  return typeof raw === 'string' ? raw : String(value)
+  try {
+    // Try pretty print for small objects
+    const pretty = JSON.stringify(value, null, 2)
+    if (pretty.length <= maxLength) return pretty
+    // Fallback to compact JSON for larger objects
+    const raw = JSON.stringify(value)
+    if (raw.length <= maxLength) return raw
+    return truncateLongString(raw, maxLength)
+  } catch {
+    return String(value)
+  }
 }
 
-const toolFormatters: Record<string, (output: any) => string | null> = {
+export const toolFormatters: Record<string, (output: any) => string | null> = {
   readFile: (output: any) => {
     if (output && typeof output.path === 'string' && typeof output.lineCount === 'number') {
       return `Read ${output.path} (${output.lineCount} lines)`
+    }
+    // Handle direct string output (legacy)
+    if (typeof output === 'string') {
+      const lineCount = output.split('\n').length
+      return `Read ${lineCount} lines`
     }
     return null
   },
@@ -202,8 +216,60 @@ const toolFormatters: Record<string, (output: any) => string | null> = {
     if (output && typeof output.path === 'string' && typeof output.count === 'number') {
       return `List ${output.path} (${output.count} entries)`
     }
+    // Handle array output
+    if (Array.isArray(output)) {
+      return `List ${output.length} entries`
+    }
+    return null
+  },
+  ls: (output: any) => {
+    // Alias for listFiles formatter
+    if (Array.isArray(output)) return `List ${output.length} entries`
+    return null
+  },
+  globTool: (output: any) => {
+    if (Array.isArray(output)) {
+      return `Found ${output.length} matching files`
+    }
+    return null
+  },
+  grepTool: (output: any) => {
+    if (typeof output === 'string') {
+      const matchCount = output.trim() ? output.trim().split('\n').length : 0
+      return `Found ${matchCount} matches`
+    }
+    return null
+  },
+  search: (output: any) => {
+    // Alias for grepTool
+    if (typeof output === 'string') {
+      const matchCount = output.trim() ? output.trim().split('\n').length : 0
+      return `Found ${matchCount} matches`
+    }
+    return null
+  },
+  runCommand: (output: any) => {
+    if (output && typeof output.exitCode === 'number') {
+      const status = output.exitCode === 0 ? 'Success' : `Exit ${output.exitCode}`
+      const preview = output.stdout ? output.stdout.trim().slice(0, 50) : (output.stderr ? output.stderr.trim().slice(0, 50) : '')
+      const suffix = preview ? ` | ${preview.replace(/\n/g, ' ')}...` : ''
+      return `${status}${suffix}`
+    }
+    return null
+  },
+  editFile: (output: any) => {
+    if (typeof output === 'string') return output // Usually "Applied replacement to..."
     return null
   }
+}
+
+export function formatToolOutput(toolName: string, output: any): string {
+  const formatter = toolFormatters[toolName]
+  const formattedCustom = formatter ? formatter(output) : null
+  if (formattedCustom) {
+    return formattedCustom
+  }
+  return formatToolPayload(output, 200)
 }
 
 export function formatAuditEntry(entry: StoredAuditEntry): {
@@ -221,15 +287,7 @@ export function formatAuditEntry(entry: StoredAuditEntry): {
     }
   }
 
-  let output: string
-  const formatter = toolFormatters[entry.payload.toolName]
-  const formattedCustom = formatter ? formatter(entry.payload.output) : null
-
-  if (formattedCustom) {
-    output = formattedCustom
-  } else {
-    output = formatToolPayload(entry.payload.output, 200)
-  }
+  const output = formatToolOutput(entry.payload.toolName, entry.payload.output)
 
   if (entry.payload.isError) {
     return {

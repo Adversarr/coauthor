@@ -5,14 +5,19 @@ import { EventEmitter } from 'node:events'
 // Helper: create a minimal mock ChildProcess (EventEmitter with .kill())
 function mockChildProcess() {
   const cp = new EventEmitter() as any
+  cp.pid = 1234
   cp.kill = vi.fn(() => { cp.emit('exit', null, 'SIGTERM') })
+  cp.unref = vi.fn()
   return cp
 }
 
 // Mock child_process
 const mockExec = vi.fn()
+const mockSpawn = vi.fn()
+
 vi.mock('node:child_process', () => ({
-  exec: (...args: any[]) => mockExec(...args)
+  exec: (...args: any[]) => mockExec(...args),
+  spawn: (...args: any[]) => mockSpawn(...args)
 }))
 
 describe('runCommandTool', () => {
@@ -20,12 +25,16 @@ describe('runCommandTool', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default mock behavior: success
+    // Default mock behavior for exec: success
     mockExec.mockImplementation((cmd: string, options: any, cb: any) => {
       const cp = mockChildProcess()
       cb(null, 'default output', '')
       queueMicrotask(() => cp.emit('exit', 0, null))
       return cp
+    })
+    // Default mock behavior for spawn: success
+    mockSpawn.mockImplementation(() => {
+      return mockChildProcess()
     })
   })
   
@@ -33,7 +42,7 @@ describe('runCommandTool', () => {
     vi.restoreAllMocks()
   })
 
-  it('should execute echo command', async () => {
+  it('should execute echo command (foreground)', async () => {
     mockExec.mockImplementation((cmd: string, options: any, cb: any) => {
       const cp = mockChildProcess()
       // simulate echo — exec callback: (error, stdout: string, stderr: string)
@@ -57,7 +66,24 @@ describe('runCommandTool', () => {
     expect(mockExec).toHaveBeenCalledWith('echo "hello world"', expect.objectContaining({ cwd: baseDir }), expect.any(Function))
   })
 
-  it('should handle command failure', async () => {
+  it('should execute command in background', async () => {
+    const result = await runCommandTool.execute({
+      command: 'long-running-process',
+      isBackground: true
+    }, { baseDir, taskId: 't1', actorId: 'a1' })
+
+    expect(result.isError).toBe(false)
+    expect((result.output as any).pid).toBe(1234)
+    expect((result.output as any).message).toContain('background')
+    
+    expect(mockSpawn).toHaveBeenCalled()
+    // Check spawn args: shell, shellArgs, options
+    // implementation uses shell wrapper
+    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+    expect(mockSpawn).toHaveBeenCalledWith(shell, expect.any(Array), expect.objectContaining({ detached: true, stdio: 'ignore' }))
+  })
+
+  it('should handle command failure (foreground)', async () => {
     mockExec.mockImplementation((cmd: string, options: any, cb: any) => {
       const cp = mockChildProcess()
       // simulate failure — error has stdout/stderr as string props
@@ -79,7 +105,7 @@ describe('runCommandTool', () => {
     expect((result.output as any).stderr).toBe('some error')
   })
 
-  it('should respect timeout', async () => {
+  it('should respect timeout (foreground)', async () => {
     mockExec.mockImplementation((cmd: string, options: any, cb: any) => {
       const cp = mockChildProcess()
       cb(null, '', '')
