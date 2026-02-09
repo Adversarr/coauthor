@@ -30,6 +30,7 @@ export type LLMCompleteOptions = {
   messages: LLMMessage[]
   tools?: ToolDefinition[]
   maxTokens?: number
+  signal?: AbortSignal
 }
 
 export type LLMStreamOptions = {
@@ -37,6 +38,7 @@ export type LLMStreamOptions = {
   messages: LLMMessage[]
   tools?: ToolDefinition[]
   maxTokens?: number
+  signal?: AbortSignal
 }
 
 // ============================================================================
@@ -69,8 +71,15 @@ export interface LLMClient {
   complete(opts: LLMCompleteOptions): Promise<LLMResponse>
 
   /**
-   * Stream a conversation.
-   * Yields chunks for text and tool calls.
+   * Stream a conversation with optional per-chunk callback.
+   *
+   * When `onChunk` is provided, the implementation SHOULD use streaming
+   * internally and invoke the callback for each incremental chunk.
+   * When `onChunk` is omitted, the implementation MAY delegate to
+   * `complete()` for efficiency (no streaming overhead).
+   *
+   * Returns the same `LLMResponse` as `complete()`, making them
+   * interchangeable from the caller's perspective.
    */
-  stream(opts: LLMStreamOptions): AsyncGenerator<LLMStreamChunk>
+  stream(opts: LLMStreamOptions, onChunk?: (chunk: LLMStreamChunk) => void): Promise<LLMResponse>
 }

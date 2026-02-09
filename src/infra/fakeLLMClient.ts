@@ -61,22 +61,27 @@ export class FakeLLMClient implements LLMClient {
     return this.#defaultByProfile[opts.profile]
   }
 
-  async *stream(opts: LLMStreamOptions): AsyncGenerator<LLMStreamChunk> {
+  async stream(opts: LLMStreamOptions, onChunk?: (chunk: LLMStreamChunk) => void): Promise<LLMResponse> {
     const response = await this.complete(opts)
-    
-    if (response.content) {
-      yield { type: 'text', content: response.content }
-    }
-    
-    if (response.toolCalls) {
-      for (const tc of response.toolCalls) {
-        yield { type: 'tool_call_start', toolCallId: tc.toolCallId, toolName: tc.toolName }
-        yield { type: 'tool_call_delta', toolCallId: tc.toolCallId, argumentsDelta: JSON.stringify(tc.arguments) }
-        yield { type: 'tool_call_end', toolCallId: tc.toolCallId }
+
+    if (onChunk) {
+      if (response.reasoning) {
+        onChunk({ type: 'reasoning', content: response.reasoning })
       }
+      if (response.content) {
+        onChunk({ type: 'text', content: response.content })
+      }
+      if (response.toolCalls) {
+        for (const tc of response.toolCalls) {
+          onChunk({ type: 'tool_call_start', toolCallId: tc.toolCallId, toolName: tc.toolName })
+          onChunk({ type: 'tool_call_delta', toolCallId: tc.toolCallId, argumentsDelta: JSON.stringify(tc.arguments) })
+          onChunk({ type: 'tool_call_end', toolCallId: tc.toolCallId })
+        }
+      }
+      onChunk({ type: 'done', stopReason: response.stopReason })
     }
-    
-    yield { type: 'done', stopReason: response.stopReason }
+
+    return response
   }
 
   static defaultResponse(): string {

@@ -68,12 +68,9 @@ export abstract class BaseToolAgent implements Agent {
       }))
 
       const messages: LLMMessage[] = [...context.conversationHistory]
-      const llmResponse = await context.llm.complete({
-        profile,
-        messages,
-        tools: toolDefs.length > 0 ? toolDefs : undefined,
-        maxTokens: 4096
-      })
+      const llmResponse = context.onStreamChunk
+        ? await context.llm.stream({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens: 4096 }, context.onStreamChunk)
+        : await context.llm.complete({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens: 4096 })
 
       if (llmResponse.content || llmResponse.reasoning || llmResponse.toolCalls) {
         await context.persistMessage({

@@ -3,7 +3,7 @@ import type { ArtifactStore } from '../domain/ports/artifactStore.js'
 import type { UiBus } from '../domain/ports/uiBus.js'
 import type { TelemetrySink } from '../domain/ports/telemetry.js'
 import type { DomainEvent } from '../domain/events.js'
-import type { LLMMessage } from '../domain/ports/llmClient.js'
+import type { LLMMessage, LLMStreamChunk } from '../domain/ports/llmClient.js'
 import type { AgentOutput } from './agent.js'
 import type { ConversationManager } from './conversationManager.js'
 import { buildConfirmInteraction } from './displayBuilder.js'
@@ -45,6 +45,8 @@ export type OutputContext = {
   persistMessage: (m: LLMMessage) => Promise<void>
   /** AbortSignal propagated to tool execution for cooperative cancellation. */
   signal?: AbortSignal
+  /** When true, text/reasoning are streamed via UiBus stream_delta events instead. */
+  streamingEnabled?: boolean
 }
 
 /**
@@ -86,7 +88,7 @@ export class OutputHandler {
   async handle(output: AgentOutput, ctx: OutputContext): Promise<OutputResult> {
     switch (output.kind) {
       case 'text':
-        this.#emitUi(ctx, 'text', output.content)
+        if (!ctx.streamingEnabled) this.#emitUi(ctx, 'text', output.content)
         return {}
 
       case 'verbose':
@@ -98,7 +100,7 @@ export class OutputHandler {
         return {}
 
       case 'reasoning':
-        this.#emitUi(ctx, 'reasoning', output.content)
+        if (!ctx.streamingEnabled) this.#emitUi(ctx, 'reasoning', output.content)
         return {}
 
       case 'tool_call': {
@@ -268,6 +270,36 @@ export class OutputHandler {
         ctx.conversationHistory,
         ctx.persistMessage
       )
+    }
+  }
+
+  // ---------- streaming ----------
+
+  /**
+   * Create a callback for `LLMClient.stream()` that forwards text/reasoning
+   * deltas to the UiBus as `stream_delta` events, while ignoring tool call
+   * chunks (those are accumulated by the LLM client and returned in the
+   * LLMResponse). Emits `stream_end` on the `done` chunk.
+   */
+  createStreamChunkHandler(ctx: OutputContext): (chunk: LLMStreamChunk) => void {
+    return (chunk: LLMStreamChunk) => {
+      if (chunk.type === 'text') {
+        this.#uiBus?.emit({
+          type: 'stream_delta',
+          payload: { taskId: ctx.taskId, agentId: ctx.agentId, kind: 'text', content: chunk.content }
+        })
+      } else if (chunk.type === 'reasoning') {
+        this.#uiBus?.emit({
+          type: 'stream_delta',
+          payload: { taskId: ctx.taskId, agentId: ctx.agentId, kind: 'reasoning', content: chunk.content }
+        })
+      } else if (chunk.type === 'done') {
+        this.#uiBus?.emit({
+          type: 'stream_end',
+          payload: { taskId: ctx.taskId, agentId: ctx.agentId }
+        })
+      }
+      // tool_call_start/delta/end are intentionally ignored — handled by LLMResponse
     }
   }
 

@@ -58,6 +58,8 @@ export class RuntimeManager {
   readonly #pendingHandlers = new Set<Promise<void>>()
   /** Per-task LLM profile overrides (set by TUI /model command) */
   readonly #profileOverrides = new Map<string, LLMProfile>()
+  /** Whether streaming mode is enabled globally */
+  #streamingEnabled = false
 
   constructor(opts: {
     store: EventStore
@@ -127,6 +129,16 @@ export class RuntimeManager {
   /** Clear a profile override. */
   clearProfileOverride(taskId: string): void {
     this.#profileOverrides.delete(taskId)
+  }
+
+  // ======================== streaming ========================
+
+  get streamingEnabled(): boolean {
+    return this.#streamingEnabled
+  }
+
+  set streamingEnabled(enabled: boolean) {
+    this.#streamingEnabled = enabled
   }
 
   // ======================== lifecycle ========================
@@ -355,6 +367,7 @@ export class RuntimeManager {
     let rt = this.#runtimes.get(taskId)
     if (rt) {
       rt.profileOverride = this.getProfileOverride(taskId)
+      rt.streamingEnabled = this.#streamingEnabled
       return rt
     }
 
@@ -375,6 +388,7 @@ export class RuntimeManager {
       outputHandler: this.#outputHandler
     })
     rt.profileOverride = this.getProfileOverride(taskId)
+    rt.streamingEnabled = this.#streamingEnabled
 
     this.#runtimes.set(taskId, rt)
     return rt

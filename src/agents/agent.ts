@@ -83,6 +83,15 @@ export type AgentContext = {
   readonly profileOverride?: LLMProfile
 
   /**
+   * Optional callback for streaming LLM chunks to the UI.
+   * When provided, the agent should call `llm.stream()` with this callback
+   * instead of `llm.complete()`, enabling real-time text display.
+   * Only text and reasoning chunks are forwarded to the UI; tool call
+   * chunks are accumulated internally.
+   */
+  readonly onStreamChunk?: (chunk: import('../domain/ports/llmClient.js').LLMStreamChunk) => void
+
+  /**
    * Persist a message to conversation history.
    * Call this after each LLM response or tool result to ensure
    * the message survives pauses, restarts, and crashes.

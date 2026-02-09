@@ -18,6 +18,7 @@ import {
 } from './utils.js'
 import { LogOutput } from './components/LogOutput.js'
 import { TaskPane } from './components/TaskPane.js'
+import { StreamingOutput } from './components/StreamingOutput.js'
 
 type Props = {
   app: App
@@ -34,6 +35,9 @@ export function MainTui(props: Props) {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [showTasks, setShowTasks] = useState(false)
   const [showVerbose, setShowVerbose] = useState(false)
+  const [streamingEnabled, setStreamingEnabled] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
+  const [streamingReasoning, setStreamingReasoning] = useState('')
   const [selectedTaskIndex, setSelectedTaskIndex] = useState(0)
   const logSequence = useRef(0)
   const hasAutoOpenedTasks = useRef(false)
@@ -42,6 +46,9 @@ export function MainTui(props: Props) {
   // Refs to track state in closures (like refresh)
   const focusedTaskIdRef = useRef<string | null>(null)
   const lastTasksRef = useRef<TaskView[]>([])
+  // Refs to track streaming content synchronously (avoids nested setState)
+  const streamingTextRef = useRef('')
+  const streamingReasoningRef = useRef('')
 
   useEffect(() => {
     showVerboseRef.current = showVerbose
@@ -49,6 +56,11 @@ export function MainTui(props: Props) {
 
   useEffect(() => {
     focusedTaskIdRef.current = focusedTaskId
+    // Clear streaming buffers on focus change
+    streamingTextRef.current = ''
+    streamingReasoningRef.current = ''
+    setStreamingText('')
+    setStreamingReasoning('')
   }, [focusedTaskId])
 
   const addPlainLog = (
@@ -228,6 +240,10 @@ export function MainTui(props: Props) {
     
     const uiBusSub = app.uiBus.events$.subscribe((event) => {
       if (event.type === 'agent_output') {
+        // Only show agent_output for focused task (or all if no focus)
+        const focused = focusedTaskIdRef.current
+        if (focused && event.payload.taskId !== focused) return
+
         if (event.payload.kind === 'reasoning') {
           addPlainLog(event.payload.content, { prefix: '󰧑 ', color: 'gray', dim: true })
         } else if (event.payload.kind === 'verbose') {
@@ -239,9 +255,34 @@ export function MainTui(props: Props) {
         } else if (event.payload.kind === 'text') {
           addMarkdownLog(event.payload.content, { prefix: '→ ', color: 'green', bold: true })
         } else {
-          // Unknown kind, log as plain text
           addPlainLog(event.payload.content, { prefix: '? ' })
         }
+      }
+      if (event.type === 'stream_delta') {
+        const focused = focusedTaskIdRef.current
+        if (focused && event.payload.taskId !== focused) return
+        if (event.payload.kind === 'text') {
+          streamingTextRef.current += event.payload.content
+          setStreamingText(streamingTextRef.current)
+        } else if (event.payload.kind === 'reasoning') {
+          streamingReasoningRef.current += event.payload.content
+          setStreamingReasoning(streamingReasoningRef.current)
+        }
+      }
+      if (event.type === 'stream_end') {
+        const focused = focusedTaskIdRef.current
+        if (focused && event.payload.taskId !== focused) return
+        // Read from refs (synchronous) — avoids nested setState ordering issues
+        const reasoningContent = streamingReasoningRef.current
+        const textContent = streamingTextRef.current
+        // Commit in correct order: reasoning first, then text
+        if (reasoningContent) addPlainLog(reasoningContent, { prefix: '󰧑 ', color: 'gray', dim: true })
+        if (textContent) addMarkdownLog(textContent, { prefix: '→ ', color: 'green', bold: true })
+        // Clear buffers
+        streamingReasoningRef.current = ''
+        streamingTextRef.current = ''
+        setStreamingReasoning('')
+        setStreamingText('')
       }
       if (event.type === 'audit_entry') {
         const formatted = formatAuditEntry(event.payload)
@@ -301,7 +342,10 @@ export function MainTui(props: Props) {
       focusedTaskId,
       setFocusedTaskId,
       setShowTasks,
-      setShowVerbose
+      setShowVerbose,
+      setStreamingEnabled: (val: boolean | ((prev: boolean) => boolean)) => {
+        setStreamingEnabled(val)
+      }
     })
   }
 
@@ -345,6 +389,13 @@ export function MainTui(props: Props) {
     <Box flexDirection="column">
       {/* Permanent output - printed once, persists in terminal scrollback */}
       <LogOutput entries={completedEntries} width={columns} />
+
+      {/* Live streaming output (only during active streaming) */}
+      <StreamingOutput
+        streamingText={streamingText}
+        streamingReasoning={streamingReasoning}
+        width={columns}
+      />
 
       {showTasks ? (
         <TaskPane

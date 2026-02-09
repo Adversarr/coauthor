@@ -23,7 +23,7 @@ async function* createStreamParts(parts: Array<Record<string, unknown>>): AsyncG
 }
 
 describe('OpenAILLMClient.stream', () => {
-  it('should yield reasoning and tool-call deltas incrementally', async () => {
+  it('should call onChunk with reasoning and tool-call deltas, then return assembled LLMResponse', async () => {
     const { OpenAILLMClient } = await import('../src/infra/openaiLLMClient.js')
 
     streamTextMock.mockResolvedValueOnce({
@@ -54,12 +54,12 @@ describe('OpenAILLMClient.stream', () => {
     })
 
     const chunks: Array<Record<string, unknown>> = []
-    for await (const chunk of client.stream({
+    const response = await client.stream({
       profile: 'fast',
       messages: [{ role: 'user', content: 'hi' }],
-    })) {
+    }, (chunk) => {
       chunks.push(chunk as unknown as Record<string, unknown>)
-    }
+    })
 
     const streamCallArgs = streamTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
     expect(streamCallArgs?.providerOptions).toEqual({
@@ -78,5 +78,43 @@ describe('OpenAILLMClient.stream', () => {
       { type: 'tool_call_end', toolCallId: 'tc1' },
       { type: 'done', stopReason: 'end_turn' },
     ])
+
+    // Verify assembled response
+    expect(response.content).toBe('hello')
+    expect(response.reasoning).toBe('think-more')
+    expect(response.stopReason).toBe('end_turn')
+    expect(response.toolCalls).toEqual([
+      { toolCallId: 'tc1', toolName: 'myTool', arguments: { a: 1 } },
+    ])
+  })
+
+  it('should delegate to complete() when no onChunk callback is provided', async () => {
+    const { OpenAILLMClient } = await import('../src/infra/openaiLLMClient.js')
+
+    generateTextMock.mockResolvedValueOnce({
+      text: 'answer',
+      reasoningText: '',
+      toolCalls: [],
+      finishReason: 'stop',
+    })
+
+    const client = new OpenAILLMClient({
+      apiKey: 'test',
+      modelByProfile: {
+        fast: 'gpt-test',
+        writer: 'gpt-test',
+        reasoning: 'gpt-test',
+      },
+    })
+
+    const response = await client.stream({
+      profile: 'fast',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    // Should use generateText (via complete), not streamText
+    expect(generateTextMock).toHaveBeenCalled()
+    expect(response.content).toBe('answer')
+    expect(response.stopReason).toBe('end_turn')
   })
 })

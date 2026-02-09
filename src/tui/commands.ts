@@ -21,6 +21,7 @@ export type CommandContext = {
   setFocusedTaskId: (id: string | null) => void
   setShowTasks: (show: boolean) => void
   setShowVerbose: (show: boolean | ((previous: boolean) => boolean)) => void
+  setStreamingEnabled: (enabled: boolean | ((previous: boolean) => boolean)) => void
 }
 
 export async function handleCommand(line: string, ctx: CommandContext) {
@@ -291,6 +292,7 @@ export async function handleCommand(line: string, ctx: CommandContext) {
           { variant: 'plain', content: '  /replay [taskId]     Replay conversation history', dim: true },
           { variant: 'plain', content: '  /replay-raw [taskId] Show raw conversation logs', dim: true },
           { variant: 'plain', content: '  /verbose [on|off]    Toggle verbose output', dim: true },
+          { variant: 'plain', content: '  /stream [on|off]     Toggle real-time LLM streaming', dim: true },
           { variant: 'plain', content: '', dim: true },
           { variant: 'plain', content: '── General ──', color: 'cyan', bold: true },
           { variant: 'plain', content: '  /exit                Quit (or Ctrl+D)', dim: true },
@@ -325,6 +327,37 @@ export async function handleCommand(line: string, ctx: CommandContext) {
         }
 
         ctx.setStatus('Usage: /verbose [on|off]')
+        return
+      }
+
+      case 'stream': {
+        const arg = (args[0] ?? '').toLowerCase()
+        const shouldEnable = arg === 'on' || arg === '1' || arg === 'true'
+        const shouldDisable = arg === 'off' || arg === '0' || arg === 'false'
+
+        if (!arg) {
+          const next = !ctx.app.runtimeManager.streamingEnabled
+          ctx.setStreamingEnabled(next)
+          ctx.app.runtimeManager.streamingEnabled = next
+          ctx.setStatus(next ? 'Streaming enabled' : 'Streaming disabled')
+          return
+        }
+
+        if (shouldEnable) {
+          ctx.setStreamingEnabled(true)
+          ctx.app.runtimeManager.streamingEnabled = true
+          ctx.setStatus('Streaming enabled — LLM output will appear in real-time')
+          return
+        }
+
+        if (shouldDisable) {
+          ctx.setStreamingEnabled(false)
+          ctx.app.runtimeManager.streamingEnabled = false
+          ctx.setStatus('Streaming disabled — LLM output appears after completion')
+          return
+        }
+
+        ctx.setStatus('Usage: /stream [on|off]')
         return
       }
 

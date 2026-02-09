@@ -143,6 +143,7 @@ export class OpenAILLMClient implements LLMClient {
       messages: toModelMessages(opts.messages),
       tools,
       maxOutputTokens: opts.maxTokens,
+      abortSignal: opts.signal,
       providerOptions: {
         openai: {
           enable_thinking: true
@@ -177,7 +178,10 @@ export class OpenAILLMClient implements LLMClient {
     }
   }
 
-  async *stream(opts: LLMStreamOptions): AsyncGenerator<LLMStreamChunk> {
+  async stream(opts: LLMStreamOptions, onChunk?: (chunk: LLMStreamChunk) => void): Promise<LLMResponse> {
+    // When no callback, delegate to complete() — no streaming overhead.
+    if (!onChunk) return this.complete(opts)
+
     const modelId = this.#modelByProfile[opts.profile]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
@@ -195,12 +199,19 @@ export class OpenAILLMClient implements LLMClient {
       messages: toModelMessages(opts.messages),
       tools,
       maxOutputTokens: opts.maxTokens,
+      abortSignal: opts.signal,
       providerOptions: {
         openai: {
           enable_thinking: true
         }
       }
     })
+
+    // Accumulators for assembling the final LLMResponse
+    let textContent = ''
+    let reasoningContent = ''
+    const toolCallBuffers = new Map<string, { toolName: string; args: string }>()
+    let stopReason: LLMResponse['stopReason'] = 'end_turn'
 
     const getPartText = (part: unknown): string => {
       if (!part || typeof part !== 'object') return ''
@@ -215,24 +226,16 @@ export class OpenAILLMClient implements LLMClient {
       return typeof record.id === 'string' ? record.id : undefined
     }
     const parseToolInput = (input: unknown): Record<string, unknown> => {
-      if (input && typeof input === 'object') {
-        return input as Record<string, unknown>
-      }
+      if (input && typeof input === 'object') return input as Record<string, unknown>
       if (typeof input === 'string') {
         try {
           const parsed = JSON.parse(input) as unknown
-          if (parsed && typeof parsed === 'object') {
-            return parsed as Record<string, unknown>
-          }
-        } catch {
-          return { input }
-        }
+          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
+        } catch { return { input } }
       }
       return {}
     }
-    const reasoningBuffers = new Map<string, string>()
-    const toolInputBuffers = new Map<string, { toolName: string; input: string }>()
-    
+
     for await (const part of res.fullStream) {
       const partType = (part as { type: string }).type
       this.#logVerbose('stream part', {
@@ -240,104 +243,96 @@ export class OpenAILLMClient implements LLMClient {
         id: getPartId(part) ?? null,
         toolName: (part as { toolName?: string }).toolName ?? null
       })
+
+      // Skip lifecycle / metadata events
       if (
-        partType === 'start' ||
-        partType === 'start-step' ||
-        partType === 'text-start' ||
-        partType === 'text-end' ||
-        partType === 'finish-step' ||
-        partType === 'stream-start' ||
-        partType === 'response-metadata' ||
-        partType === 'source' ||
-        partType === 'file' ||
-        partType === 'raw'
-      ) {
-        continue
-      }
+        partType === 'start' || partType === 'start-step' ||
+        partType === 'text-start' || partType === 'text-end' ||
+        partType === 'finish-step' || partType === 'stream-start' ||
+        partType === 'response-metadata' || partType === 'source' ||
+        partType === 'file' || partType === 'raw'
+      ) continue
+
       if (partType === 'text-delta') {
-        const textDelta = getPartText(part)
-        if (textDelta) {
-          this.#logVerbose('text-delta', { length: textDelta.length })
-          yield { type: 'text', content: textDelta }
+        const delta = getPartText(part)
+        if (delta) {
+          textContent += delta
+          onChunk({ type: 'text', content: delta })
         }
       } else if (partType === 'reasoning-start') {
-        const reasoningId = getPartId(part) ?? `reasoning_${nanoid(10)}`
-        reasoningBuffers.set(reasoningId, '')
+        // nothing to emit yet
       } else if (partType === 'reasoning-delta') {
-        const reasoningId = getPartId(part)
         const delta = getPartText(part)
-        if (reasoningId && delta) {
-          const existing = reasoningBuffers.get(reasoningId) ?? ''
-          reasoningBuffers.set(reasoningId, existing + delta)
-          this.#logVerbose('reasoning-delta', { id: reasoningId, length: delta.length })
-          yield { type: 'reasoning', content: delta }
+        if (delta) {
+          reasoningContent += delta
+          onChunk({ type: 'reasoning', content: delta })
         }
       } else if (partType === 'reasoning-end') {
-        const reasoningId = getPartId(part)
-        if (reasoningId) {
-          reasoningBuffers.delete(reasoningId)
-        }
+        // reasoning block complete, already accumulated
       } else if (partType === 'tool-input-start') {
-        const toolInputId = getPartId(part) ?? `tool_${nanoid(12)}`
+        const toolCallId = getPartId(part) ?? `tool_${nanoid(12)}`
         const toolName = (part as { toolName?: string }).toolName ?? 'unknown'
-        toolInputBuffers.set(toolInputId, { toolName, input: '' })
-        this.#logVerbose('tool-input-start', { toolCallId: toolInputId, toolName })
-        yield { type: 'tool_call_start', toolCallId: toolInputId, toolName }
+        toolCallBuffers.set(toolCallId, { toolName, args: '' })
+        onChunk({ type: 'tool_call_start', toolCallId, toolName })
       } else if (partType === 'tool-input-delta') {
-        const toolInputId = getPartId(part)
-        if (toolInputId) {
+        const toolCallId = getPartId(part)
+        if (toolCallId) {
           const delta = getPartText(part)
           if (!delta) continue
-
-          const existing = toolInputBuffers.get(toolInputId)
-          if (existing) {
-            toolInputBuffers.set(toolInputId, { toolName: existing.toolName, input: existing.input + delta })
-            this.#logVerbose('tool-input-delta', { toolCallId: toolInputId, delta })
-            yield { type: 'tool_call_delta', toolCallId: toolInputId, argumentsDelta: delta }
-            continue
+          const buf = toolCallBuffers.get(toolCallId)
+          if (buf) {
+            buf.args += delta
+            onChunk({ type: 'tool_call_delta', toolCallId, argumentsDelta: delta })
+          } else {
+            toolCallBuffers.set(toolCallId, { toolName: 'unknown', args: delta })
+            onChunk({ type: 'tool_call_start', toolCallId, toolName: 'unknown' })
+            onChunk({ type: 'tool_call_delta', toolCallId, argumentsDelta: delta })
           }
-
-          toolInputBuffers.set(toolInputId, { toolName: 'unknown', input: delta })
-          this.#logVerbose('tool-input-delta', { toolCallId: toolInputId, delta })
-          yield { type: 'tool_call_start', toolCallId: toolInputId, toolName: 'unknown' }
-          yield { type: 'tool_call_delta', toolCallId: toolInputId, argumentsDelta: delta }
         }
       } else if (partType === 'tool-input-end') {
-        const toolInputId = getPartId(part)
-        if (toolInputId) {
-          this.#logVerbose('tool-input-end', { toolCallId: toolInputId })
-          yield { type: 'tool_call_end', toolCallId: toolInputId }
-          toolInputBuffers.delete(toolInputId)
-        }
+        const toolCallId = getPartId(part)
+        if (toolCallId) onChunk({ type: 'tool_call_end', toolCallId })
       } else if (partType === 'tool-call') {
-        const toolCallPart = part as { type: 'tool-call'; toolCallId?: string; toolName: string; args?: unknown; input?: unknown }
-        const toolCallId = toolCallPart.toolCallId ?? `tool_${nanoid(12)}`
-        const parsedInput = parseToolInput(toolCallPart.args ?? toolCallPart.input)
-        this.#logVerbose('tool-call', { toolCallId, toolName: toolCallPart.toolName })
-        yield { type: 'tool_call_start', toolCallId, toolName: toolCallPart.toolName }
-        yield { type: 'tool_call_delta', toolCallId, argumentsDelta: JSON.stringify(parsedInput) }
-        yield { type: 'tool_call_end', toolCallId }
+        const tc = part as { type: 'tool-call'; toolCallId?: string; toolName: string; args?: unknown; input?: unknown }
+        const toolCallId = tc.toolCallId ?? `tool_${nanoid(12)}`
+        const parsedInput = parseToolInput(tc.args ?? tc.input)
+        const argsStr = JSON.stringify(parsedInput)
+        toolCallBuffers.set(toolCallId, { toolName: tc.toolName, args: argsStr })
+        onChunk({ type: 'tool_call_start', toolCallId, toolName: tc.toolName })
+        onChunk({ type: 'tool_call_delta', toolCallId, argumentsDelta: argsStr })
+        onChunk({ type: 'tool_call_end', toolCallId })
       } else if (partType === 'tool-result' || partType === 'tool-error') {
         const errorValue = (part as { error?: unknown }).error
-        if (errorValue) {
-          throw errorValue instanceof Error ? errorValue : new Error(String(errorValue))
-        }
+        if (errorValue) throw errorValue instanceof Error ? errorValue : new Error(String(errorValue))
       } else if (partType === 'error') {
         const errorValue = (part as { error?: unknown }).error
         throw errorValue instanceof Error ? errorValue : new Error(String(errorValue ?? 'Stream error'))
       } else if (partType === 'finish') {
         const finishPart = part as { type: 'finish'; finishReason?: string }
-        let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' = 'end_turn'
-        if (finishPart.finishReason === 'tool-calls') {
-          stopReason = 'tool_use'
-        } else if (finishPart.finishReason === 'length') {
-          stopReason = 'max_tokens'
-        }
+        if (finishPart.finishReason === 'tool-calls') stopReason = 'tool_use'
+        else if (finishPart.finishReason === 'length') stopReason = 'max_tokens'
         this.#logVerbose('stream finish', { finishReason: finishPart.finishReason ?? null, stopReason })
-        yield { type: 'done', stopReason }
+        onChunk({ type: 'done', stopReason })
       } else {
         console.warn(`Unknown stream part type: ${(part as { type: string }).type}`)
       }
+    }
+
+    // Assemble tool calls from buffers
+    const toolCalls: ToolCallRequest[] = []
+    for (const [id, buf] of toolCallBuffers) {
+      try {
+        toolCalls.push({ toolCallId: id, toolName: buf.toolName, arguments: JSON.parse(buf.args) as Record<string, unknown> })
+      } catch {
+        toolCalls.push({ toolCallId: id, toolName: buf.toolName, arguments: {} })
+      }
+    }
+
+    return {
+      content: textContent || undefined,
+      reasoning: reasoningContent || undefined,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      stopReason
     }
   }
 }

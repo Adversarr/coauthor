@@ -1,6 +1,6 @@
 import { type Argv, type Arguments } from 'yargs'
 import { type App } from '../../app/createApp.js'
-import type { LLMMessage, LLMResponse, LLMStopReason } from '../../domain/ports/llmClient.js'
+import type { LLMMessage, LLMResponse } from '../../domain/ports/llmClient.js'
 import type { ToolCallRequest, ToolDefinition } from '../../domain/ports/tool.js'
 import { type IO } from '../io.js'
 
@@ -149,58 +149,31 @@ export function registerLlmCommand(parser: Argv, app: App, io: IO): Argv {
               if (iterationIndex > 0) io.stdout('\n')
               io.stdout(`[Iteration ${iterationIndex + 1}] Streaming response...\n`)
               
-              let currentTextContent = ''
-              let currentReasoningContent = ''
-              const currentToolCalls = new Map<string, { toolName: string; argumentsStr: string }>()
-              let streamStopReason: LLMStopReason = 'end_turn'
-              
-              for await (const chunk of app.llm.stream({
+              const response = await app.llm.stream({
                 profile: 'fast',
                 messages,
                 tools,
                 maxTokens: 1024
-              })) {
-                if (chunk.type === 'text') {
-                  currentTextContent += chunk.content
-                } else if (chunk.type === 'reasoning') {
-                  currentReasoningContent += chunk.content
-                } else if (chunk.type === 'tool_call_start') {
-                  currentToolCalls.set(chunk.toolCallId, { toolName: chunk.toolName, argumentsStr: '' })
-                } else if (chunk.type === 'tool_call_delta') {
-                  const tc = currentToolCalls.get(chunk.toolCallId)
-                  if (tc) tc.argumentsStr += chunk.argumentsDelta
-                } else if (chunk.type === 'done') {
-                  streamStopReason = chunk.stopReason
+              }, (chunk) => {
+                // Observe streaming deltas (could print live)
+                if (chunk.type === 'text' || chunk.type === 'reasoning') {
+                  // accumulated in response
                 }
-              }
+              })
 
-              io.stdout(`===== Text =====\n ${currentTextContent}\n`)
-              io.stdout(`===== Reasoning =====\n ${currentReasoningContent}\n`)
+              io.stdout(`===== Text =====\n ${response.content ?? ''}\n`)
+              io.stdout(`===== Reasoning =====\n ${response.reasoning ?? ''}\n`)
               io.stdout('\n')
 
-              // Reconstruct assistant message
-              const toolCallsRequest: ToolCallRequest[] = []
-              for (const [id, tc] of currentToolCalls) {
-                try {
-                  toolCallsRequest.push({
-                    toolCallId: id,
-                    toolName: tc.toolName,
-                    arguments: JSON.parse(tc.argumentsStr)
-                  })
-                } catch {
-                  io.stderr(`Failed to parse args for tool ${tc.toolName}\n`)
-                }
-              }
-              
               messages.push({
                 role: 'assistant',
-                content: currentTextContent || undefined,
-                toolCalls: toolCallsRequest.length > 0 ? toolCallsRequest : undefined,
-                reasoning: currentReasoningContent || undefined
+                content: response.content,
+                toolCalls: response.toolCalls,
+                reasoning: response.reasoning
               })
               
-              if (streamStopReason === 'tool_use' && toolCallsRequest.length > 0) {
-                for (const tc of toolCallsRequest) {
+              if (response.stopReason === 'tool_use' && response.toolCalls && response.toolCalls.length > 0) {
+                for (const tc of response.toolCalls) {
                   io.stdout(`  Executing tool: ${tc.toolName} args=${JSON.stringify(tc.arguments)}\n`)
                   const argumentsRecord = tc.arguments as Record<string, unknown>
                   const locationValue = typeof argumentsRecord.location === 'string' ? argumentsRecord.location : 'Tokyo'
@@ -221,8 +194,8 @@ export function registerLlmCommand(parser: Argv, app: App, io: IO): Argv {
                 continue
               }
               
-              finalStopReason = streamStopReason
-              if (streamStopReason !== 'tool_use') {
+              finalStopReason = response.stopReason
+              if (response.stopReason !== 'tool_use') {
                 break
               }
             }
@@ -234,30 +207,30 @@ export function registerLlmCommand(parser: Argv, app: App, io: IO): Argv {
             let textContent = ''
             let reasoningContent = ''
             
-            for await (const chunk of app.llm.stream({
+            const response = await app.llm.stream({
               profile: 'fast',
               messages: [
                 { role: 'system', content: 'You are a helpful assistant.' },
                 { role: 'user', content: 'Say "OK" if you can hear me.' }
               ],
               maxTokens: 1024
-            })) {
+            }, (chunk) => {
               if (chunk.type === 'text') {
                 textContent += chunk.content
               } else if (chunk.type === 'reasoning') {
                 reasoningContent += chunk.content
               } else if (chunk.type === 'tool_call_start') {
                 throw new Error('Unexpected tool call in test prompt')
-              } else if (chunk.type === 'done') {
-                const duration = Date.now() - startTime
-                io.stdout(`\n✓ Connection successful (${duration}ms)\n`)
-                io.stdout(`  Response: ${textContent || '(no content)'}\n`)
-                if (reasoningContent) {
-                  io.stdout(`  Reasoning: ${reasoningContent.slice(0, 100)}${reasoningContent.length > 100 ? '...' : ''}\n`)
-                }
-                io.stdout(`  Stop reason: ${chunk.stopReason}\n`)
               }
+            })
+
+            const duration = Date.now() - startTime
+            io.stdout(`\n✓ Connection successful (${duration}ms)\n`)
+            io.stdout(`  Response: ${response.content || '(no content)'}\n`)
+            if (response.reasoning) {
+              io.stdout(`  Reasoning: ${response.reasoning.slice(0, 100)}${response.reasoning.length > 100 ? '...' : ''}\n`)
             }
+            io.stdout(`  Stop reason: ${response.stopReason}\n`)
           }
         } catch (error) {
           io.stdout(`✗ Connection failed\n`)

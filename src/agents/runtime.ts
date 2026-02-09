@@ -63,6 +63,8 @@ export class AgentRuntime {
   #abortController: AbortController | null = null
   /** Optional LLM profile override from RuntimeManager. */
   #profileOverride: LLMProfile | undefined = undefined
+  /** Whether streaming mode is enabled. */
+  #streamingEnabled = false
 
   constructor(opts: {
     taskId: string
@@ -107,6 +109,11 @@ export class AgentRuntime {
   /** Set the LLM profile override for subsequent agent loop runs. */
   set profileOverride(profile: LLMProfile | undefined) {
     this.#profileOverride = profile
+  }
+
+  /** Enable or disable streaming mode. */
+  set streamingEnabled(enabled: boolean) {
+    this.#streamingEnabled = enabled
   }
 
   // ======================== imperative control (called by RuntimeManager) ========================
@@ -345,7 +352,8 @@ export class AgentRuntime {
       confirmedToolCallId,
       conversationHistory,
       persistMessage,
-      signal: this.#abortController.signal
+      signal: this.#abortController.signal,
+      streamingEnabled: this.#streamingEnabled
     }
 
     // If user rejected a risky tool, record rejection via OutputHandler
@@ -359,6 +367,10 @@ export class AgentRuntime {
       ? new FilteredToolRegistry(this.#toolRegistry, this.#agent.toolGroups)
       : { register() { throw new Error('read-only') }, get: () => undefined, list: () => [], listByGroups: () => [], toOpenAIFormat: () => [], toOpenAIFormatByGroups: () => [] }
 
+    const onStreamChunk = this.#streamingEnabled
+      ? this.#outputHandler.createStreamChunkHandler(outputCtx)
+      : undefined
+
     const context: AgentContext = {
       llm: this.#llm,
       tools: agentTools,
@@ -366,6 +378,7 @@ export class AgentRuntime {
       conversationHistory,
       pendingInteractionResponse: pendingResponse,
       profileOverride: this.#profileOverride,
+      onStreamChunk,
       persistMessage
     }
 

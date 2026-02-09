@@ -76,7 +76,7 @@ describe('OpenAILLMClient (LLMClient port)', () => {
     expect(args.maxOutputTokens).toBe(123)
   })
 
-  test('stream yields chunks from fullStream', async () => {
+  test('stream calls onChunk and returns LLMResponse', async () => {
     mocks.createOpenAICompatible.mockReturnValue((modelId: string) => ({ modelId }))
     mocks.streamText.mockResolvedValue({
       fullStream: (async function* () {
@@ -92,16 +92,18 @@ describe('OpenAILLMClient (LLMClient port)', () => {
     })
 
     const out: unknown[] = []
-    for await (const chunk of llm.stream({
+    const response = await llm.stream({
       profile: 'fast',
       messages: [{ role: 'user', content: 'hi' }]
-    })) {
+    }, (chunk) => {
       out.push(chunk)
-    }
+    })
 
     expect(out.length).toBeGreaterThan(0)
     expect(out[0]).toEqual({ type: 'text', content: 'a' })
     expect(out[1]).toEqual({ type: 'text', content: 'b' })
+    expect(response.content).toBe('ab')
+    expect(response.stopReason).toBe('end_turn')
     const args = mocks.streamText.mock.calls[0]![0] as any
     expect(args.model.modelId).toBe('fast-model')
   })

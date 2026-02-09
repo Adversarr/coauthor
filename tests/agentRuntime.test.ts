@@ -208,8 +208,8 @@ describe('AgentRuntime (via RuntimeManager)', () => {
         }
         return baseLLM.complete(options)
       },
-      stream(options) {
-        return baseLLM.stream(options)
+      stream(options, onChunk) {
+        return baseLLM.stream(options, onChunk)
       }
     }
 

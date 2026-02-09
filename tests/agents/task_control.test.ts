@@ -89,7 +89,7 @@ describe('Task Control & Session', () => {
         }
         return baseLLM.complete(options)
       },
-      stream(options) { return baseLLM.stream(options) }
+      stream(options, onChunk) { return baseLLM.stream(options, onChunk) }
     }
 
     const { store, taskService, manager } = await createTestInfra(dir, { llm: deferredLLM })
