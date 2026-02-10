@@ -20,14 +20,21 @@ export class SearchAgent extends BaseToolAgent {
   readonly description =
     'Research agent that searches and surveys codebase using read-only tools (readFile, listFiles, glob, grep).'
   readonly toolGroups: readonly ToolGroup[] = ['search']
-  readonly defaultProfile: LLMProfile = 'fast'
+  readonly defaultProfile: LLMProfile
 
-  constructor(opts: { contextBuilder: ContextBuilder; maxIterations?: number }) {
+  constructor(opts: {
+    contextBuilder: ContextBuilder
+    maxIterations?: number
+    maxTokens?: number
+    defaultProfile?: LLMProfile
+  }) {
     super({
       contextBuilder: opts.contextBuilder,
       maxIterations: opts.maxIterations ?? 20,
+      maxTokens: opts.maxTokens,
       systemPromptTemplate: SEARCH_SYSTEM_PROMPT
     })
+    this.defaultProfile = opts.defaultProfile ?? 'fast'
   }
 
   protected override getUserSuffix(): string {

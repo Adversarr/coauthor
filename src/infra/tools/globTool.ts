@@ -11,7 +11,7 @@ import { join } from 'node:path'
 
 export const globTool: Tool = {
   name: 'globTool',
-  description: 'Find files matching a glob pattern. Returns absolute paths.',
+  description: 'Find files matching a glob pattern. Returns relative paths.',
   parameters: {
     type: 'object',
     properties: {

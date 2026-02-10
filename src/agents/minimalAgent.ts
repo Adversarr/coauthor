@@ -19,16 +19,24 @@ export class MinimalAgent implements Agent {
   readonly displayName = 'Minimal Chat'
   readonly description = 'Simple chat agent with no tool access. Just answers questions directly.'
   readonly toolGroups: readonly ToolGroup[] = []
-  readonly defaultProfile: LLMProfile = 'fast'
+  readonly defaultProfile: LLMProfile
 
   readonly #contextBuilder: ContextBuilder
+  readonly #maxTokens: number
 
-  constructor(opts: { contextBuilder: ContextBuilder }) {
+  constructor(opts: {
+    contextBuilder: ContextBuilder
+    maxTokens?: number
+    defaultProfile?: LLMProfile
+  }) {
     this.#contextBuilder = opts.contextBuilder
+    this.#maxTokens = opts.maxTokens ?? 4096
+    this.defaultProfile = opts.defaultProfile ?? 'fast'
   }
 
   async *run(task: TaskView, context: AgentContext): AsyncGenerator<AgentOutput> {
     const profile = context.profileOverride ?? this.defaultProfile
+    const maxTokens = this.#maxTokens === 0 ? undefined : this.#maxTokens
 
     // Seed conversation if fresh
     if (context.conversationHistory.length === 0) {
@@ -44,7 +52,7 @@ export class MinimalAgent implements Agent {
     const llmResponse = await context.llm.complete({
       profile,
       messages,
-      maxTokens: 4096
+      maxTokens
     })
 
     if (llmResponse.content) {

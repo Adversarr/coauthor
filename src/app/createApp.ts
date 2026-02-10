@@ -135,7 +135,12 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   // Tool Registry
   const toolRegistry = opts.toolRegistry ?? new DefaultToolRegistry()
   if (!opts.toolRegistry) {
-    registerBuiltinTools(toolRegistry as DefaultToolRegistry)
+    registerBuiltinTools(toolRegistry as DefaultToolRegistry, {
+      runCommand: {
+        maxOutputLength: config.resources.maxOutputLength,
+        defaultTimeout: config.timeouts.exec
+      }
+    })
   }
 
   // Tool Executor
@@ -163,17 +168,31 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
 
   // === Application Layer ===
   
-  const taskService = new TaskService(store, currentActorId)
+  const taskService = new TaskService(store, currentActorId, config.task.defaultPriority)
   const eventService = new EventService(store)
-  const interactionService = new InteractionService(store, currentActorId)
-  const auditService = new AuditService(auditLog)
+  const interactionService = new InteractionService(store, currentActorId, config.timeouts.interaction)
+  const auditService = new AuditService(auditLog, config.resources.auditLogLimit)
   const contextBuilder = new ContextBuilder(baseDir, artifactStore)
 
   // === Agent Layer ===
   
-  const defaultAgent = opts.agent ?? new DefaultCoAuthorAgent({ contextBuilder })
-  const searchAgent = new SearchAgent({ contextBuilder })
-  const minimalAgent = new MinimalAgent({ contextBuilder })
+  const defaultAgent = opts.agent ?? new DefaultCoAuthorAgent({
+    contextBuilder,
+    maxIterations: config.agent.maxIterations,
+    maxTokens: config.agent.maxTokens,
+    defaultProfile: config.agent.defaultProfile
+  })
+  const searchAgent = new SearchAgent({
+    contextBuilder,
+    maxIterations: config.agent.maxIterations,
+    maxTokens: config.agent.maxTokens,
+    defaultProfile: config.agent.defaultProfile
+  })
+  const minimalAgent = new MinimalAgent({
+    contextBuilder,
+    maxTokens: config.agent.maxTokens,
+    defaultProfile: config.agent.defaultProfile
+  })
 
   const conversationManager = new ConversationManager({
     conversationStore,

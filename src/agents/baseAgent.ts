@@ -25,15 +25,18 @@ export abstract class BaseToolAgent implements Agent {
 
   readonly #contextBuilder: ContextBuilder
   readonly #maxIterations: number
+  readonly #maxTokens: number
   readonly #systemPromptTemplate: string
 
   constructor(opts: {
     contextBuilder: ContextBuilder
     maxIterations?: number
+    maxTokens?: number
     systemPromptTemplate: string
   }) {
     this.#contextBuilder = opts.contextBuilder
     this.#maxIterations = opts.maxIterations ?? 50
+    this.#maxTokens = opts.maxTokens ?? 4096
     this.#systemPromptTemplate = opts.systemPromptTemplate
   }
 
@@ -55,9 +58,10 @@ export abstract class BaseToolAgent implements Agent {
     }
 
     const profile = context.profileOverride ?? this.defaultProfile
+    const maxTokens = this.#maxTokens === 0 ? undefined : this.#maxTokens
 
     let iteration = 0
-    while (iteration < this.#maxIterations) {
+    while (this.#maxIterations === 0 || iteration < this.#maxIterations) {
       iteration++
       yield { kind: 'verbose', content: `[Iteration ${iteration}] Calling LLM...` }
 
@@ -69,8 +73,8 @@ export abstract class BaseToolAgent implements Agent {
 
       const messages: LLMMessage[] = [...context.conversationHistory]
       const llmResponse = context.onStreamChunk
-        ? await context.llm.stream({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens: 4096 }, context.onStreamChunk)
-        : await context.llm.complete({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens: 4096 })
+        ? await context.llm.stream({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens }, context.onStreamChunk)
+        : await context.llm.complete({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens })
 
       if (llmResponse.content || llmResponse.reasoning || llmResponse.toolCalls) {
         await context.persistMessage({

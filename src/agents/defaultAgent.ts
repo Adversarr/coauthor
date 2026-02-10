@@ -24,14 +24,22 @@ export class DefaultCoAuthorAgent extends BaseToolAgent {
   readonly description =
     'General-purpose agent that uses available tools to analyze tasks, edit files, and execute commands.'
   readonly toolGroups: readonly ToolGroup[] = ['search', 'edit', 'exec', 'subtask']
-  readonly defaultProfile: LLMProfile = 'fast'
+  readonly defaultProfile: LLMProfile
 
-  constructor(opts: { contextBuilder: ContextBuilder; maxIterations?: number; systemPromptTemplate?: string }) {
+  constructor(opts: {
+    contextBuilder: ContextBuilder
+    maxIterations?: number
+    maxTokens?: number
+    defaultProfile?: LLMProfile
+    systemPromptTemplate?: string
+  }) {
     super({
       contextBuilder: opts.contextBuilder,
       maxIterations: opts.maxIterations,
+      maxTokens: opts.maxTokens,
       systemPromptTemplate: opts.systemPromptTemplate ?? DEFAULT_COAUTHOR_SYSTEM_PROMPT
     })
+    this.defaultProfile = opts.defaultProfile ?? 'fast'
   }
 }
 

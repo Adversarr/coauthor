@@ -63,10 +63,16 @@ export type CreateTaskOptions = {
 export class TaskService {
   readonly #store: EventStore
   readonly #currentActorId: string
+  readonly #defaultPriority: TaskPriority
 
-  constructor(store: EventStore, currentActorId: string = DEFAULT_USER_ACTOR_ID) {
+  constructor(
+    store: EventStore,
+    currentActorId: string = DEFAULT_USER_ACTOR_ID,
+    defaultPriority: TaskPriority = 'foreground'
+  ) {
     this.#store = store
     this.#currentActorId = currentActorId
+    this.#defaultPriority = defaultPriority
   }
 
   // Create new task event
@@ -79,7 +85,7 @@ export class TaskService {
           taskId,
           title: opts.title,
           intent: opts.intent ?? '',
-          priority: opts.priority ?? 'foreground',
+          priority: opts.priority ?? this.#defaultPriority,
           artifactRefs: opts.artifactRefs,
           agentId: opts.agentId,
           parentTaskId: opts.parentTaskId,

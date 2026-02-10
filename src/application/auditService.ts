@@ -9,16 +9,18 @@ import type { AuditLog, StoredAuditEntry } from '../domain/ports/auditLog.js'
 
 export class AuditService {
   readonly #auditLog: AuditLog
+  readonly #defaultLimit: number
 
-  constructor(auditLog: AuditLog) {
+  constructor(auditLog: AuditLog, defaultLimit: number = 20) {
     this.#auditLog = auditLog
+    this.#defaultLimit = defaultLimit
   }
 
   /**
    * Get recent audit entries, optionally filtered by task ID.
    * Returns entries sorted by timestamp descending (newest first).
    */
-  async getRecentEntries(taskId?: string, limit: number = 20): Promise<StoredAuditEntry[]> {
+  async getRecentEntries(taskId?: string, limit?: number): Promise<StoredAuditEntry[]> {
     let entries: StoredAuditEntry[]
     
     if (taskId) {
@@ -30,7 +32,8 @@ export class AuditService {
     // Sort by ID descending (newest first) since IDs are monotonic
     entries.sort((a, b) => b.id - a.id)
     
-    return entries.slice(0, limit)
+    const effectiveLimit = limit ?? this.#defaultLimit
+    return effectiveLimit === 0 ? entries : entries.slice(0, effectiveLimit)
   }
 
   async observeEntries(taskId?: string): Promise<Observable<StoredAuditEntry>> {

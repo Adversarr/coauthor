@@ -43,10 +43,16 @@ export type InteractionResponse = {
 export class InteractionService {
   readonly #store: EventStore
   readonly #currentActorId: string
+  readonly #defaultTimeoutMs: number
 
-  constructor(store: EventStore, currentActorId: string = DEFAULT_USER_ACTOR_ID) {
+  constructor(
+    store: EventStore,
+    currentActorId: string = DEFAULT_USER_ACTOR_ID,
+    defaultTimeoutMs: number = 300000
+  ) {
     this.#store = store
     this.#currentActorId = currentActorId
+    this.#defaultTimeoutMs = defaultTimeoutMs
   }
 
   /**
@@ -180,12 +186,12 @@ export class InteractionService {
     interactionId: string,
     opts?: { timeoutMs?: number; pollIntervalMs?: number }
   ): Promise<UserInteractionRespondedPayload | null> {
-    const timeoutMs = opts?.timeoutMs ?? 300000 // 5 minutes default
+    const timeoutMs = opts?.timeoutMs ?? this.#defaultTimeoutMs
     const pollIntervalMs = opts?.pollIntervalMs ?? 100
 
     const startTime = Date.now()
     
-    while (Date.now() - startTime < timeoutMs) {
+    while (timeoutMs === 0 || Date.now() - startTime < timeoutMs) {
       const response = await this.getInteractionResponse(taskId, interactionId)
       if (response) {
         return response
