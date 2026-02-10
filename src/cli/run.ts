@@ -54,7 +54,7 @@ export async function runCli(opts: {
     const addr = server.address!
     const lockPath = lockFilePath(baseDir)
     writeLockFile(lockPath, { pid: process.pid, port: addr.port, token: authToken, startedAt: new Date().toISOString() })
-    io.stdout(`Web UI: http://${addr.host}:${addr.port}\n`)
+    io.stdout(`Web UI: http://${addr.host}:${addr.port}\n Auth Token: ${authToken}\n`)
     cleanup = () => { removeLockFile(lockPath); server.stop().catch(() => {}) }
     process.on('SIGINT', () => { cleanup?.(); process.exit(0) })
     process.on('SIGTERM', () => { cleanup?.(); process.exit(0) })

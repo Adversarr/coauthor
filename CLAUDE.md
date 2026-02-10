@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview -- in MVP development stage, no backward compatibility need to consider.
+## Project Overview (MVP; no backwards-compat guarantees)
 
 CoAuthor is a co-authoring system for STEM academic writing using LLM agents. It provides a task-driven, event-sourced architecture for collaborative writing with LaTeX support.
 
-**Current Milestone:** MVP with basic task management, agent execution, user interaction protocol (UIP), and terminal UI (TUI). Under MVP development (pre Ver 0), huge changes to architecture and domain model is acceptable and will happen frequently.
+**Current Milestone:** MVP with tasks, agent runtime execution, UIP (Universal Interaction Protocol), and UIs (TUI + Web UI). Architecture and domain model can change frequently.
 
 ## Common Commands
 
@@ -75,66 +75,46 @@ node dist/index.js task list
 
 ## Architecture Overview
 
-### Architecture Pattern
-**Hexagonal Architecture (Ports and Adapters)** with **Event Sourcing** and **CQRS**.
+### Mental Model
+- **Hexagonal (Ports/Adapters)** + **Event Sourcing** + **CQRS (pull-based projections)**.
+- **Master process** owns persistence + agent execution and exposes **HTTP + WebSocket** on localhost.
+- **Client processes** (CLI/TUI/Web UI) call **HTTP for commands/queries** and use **WS for realtime streams**.
+- Two realtime planes:
+  - **Domain event stream**: `EventStore.events$` (append-only StoredEvents).
+  - **UI event stream**: `UiBus.events$` (agent output, streaming deltas, forwarded audit entries).
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture design.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the normative (V0.x) spec.
+See [docs/ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md) for the current implementation-centric coupling map (HTTP/Web UI/WS + buses).
 See [docs/DOMAIN.md](docs/DOMAIN.md) for domain model specification.
-See [docs/MILESTONES.md](docs/MILESTONES.md) for milestone planning.
 
-### Directory Structure
+### Key Entry Points
+- App wiring: `src/app/createApp.ts` (local) and `src/app/createRemoteApp.ts` (client mode).
+- Master server: `src/infra/server.ts` (HTTP + WS + static Web UI).
+- HTTP API: `src/infra/http/httpServer.ts` (Hono routes; calls application services).
+- WS fanout: `src/infra/ws/wsServer.ts` (bridges `EventStore.events$` + `UiBus.events$`).
+- Agent runtime: `src/agents/runtimeManager.ts` (subscribes to domain events, orchestrates per-task runtimes).
+- Web UI: `web/src/services/{api,ws}.ts` + Zustand stores in `web/src/stores/`.
+
+### Directory Structure (high-signal)
 ```
 src/
-├── index.ts              # CLI entry point
-├── agents/               # Agent layer: RuntimeManager + task-scoped runtimes
-├── app/
-│   └── createApp.ts      # App initialization with services
-├── application/          # Application services (Use Cases)
-│   ├── auditService.ts   # Audit log queries
-│   ├── contextBuilder.ts # LLM system+task context
-│   ├── eventService.ts   # Event replay use cases
-│   ├── interactionService.ts # UIP use cases
-│   ├── projector.ts      # Projection runner with checkpoint
-│   ├── taskService.ts    # Task use cases
-│   └── index.ts
-├── cli/                  # CLI interface
-│   ├── commands/         # CLI subcommands
-│   ├── run.ts            # CLI command parser (yargs)
-│   └── io.ts             # IO abstraction for testability
-├── config/               # Runtime configuration
-├── domain/               # Domain layer (types, schemas)
-│   ├── actor.ts          # Actor types (User, Agent, System)
-│   ├── task.ts           # Task, ArtifactRef types
-│   ├── events.ts         # Domain events (Zod schemas)
-│   ├── index.ts          # Domain exports
-│   └── ports/            # Port interfaces
-│       ├── eventStore.ts # EventStore interface
-│       ├── llmClient.ts  # LLM client interface
-│       ├── tool.ts       # Tool registry interface
-│       └── index.ts
-├── infra/                # Infrastructure adapters
-│   ├── jsonlEventStore.ts   # JSONL-based event store
-│   ├── jsonlAuditLog.ts     # Tool audit log
-│   ├── jsonlConversationStore.ts # Conversation persistence
-│   ├── toolExecutor.ts      # Tool execution + audit
-│   ├── toolRegistry.ts      # Tool definitions
-│   ├── toolSchemaAdapter.ts # Tool schema adaptation
-│   └── tools/               # Built-in tool implementations
-├── tui/                  # Terminal UI (Ink + React)
-│   ├── components/       # UI components
-│   ├── main.tsx          # Main TUI component
-│   └── run.ts            # TUI renderer
-└── patch/                # Unified diff helpers
-    └── applyUnifiedPatch.ts  # Unified diff patch application
+├── index.ts                 # CLI entry point
+├── app/                      # Composition roots (local + remote)
+├── domain/                   # Domain types, events, ports (no external deps)
+├── application/              # Use cases (Task/Event/Interaction/Audit services)
+├── agents/                   # RuntimeManager + task-scoped runtimes + output handling
+├── infra/                    # Adapters (JSONL stores, HTTP/WS server, tools)
+├── cli/                      # CLI adapter
+└── tui/                      # TUI adapter (Ink)
 
 tests/                    # Test files (vitest)
 docs/                     # Documentation
-├── ARCHITECTURE.md       # Architecture design
-├── DOMAIN.md             # Domain model spec
-└── MILESTONES.md         # Milestone planning
-.coauthor/                # Database directory
-├── events.jsonl          # Event store (append-only)
-└── projections.jsonl     # Projection checkpoints
+web/                      # Web UI (Vite + React) and build output (web/dist)
+.coauthor/                # Local data directory (JSONL)
+├── events.jsonl          # Domain event log (append-only)
+├── projections.jsonl     # Projection checkpoints
+├── audit.jsonl           # Tool audit log (append-only)
+└── conversations.jsonl   # LLM conversation persistence
 ```
 
 ### Core Concepts
@@ -160,57 +140,32 @@ docs/                     # Documentation
 - File modifications and command execution are recorded in AuditLog, not DomainEvents
 
 **Projections:**
-- `tasks` projection - Lists all tasks with current state and metadata
-- Projections use cursor positions for incremental updates
-- Checkpoint stored in `.coauthor/projections.jsonl`
-- Projections can be rebuilt by replaying all events
+- Projections are computed by folding events (`runProjection`) and checkpointed in `.coauthor/projections.jsonl`.
+- UIs typically treat `events$` as a “refresh trigger” and re-run projections, not as an incremental reducer.
 
 **Hexagonal Architecture Layers:**
 1. **Domain** (`src/domain/`): Pure types, event schemas, port interfaces. Zero external dependencies.
 2. **Application** (`src/application/`): Use case services implementing business logic.
-3. **Infrastructure** (`src/infra/`): EventStore adapter (JSONL), logger, external dependencies.
-4. **Agents** (`src/agents/`): RuntimeManager + task-scoped AgentRuntime. RuntimeManager is the single subscriber to `EventStore.events$`, routes events by taskId to task-scoped `AgentRuntime` instances. Each runtime manages exactly ONE task with scalar state (no Maps/Sets). Supports multi-agent via agent registration catalogue.
-5. **Interface** (`src/cli/`, `src/tui/`): User-facing CLI and TUI adapters.
+3. **Infrastructure** (`src/infra/`): JSONL stores, HTTP/WS server, tool adapters.
+4. **Agents** (`src/agents/`): RuntimeManager subscribes to `EventStore.events$` and manages per-task runtimes.
+5. **Interfaces** (`src/cli/`, `src/tui/`, `web/`): Adapters that call services and subscribe to streams.
 
 ### Dependency Flow
 ```
-CLI/TUI → Application Services → Domain Ports ← Infrastructure Adapters
-         ↓                      ↓
-         Domain Events ← Domain Types
+Adapters (CLI/TUI/Web) → Application → Domain Ports ← Infra Adapters
+                             ↓
+                        Domain Events
 ```
 
 ## Important Patterns
 
-**Event Store Pattern:**
-- `EventStore` is a port (interface) in domain layer
-- `JsonlEventStore` is an adapter in infrastructure layer
-- All events are appended with monotonically increasing sequence numbers
-- Events within a stream are totally ordered
-
-**Service Pattern:**
-- Services in `src/application/` encapsulate use cases
-- Services depend on `EventStore` port, not concrete implementation
-- Services emit events, never mutate state directly
-- Services build projections by folding over events
-
-**Testing Pattern:**
-- Uses Vitest with Node environment
-- `mock-fs` for filesystem mocking (event store testing)
-- `ink-testing-library` for TUI component tests
-- IO abstraction in CLI allows easy testing without actual stdin/stdout
-- Test services by verifying emitted events, not state
+**EventStore vs UiBus:**
+- Domain events = collaboration history + task lifecycle.
+- UiBus events = live UX stream (agent output, streaming deltas, forwarded audit entries).
 
 **Tool Use + Audit Log:**
-- Tool calls are executed through `ToolExecutor`
-- Tool calls are recorded in AuditLog (`ToolCallRequested` / `ToolCallCompleted`)
-- Risky tools trigger UIP confirmation with a diff preview
-
-**Database:**
-- JSONL stored in `.coauthor/` directory
-  - `events.jsonl` - Event log (append-only)
-  - `projections.jsonl` - Projection checkpoints
-- Files auto-created via `ensureSchema()` in EventStore
-- Event log is immutable, never modified or deleted
+- Tool calls are executed via `ToolExecutor` and recorded in `audit.jsonl`.
+- Risky tool actions require UIP confirmation.
 
 ## Development Workflow
 
