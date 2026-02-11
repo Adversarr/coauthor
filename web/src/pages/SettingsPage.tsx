@@ -2,13 +2,24 @@
  * Settings page — connection settings and configuration.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useConnectionStore } from '@/stores'
 
 export function SettingsPage() {
-  const { status, connect, disconnect } = useConnectionStore()
+  const status = useConnectionStore(s => s.status)
+  const connect = useConnectionStore(s => s.connect)
+  const disconnect = useConnectionStore(s => s.disconnect)
   const [token, setToken] = useState(sessionStorage.getItem('coauthor-token') ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    }
+  }, [])
 
   const saveToken = () => {
     try {
@@ -19,10 +30,12 @@ export function SettingsPage() {
     }
     disconnect()
     // Wait for disconnect to settle before reconnecting
-    setTimeout(() => {
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    reconnectTimerRef.current = setTimeout(() => {
       connect()
       setSaveStatus('saved')
-      setTimeout(() => setSaveStatus('idle'), 2000)
+      statusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000)
     }, 200)
   }
 

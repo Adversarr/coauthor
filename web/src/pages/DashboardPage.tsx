@@ -25,7 +25,9 @@ function sortTasks(tasks: TaskView[]): TaskView[] {
 }
 
 export function DashboardPage() {
-  const { tasks, loading, fetchTasks } = useTaskStore()
+  const tasks = useTaskStore(s => s.tasks)
+  const loading = useTaskStore(s => s.loading)
+  const fetchTasks = useTaskStore(s => s.fetchTasks)
   const [showCreate, setShowCreate] = useState(false)
   const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all')
   const navigate = useNavigate()

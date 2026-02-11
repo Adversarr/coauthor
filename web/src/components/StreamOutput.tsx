@@ -6,8 +6,16 @@ import { useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useStreamStore } from '@/stores'
 
+type StreamChunk = {
+  kind: 'text' | 'reasoning' | 'verbose' | 'error'
+  content: string
+  timestamp: number
+}
+
+const EMPTY_ARRAY: StreamChunk[] = []
+
 export function StreamOutput({ taskId }: { taskId: string }) {
-  const chunks = useStreamStore(s => s.streams[taskId] ?? [])
+  const chunks = useStreamStore(s => s.streams[taskId] ?? EMPTY_ARRAY)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {

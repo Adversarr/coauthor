@@ -40,18 +40,32 @@ export async function discoverMaster(baseDir: string): Promise<DiscoveryResult> 
   }
 
   // HTTP health check with timeout
+  let res: Response | undefined
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 2000)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 2000)
-    const res = await fetch(`http://127.0.0.1:${data.port}/api/health`, {
+    res = await fetch(`http://127.0.0.1:${data.port}/api/health`, {
       signal: controller.signal,
+      headers: {
+        // Prevent persistent sockets from keeping short-lived probe servers open.
+        Connection: 'close',
+      },
     })
-    clearTimeout(timeout)
     if (res.ok) {
       return { mode: 'client', port: data.port, token: data.token }
     }
   } catch {
     // Health check failed — stale lock
+  } finally {
+    clearTimeout(timeout)
+    // Ensure probe response is closed so server shutdown is not blocked.
+    if (res?.body && !res.bodyUsed) {
+      try {
+        await res.body.cancel()
+      } catch {
+        // ignore cleanup failures
+      }
+    }
   }
 
   removeLockFile(path)

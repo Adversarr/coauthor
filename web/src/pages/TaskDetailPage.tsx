@@ -2,7 +2,7 @@
  * TaskDetailPage — detailed view of a single task with live output, events, and interactions.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Pause, Play, X, MessageSquare, Bot, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,26 +27,42 @@ export function TaskDetailPage() {
   const [tab, setTab] = useState<'output' | 'events'>('output')
   const [taskLoading, setTaskLoading] = useState(false)
   const [taskNotFound, setTaskNotFound] = useState(false)
+  const lastFetchIdRef = useRef<string | null>(null)
+  const fetchInFlightRef = useRef(false)
 
   // Fetch task from API if not in store (supports direct navigation / page refresh)
   useEffect(() => {
     if (!taskId) return
     if (task) {
-      setTaskNotFound(false)
+      if (taskNotFound) setTaskNotFound(false)
+      if (taskLoading) setTaskLoading(false)
       return
     }
+    if (lastFetchIdRef.current === taskId && fetchInFlightRef.current) return
+    lastFetchIdRef.current = taskId
+    fetchInFlightRef.current = true
     setTaskLoading(true)
-    fetchTask(taskId).then(t => {
-      setTaskLoading(false)
-      if (!t) setTaskNotFound(true)
-    })
+    fetchTask(taskId)
+      .then(t => {
+        setTaskLoading(false)
+        if (!t) setTaskNotFound(true)
+      })
+      .finally(() => {
+        fetchInFlightRef.current = false
+      })
   }, [taskId, task, fetchTask])
 
   useEffect(() => {
+    let cancelled = false
     if (taskId && task?.pendingInteractionId) {
-      api.getPendingInteraction(taskId).then(setInteraction).catch(() => {})
+      api.getPendingInteraction(taskId).then(p => {
+        if (!cancelled) setInteraction(p)
+      }).catch(() => {})
     } else {
-      setInteraction(null)
+      if (interaction) setInteraction(null)
+    }
+    return () => {
+      cancelled = true
     }
   }, [taskId, task?.pendingInteractionId])
 

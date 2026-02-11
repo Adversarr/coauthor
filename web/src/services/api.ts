@@ -65,8 +65,8 @@ export const api = {
   }>('/api/runtime'),
 
   // Audit
-  getAudit: (after = 0, taskId?: string) => {
-    const params = new URLSearchParams({ after: String(after) })
+  getAudit: (limit = 50, taskId?: string) => {
+    const params = new URLSearchParams({ limit: String(limit) })
     if (taskId) params.set('taskId', taskId)
     return get<{ entries: unknown[] }>(`/api/audit?${params}`).then(r => r.entries)
   },
