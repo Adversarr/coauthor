@@ -54,6 +54,7 @@ describe('TaskTree data logic', () => {
     })
     const stream = useStreamStore.getState().streams['t1']
     expect(stream).toBeDefined()
+    if (!stream) throw new Error('expected stream to exist')
     expect(stream.completed).toBe(false)
     expect(stream.chunks.length).toBeGreaterThanOrEqual(1)
   })

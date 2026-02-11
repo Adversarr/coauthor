@@ -19,14 +19,18 @@ import { eventBus } from '@/stores/eventBus'
 // Import the notifications module to activate the subscription
 import '@/notifications'
 
-function makeEvent(type: string, payload: Record<string, unknown> = {}): StoredEvent {
+function makeEvent(
+  type: string,
+  payload: Record<string, unknown> = {},
+  createdAt: string = new Date().toISOString(),
+): StoredEvent {
   return {
     id: Math.random() * 1000 | 0,
     streamId: 's-1',
     seq: 1,
     type: type as StoredEvent['type'],
     payload,
-    createdAt: new Date().toISOString(),
+    createdAt,
   }
 }
 
@@ -58,5 +62,11 @@ describe('notifications', () => {
   it('fires warning toast on UserInteractionRequested', () => {
     eventBus.emit('domain-event', makeEvent('UserInteractionRequested', { purpose: 'Confirm deletion' }))
     expect(mockToast.warning).toHaveBeenCalledWith('Action required', expect.objectContaining({ description: 'Confirm deletion' }))
+  })
+
+  it('suppresses old historical events on startup', () => {
+    const oldTs = new Date(Date.now() - 60_000).toISOString()
+    eventBus.emit('domain-event', makeEvent('TaskCompleted', { title: 'Old' }, oldTs))
+    expect(mockToast.success).not.toHaveBeenCalled()
   })
 })

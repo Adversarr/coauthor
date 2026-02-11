@@ -34,8 +34,11 @@ describe('conversationStore', () => {
   })
 
   it('getMessages returns empty array for unknown task', () => {
-    const msgs = useConversationStore.getState().getMessages('unknown')
-    expect(msgs).toEqual([])
+    const store = useConversationStore.getState()
+    const msgs1 = store.getMessages('unknown')
+    const msgs2 = store.getMessages('unknown')
+    expect(msgs1).toEqual([])
+    expect(msgs1).toBe(msgs2)
   })
 
   it('clearConversation removes task data', () => {

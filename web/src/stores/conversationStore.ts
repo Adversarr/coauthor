@@ -11,7 +11,7 @@ import { api } from '@/services/api'
 import type { StoredEvent } from '@/types'
 import { eventBus } from './eventBus'
 import {
-  TaskCreatedPayload, TaskIdPayload, TaskCompletedPayload,
+  TaskCreatedPayload, TaskCompletedPayload,
   TaskFailedPayload, TaskCanceledPayload,
   InteractionRequestedPayload, InteractionRespondedPayload,
   InstructionAddedPayload, safeParse,
@@ -31,6 +31,8 @@ export interface ConversationMessage {
   /** For interaction messages, the interaction metadata. */
   metadata?: Record<string, unknown>
 }
+
+const EMPTY_MESSAGES: ConversationMessage[] = []
 
 // ── Store ──────────────────────────────────────────────────────────────
 
@@ -145,7 +147,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  getMessages: (taskId) => get().conversations[taskId] ?? [],
+  getMessages: (taskId) => get().conversations[taskId] ?? EMPTY_MESSAGES,
 
   clearConversation: (taskId) => {
     const conversations = { ...get().conversations }
@@ -159,20 +161,21 @@ eventBus.on('domain-event', (event) => {
   const taskId = (event.payload as Record<string, unknown>).taskId as string | undefined
   if (!taskId) return
 
-  const { conversations } = useConversationStore.getState()
-  // Only append if we already have a conversation loaded for this task
-  if (!conversations[taskId]) return
-
   const newMessages = eventToMessages(event)
   if (newMessages.length === 0) return
 
-  const existing = conversations[taskId] ?? []
-  // Deduplicate by id
-  const existingIds = new Set(existing.map(m => m.id))
-  const unique = newMessages.filter(m => !existingIds.has(m.id))
-  if (unique.length === 0) return
+  useConversationStore.setState((state) => {
+    // Only append if we already have a conversation loaded for this task.
+    const existing = state.conversations[taskId]
+    if (!existing) return state
 
-  useConversationStore.setState({
-    conversations: { ...conversations, [taskId]: [...existing, ...unique] },
+    // Deduplicate by id.
+    const existingIds = new Set(existing.map(m => m.id))
+    const unique = newMessages.filter(m => !existingIds.has(m.id))
+    if (unique.length === 0) return state
+
+    return {
+      conversations: { ...state.conversations, [taskId]: [...existing, ...unique] },
+    }
   })
 })

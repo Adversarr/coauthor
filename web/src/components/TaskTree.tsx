@@ -38,9 +38,8 @@ function buildTree(tasks: TaskView[]): TreeNode[] {
 }
 
 function TreeNodeRow({ node, depth, activeTaskId }: { node: TreeNode; depth: number; activeTaskId?: string }) {
-  const streams = useStreamStore(s => s.streams)
   const isActive = node.task.taskId === activeTaskId
-  const stream = streams[node.task.taskId]
+  const stream = useStreamStore(s => s.streams[node.task.taskId])
   const hasStream = !!stream && !stream.completed
   const hasChildren = node.children.length > 0
 

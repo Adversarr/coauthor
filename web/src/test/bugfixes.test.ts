@@ -7,7 +7,7 @@ import { useTaskStore } from '@/stores/taskStore'
 import { useStreamStore } from '@/stores/streamStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { eventBus } from '@/stores/eventBus'
-import type { StoredEvent, TaskView, UiEvent } from '@/types'
+import type { StoredEvent, TaskView } from '@/types'
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

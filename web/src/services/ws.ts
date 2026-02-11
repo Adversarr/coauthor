@@ -17,10 +17,33 @@ export interface WsCallbacks {
   onStatusChange?: (status: ConnectionStatus) => void
 }
 
+const LAST_EVENT_ID_STORAGE_KEY = 'coauthor-last-event-id'
+
+function readPersistedLastEventId(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const raw = window.sessionStorage.getItem(LAST_EVENT_ID_STORAGE_KEY)
+    if (!raw) return 0
+    const parsed = Number.parseInt(raw, 10)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  } catch {
+    return 0
+  }
+}
+
+function persistLastEventId(id: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(LAST_EVENT_ID_STORAGE_KEY, String(id))
+  } catch {
+    // Best-effort persistence only.
+  }
+}
+
 export class WsService {
   #ws: WebSocket | null = null
   #callbacks: WsCallbacks
-  #lastEventId = 0
+  #lastEventId = readPersistedLastEventId()
   #reconnectTimer: ReturnType<typeof setTimeout> | null = null
   #reconnectDelay = 1000
   #disposed = false
@@ -59,6 +82,7 @@ export class WsService {
         switch (msg.type) {
           case 'event':
             this.#lastEventId = Math.max(this.#lastEventId, msg.data.id)
+            persistLastEventId(this.#lastEventId)
             this.#callbacks.onEvent?.(msg.data)
             break
           case 'ui_event':
@@ -96,7 +120,10 @@ export class WsService {
   }
 
   get lastEventId(): number { return this.#lastEventId }
-  set lastEventId(id: number) { this.#lastEventId = id }
+  set lastEventId(id: number) {
+    this.#lastEventId = Math.max(0, id)
+    persistLastEventId(this.#lastEventId)
+  }
 
   #scheduleReconnect(): void {
     if (this.#disposed) return
