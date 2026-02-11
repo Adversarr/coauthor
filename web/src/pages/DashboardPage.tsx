@@ -11,6 +11,8 @@ import { useTaskStore } from '@/stores'
 import { StatusBadge } from '@/components/StatusBadge'
 import { PriorityIcon } from '@/components/PriorityIcon'
 import { CreateTaskDialog } from '@/components/CreateTaskDialog'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { TaskView, TaskStatus } from '@/types'
 
 const STATUS_ORDER: TaskStatus[] = ['in_progress', 'awaiting_user', 'open', 'paused', 'done', 'failed', 'canceled']
@@ -53,38 +55,31 @@ export function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => fetchTasks()}
-            className="p-2 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
             title="Refresh"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <Button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
           >
-            <Plus size={16} />
+            <Plus className="h-4 w-4" />
             New Task
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1 bg-zinc-900 rounded-lg p-1">
-        {(['all', 'active', 'done'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize',
-              filter === f ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300',
-            )}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+        <TabsList className="bg-zinc-900">
+          <TabsTrigger value="all" className="capitalize">all</TabsTrigger>
+          <TabsTrigger value="active" className="capitalize">active</TabsTrigger>
+          <TabsTrigger value="done" className="capitalize">done</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Task List */}
       {filtered.length === 0 ? (
@@ -99,7 +94,7 @@ export function DashboardPage() {
             <button
               key={task.taskId}
               onClick={() => navigate(`/tasks/${task.taskId}`)}
-              className="w-full flex items-center gap-4 px-4 py-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:bg-zinc-800/60 hover:border-zinc-700/50 transition-all text-left group"
+              className="w-full flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border hover:bg-accent/40 transition-colors text-left group"
             >
               <PriorityIcon priority={task.priority} />
               <div className="flex-1 min-w-0">

@@ -4,6 +4,7 @@
 
 import { Wifi, WifiOff, Loader2 } from 'lucide-react'
 import { useConnectionStore } from '@/stores'
+import { Badge } from '@/components/ui/badge'
 
 export function ConnectionIndicator() {
   const status = useConnectionStore(s => s.status)
@@ -11,24 +12,24 @@ export function ConnectionIndicator() {
   switch (status) {
     case 'connected':
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+        <Badge className="gap-1.5 bg-emerald-900/60 text-emerald-200 border-transparent">
           <Wifi size={14} />
           Connected
-        </span>
+        </Badge>
       )
     case 'connecting':
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-amber-400">
+        <Badge className="gap-1.5 bg-amber-900/60 text-amber-200 border-transparent">
           <Loader2 size={14} className="animate-spin" />
           Connecting
-        </span>
+        </Badge>
       )
     case 'disconnected':
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-red-400">
+        <Badge className="gap-1.5 bg-red-900/60 text-red-200 border-transparent">
           <WifiOff size={14} />
           Disconnected
-        </span>
+        </Badge>
       )
   }
 }

@@ -2,9 +2,9 @@
  * StreamOutput — renders live agent streaming output for a task.
  */
 
-import { useRef, useEffect } from 'react'
-import { cn } from '@/lib/utils'
+import { useMemo } from 'react'
 import { useStreamStore } from '@/stores'
+import { Terminal, TerminalContent, TerminalHeader, TerminalTitle } from '@/components/ai-elements/terminal'
 
 type StreamChunk = {
   kind: 'text' | 'reasoning' | 'verbose' | 'error'
@@ -14,38 +14,33 @@ type StreamChunk = {
 
 const EMPTY_ARRAY: StreamChunk[] = []
 
+function chunkToAnsi(chunk: StreamChunk): string {
+  switch (chunk.kind) {
+    case 'error':
+      return `\u001b[31m${chunk.content}\u001b[0m`
+    case 'reasoning':
+      return `\u001b[2m${chunk.content}\u001b[0m`
+    case 'verbose':
+      return `\u001b[2m${chunk.content}\u001b[0m`
+    case 'text':
+      return chunk.content
+  }
+}
+
 export function StreamOutput({ taskId }: { taskId: string }) {
   const chunks = useStreamStore(s => s.streams[taskId] ?? EMPTY_ARRAY)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const clearStream = useStreamStore(s => s.clearStream)
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chunks.length])
+  const output = useMemo(() => chunks.map(chunkToAnsi).join(''), [chunks])
 
   if (chunks.length === 0) return null
 
   return (
-    <div className="rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden">
-      <div className="px-3 py-1.5 text-xs font-medium text-zinc-500 border-b border-zinc-800 bg-zinc-900/50">
-        Agent Output
-      </div>
-      <div className="max-h-96 overflow-y-auto p-3 space-y-1 font-mono text-sm">
-        {chunks.map((chunk, i) => (
-          <div
-            key={i}
-            className={cn(
-              'whitespace-pre-wrap break-words',
-              chunk.kind === 'error' && 'text-red-400',
-              chunk.kind === 'reasoning' && 'text-zinc-500 italic',
-              chunk.kind === 'verbose' && 'text-zinc-600',
-              chunk.kind === 'text' && 'text-zinc-200',
-            )}
-          >
-            {chunk.content}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </div>
+    <Terminal output={output} onClear={() => clearStream(taskId)} className="border-border bg-zinc-950">
+      <TerminalHeader>
+        <TerminalTitle>Agent Output</TerminalTitle>
+      </TerminalHeader>
+      <TerminalContent />
+    </Terminal>
   )
 }

@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { api } from '@/services/api'
+import { CodeBlock } from '@/components/ai-elements/code-block'
 import type { PendingInteraction } from '@/types'
 
 export function InteractionPanel({ interaction }: { interaction: PendingInteraction }) {
@@ -37,11 +38,20 @@ export function InteractionPanel({ interaction }: { interaction: PendingInteract
       </div>
 
       {interaction.display.content != null && (
-        <pre className="text-xs bg-zinc-900 rounded p-3 overflow-x-auto text-zinc-300 border border-zinc-800">
-          {typeof interaction.display.content === 'string'
-            ? interaction.display.content
-            : JSON.stringify(interaction.display.content, null, 2)}
-        </pre>
+        typeof interaction.display.content === 'string' && interaction.display.contentKind !== 'Json' ? (
+          <pre className="text-xs bg-zinc-900 rounded p-3 overflow-x-auto text-zinc-300 border border-zinc-800">
+            {interaction.display.content}
+          </pre>
+        ) : (
+          <div className="rounded-md border border-zinc-800 overflow-hidden">
+            <CodeBlock
+              code={typeof interaction.display.content === 'string'
+                ? interaction.display.content
+                : JSON.stringify(interaction.display.content, null, 2)}
+              language={interaction.display.contentKind === 'Diff' ? 'diff' : 'json'}
+            />
+          </div>
+        )
       )}
 
       {/* Select / Confirm options */}

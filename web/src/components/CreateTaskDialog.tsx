@@ -2,9 +2,13 @@
  * CreateTaskDialog — modal form for creating a new task.
  */
 
-import { useState, useRef, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '@/services/api'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 interface Props {
   open: boolean
@@ -18,17 +22,16 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+  const intentId = useId()
 
   useEffect(() => {
     if (open) {
       setTitle('')
       setIntent('')
       setError(null)
-      setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
-
-  if (!open) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,65 +50,57 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Dialog */}
-      <form
-        onSubmit={handleSubmit}
-        className="relative z-10 w-full max-w-lg bg-zinc-900 rounded-xl border border-zinc-800 shadow-2xl p-6 space-y-4"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+    >
+      <DialogContent
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          inputRef.current?.focus()
+        }}
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-100">New Task</h2>
-          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
-            <X size={18} />
-          </button>
-        </div>
+        <DialogHeader>
+          <DialogTitle>New Task</DialogTitle>
+        </DialogHeader>
 
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Title</label>
-            <input
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor={titleId}>Title</Label>
+            <Input
+              id={titleId}
               ref={inputRef}
-              type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="What should the agent do?"
-              className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
             />
           </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Intent (optional)</label>
-            <textarea
+
+          <div className="grid gap-2">
+            <Label htmlFor={intentId}>Intent (optional)</Label>
+            <Textarea
+              id={intentId}
               value={intent}
               onChange={e => setIntent(e.target.value)}
               placeholder="Additional context or instructions…"
               rows={3}
-              className="w-full rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
             />
           </div>
-        </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-md text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || !title.trim()}
-            className="px-4 py-2 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50 transition-colors"
-          >
-            {submitting ? 'Creating…' : 'Create Task'}
-          </button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting || !title.trim()}>
+              {submitting ? 'Creating…' : 'Create Task'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

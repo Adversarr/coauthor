@@ -5,7 +5,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Pause, Play, X, MessageSquare, Bot, Clock } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { formatTime, timeAgo } from '@/lib/utils'
 import { useTaskStore } from '@/stores'
 import { api } from '@/services/api'
@@ -14,6 +13,10 @@ import { PriorityIcon } from '@/components/PriorityIcon'
 import { StreamOutput } from '@/components/StreamOutput'
 import { EventTimeline } from '@/components/EventTimeline'
 import { InteractionPanel } from '@/components/InteractionPanel'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import type { PendingInteraction } from '@/types'
 
 export function TaskDetailPage() {
@@ -107,12 +110,14 @@ export function TaskDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => navigate('/')}
-          className="mt-1 p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="mt-1"
         >
-          <ArrowLeft size={18} />
-        </button>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-zinc-100 truncate">{task.title}</h1>
@@ -134,43 +139,46 @@ export function TaskDetailPage() {
       {/* Actions */}
       <div className="flex gap-2">
         {canPause && (
-          <button
+          <Button
+            variant="secondary"
             onClick={() => api.pauseTask(task.taskId)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm transition-colors"
           >
-            <Pause size={14} /> Pause
-          </button>
+            <Pause className="h-4 w-4" /> Pause
+          </Button>
         )}
         {canResume && (
-          <button
+          <Button
             onClick={() => api.resumeTask(task.taskId)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-700 hover:bg-violet-600 text-white text-sm transition-colors"
           >
-            <Play size={14} /> Resume
-          </button>
+            <Play className="h-4 w-4" /> Resume
+          </Button>
         )}
         {canCancel && (
-          <button
+          <Button
+            variant="destructive"
             onClick={() => api.cancelTask(task.taskId)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-red-900/40 text-zinc-400 hover:text-red-300 text-sm transition-colors"
           >
-            <X size={14} /> Cancel
-          </button>
+            <X className="h-4 w-4" /> Cancel
+          </Button>
         )}
       </div>
 
       {/* Terminal Summary */}
       {task.summary && (
-        <div className="rounded-lg bg-emerald-950/20 border border-emerald-800/30 p-4">
-          <p className="text-sm font-medium text-emerald-300 mb-1">Summary</p>
-          <p className="text-sm text-zinc-300 whitespace-pre-wrap">{task.summary}</p>
-        </div>
+        <Alert className="border-emerald-800/40 bg-emerald-950/20 text-emerald-200">
+          <AlertTitle>Summary</AlertTitle>
+          <AlertDescription>
+            <p className="whitespace-pre-wrap">{task.summary}</p>
+          </AlertDescription>
+        </Alert>
       )}
       {task.failureReason && (
-        <div className="rounded-lg bg-red-950/20 border border-red-800/30 p-4">
-          <p className="text-sm font-medium text-red-300 mb-1">Failure</p>
-          <p className="text-sm text-zinc-300 whitespace-pre-wrap">{task.failureReason}</p>
-        </div>
+        <Alert variant="destructive" className="bg-red-950/20">
+          <AlertTitle>Failure</AlertTitle>
+          <AlertDescription>
+            <p className="whitespace-pre-wrap">{task.failureReason}</p>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Interaction */}
@@ -179,42 +187,36 @@ export function TaskDetailPage() {
       {/* Instruction input */}
       {isActive && (
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={instruction}
             onChange={e => setInstruction(e.target.value)}
             placeholder="Add instruction for the agent…"
-            className="flex-1 rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className="flex-1"
             onKeyDown={e => e.key === 'Enter' && handleInstruction()}
           />
-          <button
+          <Button
             onClick={handleInstruction}
             disabled={sending || !instruction.trim()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50 transition-colors"
           >
-            <MessageSquare size={14} /> Send
-          </button>
+            <MessageSquare className="h-4 w-4" /> Send
+          </Button>
         </div>
       )}
 
       {/* Tabs: Output / Events */}
-      <div className="flex gap-1 bg-zinc-900 rounded-lg p-1">
-        {(['output', 'events'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize',
-              tab === t ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300',
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'output' && <StreamOutput taskId={task.taskId} />}
-      {tab === 'events' && <EventTimeline taskId={task.taskId} />}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <TabsList className="bg-zinc-900">
+          <TabsTrigger value="output" className="capitalize">output</TabsTrigger>
+          <TabsTrigger value="events" className="capitalize">events</TabsTrigger>
+        </TabsList>
+        <TabsContent value="output">
+          <StreamOutput taskId={task.taskId} />
+        </TabsContent>
+        <TabsContent value="events">
+          <EventTimeline taskId={task.taskId} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
