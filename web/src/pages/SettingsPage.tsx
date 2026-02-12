@@ -17,6 +17,7 @@ export function SettingsPage() {
   const [token, setToken] = useState(sessionStorage.getItem('coauthor-token') ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
   const [isReconnecting, setIsReconnecting] = useState(false)
+  const isReconnectingRef = useRef(false)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -24,17 +25,20 @@ export function SettingsPage() {
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+      isReconnectingRef.current = false
     }
   }, [])
 
   const saveToken = () => {
-    if (isReconnecting) return
+    if (isReconnectingRef.current) return
+    isReconnectingRef.current = true
     setIsReconnecting(true)
     try {
       sessionStorage.setItem('coauthor-token', token)
     } catch {
       setSaveStatus('error')
       setIsReconnecting(false)
+      isReconnectingRef.current = false
       return
     }
     disconnect()
@@ -46,6 +50,7 @@ export function SettingsPage() {
       statusTimerRef.current = setTimeout(() => {
         setSaveStatus('idle')
         setIsReconnecting(false)
+        isReconnectingRef.current = false
       }, 2000)
     }, 200)
   }

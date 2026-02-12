@@ -12,13 +12,14 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
 import { resolve, sep } from 'node:path'
-import { realpath, lstat } from 'node:fs/promises'
+import { realpath } from 'node:fs/promises'
 import type { TaskService } from '../../../application/services/taskService.js'
 import type { InteractionService } from '../../../application/services/interactionService.js'
 import type { EventService } from '../../../application/services/eventService.js'
 import type { AuditService } from '../../../application/services/auditService.js'
 import type { RuntimeManager } from '../../../agents/orchestration/runtimeManager.js'
 import type { ArtifactStore } from '../../../core/ports/artifactStore.js'
+import type { ConversationStore } from '../../../core/ports/conversationStore.js'
 import { TaskPrioritySchema } from '../../../core/entities/task.js'
 
 // ============================================================================
@@ -83,6 +84,7 @@ export interface HttpAppDeps {
   auditService: AuditService
   runtimeManager: RuntimeManager
   artifactStore: ArtifactStore
+  conversationStore: ConversationStore
   authToken: string
   baseDir: string
 }
@@ -223,6 +225,12 @@ export function createHttpApp(deps: HttpAppDeps): Hono {
   app.get('/api/tasks/:id/events', async (c) => {
     const events = await deps.eventService.replayEvents(c.req.param('id'))
     return c.json({ events })
+  })
+
+  // ── Conversations ──
+  app.get('/api/tasks/:id/conversation', async (c) => {
+    const messages = await deps.conversationStore.getMessages(c.req.param('id'))
+    return c.json({ messages })
   })
 
   // ── Interactions ──

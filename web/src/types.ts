@@ -94,3 +94,17 @@ export type WsServerMessage =
 
 export interface CreateTaskResponse { taskId: string }
 export interface HealthResponse { status: string; uptime: number }
+
+// ── LLM Conversation ───────────────────────────────────────────────────
+
+export interface ToolCallRequest {
+  toolCallId: string
+  toolName: string
+  arguments: Record<string, unknown>
+}
+
+export type LLMMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string }
+  | { role: 'tool'; toolCallId: string; content: string; toolName?: string }

@@ -3,7 +3,7 @@
  * All methods throw on non-ok responses.
  */
 
-import type { TaskView, StoredEvent, CreateTaskResponse, PendingInteraction, HealthResponse } from '@/types'
+import type { TaskView, StoredEvent, CreateTaskResponse, PendingInteraction, HealthResponse, LLMMessage } from '@/types'
 
 const BASE = '' // same origin (Vite proxy in dev, served directly in prod)
 
@@ -82,4 +82,8 @@ export const api = {
 
   // Files
   readFile: (path: string) => get<{ path: string; content: string }>(`/api/files?path=${encodeURIComponent(path)}`),
+
+  // Conversation
+  getConversation: (taskId: string, opts?: { signal?: AbortSignal }) =>
+    get<{ messages: LLMMessage[] }>(`/api/tasks/${taskId}/conversation`, opts).then(r => r.messages),
 }

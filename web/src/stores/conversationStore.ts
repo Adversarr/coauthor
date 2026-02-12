@@ -1,35 +1,31 @@
 /**
- * Conversation store — builds a structured conversation view from events.
+ * Conversation store — builds a structured conversation view from LLM messages.
  *
- * Fetches events for a specific task and transforms them into a linear
- * conversation timeline (messages, interactions, status changes).
- * Used by the ConversationView component (ai-elements).
+ * Fetches LLM conversation history per task from the backend ConversationStore.
+ * Preserves interleaved output order (reasoning → tool → reasoning → content)
+ * via a `parts` array on each message.
  */
 
 import { create } from 'zustand'
 import { api } from '@/services/api'
-import type { StoredEvent } from '@/types'
+import type { LLMMessage } from '@/types'
 import { eventBus } from './eventBus'
-import {
-  TaskCreatedPayload, TaskCompletedPayload,
-  TaskFailedPayload, TaskCanceledPayload,
-  InteractionRequestedPayload, InteractionRespondedPayload,
-  InstructionAddedPayload, safeParse,
-} from '@/schemas/eventPayloads'
 
-// ── Conversation message types ─────────────────────────────────────────
+// ── Conversation message types (preserve interleaved order) ────────────
 
-export type MessageRole = 'user' | 'assistant' | 'system'
-export type MessageKind = 'text' | 'reasoning' | 'tool_call' | 'interaction' | 'status' | 'instruction' | 'error'
+export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
+
+export type MessagePart =
+  | { kind: 'text'; content: string }
+  | { kind: 'reasoning'; content: string }
+  | { kind: 'tool_call'; toolCallId: string; toolName: string; arguments: Record<string, unknown> }
+  | { kind: 'tool_result'; toolCallId: string; toolName?: string; content: string }
 
 export interface ConversationMessage {
   id: string
   role: MessageRole
-  kind: MessageKind
-  content: string
+  parts: MessagePart[]
   timestamp: string
-  /** For interaction messages, the interaction metadata. */
-  metadata?: Record<string, unknown>
 }
 
 const EMPTY_MESSAGES: ConversationMessage[] = []
@@ -42,7 +38,7 @@ interface ConversationState {
   /** Currently loading task IDs */
   loadingTasks: Set<string>
 
-  /** Fetch conversation history for a task from the events API. */
+  /** Fetch conversation history for a task from the conversation API. */
   fetchConversation: (taskId: string) => Promise<void>
 
   /** Get messages for a task. */
@@ -52,75 +48,70 @@ interface ConversationState {
   clearConversation: (taskId: string) => void
 }
 
-/** Transform a StoredEvent into conversation messages (B8: Zod-validated payloads). */
-function eventToMessages(event: StoredEvent): ConversationMessage[] {
-  const base = { timestamp: event.createdAt }
+let messageIndex = 0
 
-  switch (event.type) {
-    case 'TaskCreated': {
-      const p = safeParse(TaskCreatedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{
-        ...base,
-        id: `${event.id}-created`,
-        role: 'system' as const,
-        kind: 'status' as const,
-        content: `Task created: ${p.title}`,
-        metadata: { intent: p.intent, agentId: p.agentId },
-      }]
-    }
-    case 'TaskStarted':
-      return [{ ...base, id: `${event.id}-started`, role: 'system', kind: 'status', content: 'Agent started working' }]
-    case 'TaskCompleted': {
-      const p = safeParse(TaskCompletedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{ ...base, id: `${event.id}-done`, role: 'assistant', kind: 'text', content: p.summary || 'Task completed.' }]
-    }
-    case 'TaskFailed': {
-      const p = safeParse(TaskFailedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{ ...base, id: `${event.id}-fail`, role: 'system', kind: 'error', content: `Task failed: ${p.reason}` }]
-    }
-    case 'TaskCanceled': {
-      const p = safeParse(TaskCanceledPayload, event.payload, event.type)
-      if (!p) return []
-      return [{ ...base, id: `${event.id}-cancel`, role: 'system', kind: 'status', content: `Task canceled${p.reason ? `: ${p.reason}` : ''}` }]
-    }
-    case 'TaskPaused':
-      return [{ ...base, id: `${event.id}-pause`, role: 'system', kind: 'status', content: 'Task paused' }]
-    case 'TaskResumed':
-      return [{ ...base, id: `${event.id}-resume`, role: 'system', kind: 'status', content: 'Task resumed' }]
-    case 'TaskInstructionAdded': {
-      const p = safeParse(InstructionAddedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{ ...base, id: `${event.id}-inst`, role: 'user', kind: 'instruction', content: p.instruction }]
-    }
-    case 'UserInteractionRequested': {
-      const p = safeParse(InteractionRequestedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{
-        ...base,
-        id: `${event.id}-req`,
-        role: 'assistant',
-        kind: 'interaction',
-        content: p.purpose ?? '',
-        metadata: { interactionId: p.interactionId, kind: p.kind },
-      }]
-    }
-    case 'UserInteractionResponded': {
-      const p = safeParse(InteractionRespondedPayload, event.payload, event.type)
-      if (!p) return []
-      return [{
-        ...base,
-        id: `${event.id}-resp`,
+function generateMessageId(): string {
+  return `msg-${Date.now()}-${++messageIndex}`
+}
+
+function transformLLMMessage(message: LLMMessage): ConversationMessage {
+  const timestamp = new Date().toISOString()
+  const id = generateMessageId()
+
+  switch (message.role) {
+    case 'system':
+      return {
+        id,
+        role: 'system',
+        parts: [{ kind: 'text', content: message.content }],
+        timestamp,
+      }
+
+    case 'user':
+      return {
+        id,
         role: 'user',
-        kind: 'interaction',
-        content: p.inputValue || p.selectedOptionId || 'Response submitted',
-        metadata: { interactionId: p.interactionId },
-      }]
+        parts: [{ kind: 'text', content: message.content }],
+        timestamp,
+      }
+
+    case 'assistant': {
+      const parts: MessagePart[] = []
+
+      if (message.reasoning) {
+        parts.push({ kind: 'reasoning', content: message.reasoning })
+      }
+
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        for (const toolCall of message.toolCalls) {
+          parts.push({
+            kind: 'tool_call',
+            toolCallId: toolCall.toolCallId,
+            toolName: toolCall.toolName,
+            arguments: toolCall.arguments,
+          })
+        }
+      }
+
+      if (message.content) {
+        parts.push({ kind: 'text', content: message.content })
+      }
+
+      return { id, role: 'assistant', parts, timestamp }
     }
-    default:
-      return []
+
+    case 'tool':
+      return {
+        id,
+        role: 'tool',
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: message.toolCallId,
+          toolName: message.toolName,
+          content: message.content,
+        }],
+        timestamp,
+      }
   }
 }
 
@@ -134,8 +125,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     set({ loadingTasks: loading })
 
     try {
-      const events = await api.getEvents(0, taskId)
-      const messages = events.flatMap(eventToMessages)
+      const llmMessages = await api.getConversation(taskId)
+      const messages = llmMessages.map(transformLLMMessage)
       const conversations = { ...get().conversations, [taskId]: messages }
       const done = new Set(get().loadingTasks)
       done.delete(taskId)
@@ -164,21 +155,30 @@ export function registerConversationSubscriptions(): void {
     const taskId = (event.payload as Record<string, unknown>).taskId as string | undefined
     if (!taskId) return
 
-    const newMessages = eventToMessages(event)
-    if (newMessages.length === 0) return
+    if (event.type === 'TaskInstructionAdded') {
+      const instruction = (event.payload as Record<string, unknown>).instruction as string | undefined
+      if (!instruction) return
 
-    useConversationStore.setState((state) => {
-      const existing = state.conversations[taskId]
-      if (!existing) return state
+      useConversationStore.setState((state) => {
+        const existing = state.conversations[taskId]
+        if (!existing) return state
 
-      const existingIds = new Set(existing.map(m => m.id))
-      const unique = newMessages.filter(m => !existingIds.has(m.id))
-      if (unique.length === 0) return state
+        const newMessage: ConversationMessage = {
+          id: generateMessageId(),
+          role: 'user',
+          parts: [{ kind: 'text', content: instruction }],
+          timestamp: event.createdAt,
+        }
 
-      return {
-        conversations: { ...state.conversations, [taskId]: [...existing, ...unique] },
-      }
-    })
+        return {
+          conversations: { ...state.conversations, [taskId]: [...existing, newMessage] },
+        }
+      })
+    }
+
+    if (event.type === 'TaskCompleted' || event.type === 'TaskFailed') {
+      void useConversationStore.getState().fetchConversation(taskId)
+    }
   })
 }
 

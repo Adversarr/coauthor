@@ -64,6 +64,7 @@ export class CoAuthorServer {
       auditService: this.#app.auditService,
       runtimeManager: this.#app.runtimeManager,
       artifactStore: this.#app.artifactStore,
+      conversationStore: this.#app.conversationStore,
       authToken: this.#opts.authToken,
       baseDir: this.#app.baseDir,
     }

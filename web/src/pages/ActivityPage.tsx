@@ -45,14 +45,15 @@ export function ActivityPage() {
   const fetchEvents = useCallback((signal?: AbortSignal) => {
     setLoading(true)
     seenIdsRef.current.clear()
-    api.getEvents(0, undefined, { signal })
+    api.getEvents(0)
       .then(fetched => {
+        if (signal?.aborted) return
         for (const e of fetched) seenIdsRef.current.add(e.id)
         setEvents(fetched.length > MAX_ACTIVITY_EVENTS ? fetched.slice(-MAX_ACTIVITY_EVENTS) : fetched)
         setLoading(false)
       })
       .catch(err => {
-        if ((err as Error).name === 'AbortError') return
+        if ((err as Error).name === 'AbortError' || signal?.aborted) return
         console.error('[ActivityPage] Failed to fetch events:', err)
         setLoading(false)
       })

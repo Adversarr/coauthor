@@ -2,46 +2,86 @@
  * ConversationView — chat-like interface for viewing task conversation history.
  *
  * Uses ai-elements Message components to render a rich conversation timeline
- * that combines stored events with live streaming output. Provides feature
- * parity with the TUI's InteractionPane.
+ * that combines stored LLM messages with live streaming output.
+ * Preserves interleaved output order (reasoning → tool → reasoning → content)
+ * via the `parts` array on each ConversationMessage.
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/utils'
-import { useConversationStore, type ConversationMessage } from '@/stores/conversationStore'
+import { useConversationStore, type ConversationMessage, type MessagePart } from '@/stores/conversationStore'
 import { useStreamStore } from '@/stores/streamStore'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool'
 import { Shimmer } from '@/components/ai-elements/shimmer'
 import {
-  Bot, User, AlertCircle, Info, MessageSquare, Pause, Play, XCircle, CheckCircle,
+  Bot, User, AlertCircle, MessageSquare,
 } from 'lucide-react'
 
-// ── Helpers ────────────────────────────────────────────────────────────
+// ── Message part renderers ─────────────────────────────────────────────
 
-// Status icons are inlined in the renderers below.
+function TextPart({ content }: { content: string }) {
+  return <MessageResponse>{content}</MessageResponse>
+}
 
-function statusLabel(content: string): { icon: React.ReactNode; color: string } {
-  if (content.includes('created')) return { icon: <CheckCircle className="h-3 w-3" />, color: 'text-emerald-400' }
-  if (content.includes('started')) return { icon: <Play className="h-3 w-3" />, color: 'text-violet-400' }
-  if (content.includes('completed') || content.includes('Task completed')) return { icon: <CheckCircle className="h-3 w-3" />, color: 'text-emerald-400' }
-  if (content.includes('failed')) return { icon: <XCircle className="h-3 w-3" />, color: 'text-red-400' }
-  if (content.includes('paused')) return { icon: <Pause className="h-3 w-3" />, color: 'text-zinc-400' }
-  if (content.includes('resumed')) return { icon: <Play className="h-3 w-3" />, color: 'text-violet-400' }
-  if (content.includes('canceled')) return { icon: <XCircle className="h-3 w-3" />, color: 'text-zinc-500' }
-  return { icon: <Info className="h-3 w-3" />, color: 'text-zinc-500' }
+function ReasoningPart({ content, defaultOpen = false }: { content: string; defaultOpen?: boolean }) {
+  return (
+    <Reasoning defaultOpen={defaultOpen}>
+      <ReasoningTrigger />
+      <ReasoningContent>{content}</ReasoningContent>
+    </Reasoning>
+  )
+}
+
+function ToolCallPart({ toolName, arguments: args }: { toolName: string; arguments: Record<string, unknown> }) {
+  return (
+    <Tool>
+      <ToolHeader type="dynamic-tool" state="input-streaming" toolName={toolName} />
+      <ToolContent>
+        <ToolInput input={args} />
+      </ToolContent>
+    </Tool>
+  )
+}
+
+function ToolResultPart({ toolName, content }: { toolName?: string; content: string }) {
+  const isError = content.includes('error') || content.includes('Error') || content.includes('failed')
+  const state = isError ? 'output-error' : 'output-available'
+  return (
+    <Tool>
+      <ToolHeader type="dynamic-tool" state={state} toolName={toolName ?? 'tool'} />
+      <ToolContent>
+        <ToolOutput output={content} errorText={isError ? content : undefined} />
+      </ToolContent>
+    </Tool>
+  )
+}
+
+function MessagePartRenderer({ part }: { part: MessagePart }) {
+  switch (part.kind) {
+    case 'text':
+      return <TextPart content={part.content} />
+    case 'reasoning':
+      return <ReasoningPart content={part.content} />
+    case 'tool_call':
+      return <ToolCallPart toolName={part.toolName} arguments={part.arguments} />
+    case 'tool_result':
+      return <ToolResultPart toolName={part.toolName} content={part.content} />
+  }
 }
 
 // ── Message renderers ──────────────────────────────────────────────────
 
 function SystemMessage({ msg }: { msg: ConversationMessage }) {
-  const { icon, color } = statusLabel(msg.content)
+  const textPart = msg.parts.find(p => p.kind === 'text')
+  if (!textPart || textPart.kind !== 'text') return null
+
   return (
     <div className="flex items-center justify-center gap-2 py-1.5">
-      <div className={cn('flex items-center gap-1.5 text-xs', color)}>
-        {icon}
-        <span>{msg.content}</span>
+      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <span>{textPart.content}</span>
       </div>
       <span className="text-[10px] text-zinc-700">{timeAgo(msg.timestamp)}</span>
     </div>
@@ -49,6 +89,9 @@ function SystemMessage({ msg }: { msg: ConversationMessage }) {
 }
 
 function UserMessage({ msg }: { msg: ConversationMessage }) {
+  const textPart = msg.parts.find(p => p.kind === 'text')
+  if (!textPart || textPart.kind !== 'text') return null
+
   return (
     <Message from="user">
       <div className="flex items-center gap-2 justify-end">
@@ -58,13 +101,16 @@ function UserMessage({ msg }: { msg: ConversationMessage }) {
         </div>
       </div>
       <MessageContent>
-        <MessageResponse>{msg.content}</MessageResponse>
+        <MessageResponse>{textPart.content}</MessageResponse>
       </MessageContent>
     </Message>
   )
 }
 
 function AssistantMessage({ msg }: { msg: ConversationMessage }) {
+  const hasContent = msg.parts.length > 0
+  if (!hasContent) return null
+
   return (
     <Message from="assistant">
       <div className="flex items-center gap-2">
@@ -74,27 +120,27 @@ function AssistantMessage({ msg }: { msg: ConversationMessage }) {
         <span className="text-[10px] text-zinc-600">{timeAgo(msg.timestamp)}</span>
       </div>
       <MessageContent>
-        {msg.kind === 'interaction' ? (
-          <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-3 py-2">
-            <p className="text-sm text-amber-200">{msg.content}</p>
-            {msg.metadata?.kind != null && (
-              <span className="inline-block mt-1 text-[10px] text-amber-500/60 bg-amber-900/20 px-1.5 rounded">
-                {String(msg.metadata.kind)}
-              </span>
-            )}
-          </div>
-        ) : msg.kind === 'error' ? (
-          <div className="rounded-md border border-red-800/40 bg-red-950/20 px-3 py-2">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-              <p className="text-sm text-red-300">{msg.content}</p>
-            </div>
-          </div>
-        ) : (
-          <MessageResponse>{msg.content}</MessageResponse>
-        )}
+        <div className="space-y-3">
+          {msg.parts.map((part, idx) => (
+            <MessagePartRenderer key={idx} part={part} />
+          ))}
+        </div>
       </MessageContent>
     </Message>
+  )
+}
+
+function ToolMessage({ msg }: { msg: ConversationMessage }) {
+  const toolResult = msg.parts.find(p => p.kind === 'tool_result')
+  if (!toolResult || toolResult.kind !== 'tool_result') return null
+
+  return (
+    <div className="ml-4">
+      <ToolResultPart
+        toolName={toolResult.toolName}
+        content={toolResult.content}
+      />
+    </div>
   )
 }
 
@@ -103,6 +149,7 @@ function ConversationMessageItem({ msg }: { msg: ConversationMessage }) {
     case 'system': return <SystemMessage msg={msg} />
     case 'user': return <UserMessage msg={msg} />
     case 'assistant': return <AssistantMessage msg={msg} />
+    case 'tool': return <ToolMessage msg={msg} />
     default: return null
   }
 }
@@ -113,59 +160,54 @@ function LiveStream({ taskId }: { taskId: string }) {
   const stream = useStreamStore(s => s.streams[taskId])
   if (!stream || stream.chunks.length === 0) return null
 
-  const textContent = stream.chunks
-    .filter(c => c.kind === 'text')
-    .map(c => c.content)
-    .join('')
-
-  const reasoningContent = stream.chunks
-    .filter(c => c.kind === 'reasoning')
-    .map(c => c.content)
-    .join('')
-
-  const errorContent = stream.chunks
-    .filter(c => c.kind === 'error')
-    .map(c => c.content)
-    .join('')
-
   return (
     <div className="space-y-3">
-      {/* Reasoning collapsible */}
-      {reasoningContent && (
-        <Reasoning isStreaming={!stream.completed} defaultOpen>
-          <ReasoningTrigger />
-          <ReasoningContent>{reasoningContent}</ReasoningContent>
-        </Reasoning>
-      )}
-
-      {/* Main text output */}
-      {textContent && (
-        <Message from="assistant">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-zinc-800 p-1">
-              <Bot className="h-3 w-3 text-zinc-400" />
-            </div>
-            {!stream.completed && <Shimmer className="h-3">thinking…</Shimmer>}
-          </div>
-          <MessageContent>
-            <MessageResponse>{textContent}</MessageResponse>
-          </MessageContent>
-        </Message>
-      )}
-
-      {/* Error output */}
-      {errorContent && (
-        <Message from="assistant">
-          <MessageContent>
-            <div className="rounded-md border border-red-800/40 bg-red-950/20 px-3 py-2">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-                <pre className="text-xs text-red-300 whitespace-pre-wrap">{errorContent}</pre>
+      {stream.chunks.map((chunk, idx) => {
+        switch (chunk.kind) {
+          case 'text':
+            return (
+              <Message key={idx} from="assistant">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full bg-zinc-800 p-1">
+                    <Bot className="h-3 w-3 text-zinc-400" />
+                  </div>
+                  {!stream.completed && <Shimmer className="h-3">thinking…</Shimmer>}
+                </div>
+                <MessageContent>
+                  <MessageResponse>{chunk.content}</MessageResponse>
+                </MessageContent>
+              </Message>
+            )
+          case 'reasoning':
+            return (
+              <Reasoning key={idx} isStreaming={!stream.completed} defaultOpen>
+                <ReasoningTrigger />
+                <ReasoningContent>{chunk.content}</ReasoningContent>
+              </Reasoning>
+            )
+          case 'error':
+            return (
+              <Message key={idx} from="assistant">
+                <MessageContent>
+                  <div className="rounded-md border border-red-800/40 bg-red-950/20 px-3 py-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                      <pre className="text-xs text-red-300 whitespace-pre-wrap">{chunk.content}</pre>
+                    </div>
+                  </div>
+                </MessageContent>
+              </Message>
+            )
+          case 'verbose':
+            return (
+              <div key={idx} className="text-xs text-zinc-500 font-mono">
+                {chunk.content}
               </div>
-            </div>
-          </MessageContent>
-        </Message>
-      )}
+            )
+          default:
+            return null
+        }
+      })}
     </div>
   )
 }
@@ -188,15 +230,13 @@ export function ConversationView({ taskId, className }: ConversationViewProps) {
     fetchConversation(taskId)
   }, [taskId, fetchConversation])
 
-  // Track if user is near bottom to decide whether to auto-scroll (B5)
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const threshold = 80 // px from bottom
+    const threshold = 80
     isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
   }, [])
 
-  // Auto-scroll only when near bottom
   useEffect(() => {
     if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -229,7 +269,6 @@ export function ConversationView({ taskId, className }: ConversationViewProps) {
           <ConversationMessageItem key={msg.id} msg={msg} />
         ))}
 
-        {/* Live streaming output at the bottom */}
         <LiveStream taskId={taskId} />
       </div>
     </div>
