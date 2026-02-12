@@ -15,6 +15,14 @@ export type UiEvent =
       payload: { taskId: string; agentId: string }
     }
   | {
+      type: 'tool_call_start'
+      payload: { taskId: string; agentId: string; toolCallId: string; toolName: string; arguments: Record<string, unknown> }
+    }
+  | {
+      type: 'tool_call_end'
+      payload: { taskId: string; agentId: string; toolCallId: string; toolName: string; output: unknown; isError: boolean; durationMs: number }
+    }
+  | {
       type: 'audit_entry'
       payload: StoredAuditEntry
     }

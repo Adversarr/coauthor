@@ -3,7 +3,7 @@ import type { ArtifactStore } from '../../core/ports/artifactStore.js'
 import type { UiBus } from '../../core/ports/uiBus.js'
 import type { TelemetrySink } from '../../core/ports/telemetry.js'
 import type { DomainEvent } from '../../core/events/events.js'
-import type { LLMMessage, LLMStreamChunk } from '../../core/ports/llmClient.js'
+import type { LLMMessage, LLMStreamChunk, LLMMessagePart } from '../../core/ports/llmClient.js'
 import type { AgentOutput } from '../core/agent.js'
 import type { ConversationManager } from './conversationManager.js'
 import { buildConfirmInteraction } from '../display/displayBuilder.js'
@@ -164,7 +164,35 @@ export class OutputHandler {
           return { event, pause: true }
         }
 
+        // Emit tool_call_start UiEvent so the frontend can show real-time tool activity
+        this.#uiBus?.emit({
+          type: 'tool_call_start',
+          payload: {
+            taskId: ctx.taskId,
+            agentId: ctx.agentId,
+            toolCallId: output.call.toolCallId,
+            toolName: output.call.toolName,
+            arguments: output.call.arguments,
+          }
+        })
+
+        const startMs = Date.now()
         const result: ToolResult = await this.#toolExecutor.execute(output.call, toolContext)
+        const durationMs = Date.now() - startMs
+
+        // Emit tool_call_end UiEvent with result
+        this.#uiBus?.emit({
+          type: 'tool_call_end',
+          payload: {
+            taskId: ctx.taskId,
+            agentId: ctx.agentId,
+            toolCallId: output.call.toolCallId,
+            toolName: output.call.toolName,
+            output: result.output,
+            isError: result.isError,
+            durationMs,
+          }
+        })
 
         // Persist into conversation (idempotent)
         await this.#conversationManager.persistToolResultIfMissing(
@@ -277,30 +305,68 @@ export class OutputHandler {
 
   /**
    * Create a callback for `LLMClient.stream()` that forwards text/reasoning
-   * deltas to the UiBus as `stream_delta` events, while ignoring tool call
-   * chunks (those are accumulated by the LLM client and returned in the
-   * LLMResponse). Emits `stream_end` on the `done` chunk.
+   * deltas to the UiBus as `stream_delta` events, while accumulating an ordered
+   * `parts` array that captures the true interleaved output sequence.
+   * Emits `stream_end` on the `done` chunk.
+   *
+   * Returns both the callback and a `getParts()` accessor for the accumulated parts array.
    */
-  createStreamChunkHandler(ctx: OutputContext): (chunk: LLMStreamChunk) => void {
-    return (chunk: LLMStreamChunk) => {
+  createStreamChunkHandler(ctx: OutputContext): {
+    onChunk: (chunk: LLMStreamChunk) => void
+    getParts: () => LLMMessagePart[]
+  } {
+    const parts: LLMMessagePart[] = []
+    let currentKind: 'text' | 'reasoning' | null = null
+
+    const onChunk = (chunk: LLMStreamChunk) => {
       if (chunk.type === 'text') {
         this.#uiBus?.emit({
           type: 'stream_delta',
           payload: { taskId: ctx.taskId, agentId: ctx.agentId, kind: 'text', content: chunk.content }
         })
+        // Accumulate into ordered parts array — merge consecutive same-kind
+        if (currentKind === 'text' && parts.length > 0) {
+          const last = parts[parts.length - 1]!
+          if (last.kind === 'text') {
+            last.content += chunk.content
+          }
+        } else {
+          parts.push({ kind: 'text', content: chunk.content })
+          currentKind = 'text'
+        }
       } else if (chunk.type === 'reasoning') {
         this.#uiBus?.emit({
           type: 'stream_delta',
           payload: { taskId: ctx.taskId, agentId: ctx.agentId, kind: 'reasoning', content: chunk.content }
         })
+        if (currentKind === 'reasoning' && parts.length > 0) {
+          const last = parts[parts.length - 1]!
+          if (last.kind === 'reasoning') {
+            last.content += chunk.content
+          }
+        } else {
+          parts.push({ kind: 'reasoning', content: chunk.content })
+          currentKind = 'reasoning'
+        }
+      } else if (chunk.type === 'tool_call_start') {
+        parts.push({
+          kind: 'tool_call',
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          arguments: {},
+        })
+        currentKind = null
       } else if (chunk.type === 'done') {
         this.#uiBus?.emit({
           type: 'stream_end',
           payload: { taskId: ctx.taskId, agentId: ctx.agentId }
         })
       }
-      // tool_call_start/delta/end are intentionally ignored — handled by LLMResponse
+      // tool_call_delta/end: arguments are accumulated by the LLM client,
+      // the complete arguments will be available in LLMResponse.toolCalls
     }
+
+    return { onChunk, getParts: () => parts }
   }
 
   // ---------- internals ----------

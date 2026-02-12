@@ -78,23 +78,46 @@ function transformLLMMessage(message: LLMMessage): ConversationMessage {
     case 'assistant': {
       const parts: MessagePart[] = []
 
-      if (message.reasoning) {
-        parts.push({ kind: 'reasoning', content: message.reasoning })
-      }
-
-      if (message.toolCalls && message.toolCalls.length > 0) {
-        for (const toolCall of message.toolCalls) {
-          parts.push({
-            kind: 'tool_call',
-            toolCallId: toolCall.toolCallId,
-            toolName: toolCall.toolName,
-            arguments: toolCall.arguments,
-          })
+      // Prefer the ordered `parts` array when available (preserves true interleaving)
+      if (message.parts && message.parts.length > 0) {
+        for (const p of message.parts) {
+          switch (p.kind) {
+            case 'text':
+              parts.push({ kind: 'text', content: p.content })
+              break
+            case 'reasoning':
+              parts.push({ kind: 'reasoning', content: p.content })
+              break
+            case 'tool_call':
+              parts.push({
+                kind: 'tool_call',
+                toolCallId: p.toolCallId,
+                toolName: p.toolName,
+                arguments: p.arguments,
+              })
+              break
+          }
         }
-      }
+      } else {
+        // Legacy fallback: build parts from flat fields (reasoning → toolCalls → text)
+        if (message.reasoning) {
+          parts.push({ kind: 'reasoning', content: message.reasoning })
+        }
 
-      if (message.content) {
-        parts.push({ kind: 'text', content: message.content })
+        if (message.toolCalls && message.toolCalls.length > 0) {
+          for (const toolCall of message.toolCalls) {
+            parts.push({
+              kind: 'tool_call',
+              toolCallId: toolCall.toolCallId,
+              toolName: toolCall.toolName,
+              arguments: toolCall.arguments,
+            })
+          }
+        }
+
+        if (message.content) {
+          parts.push({ kind: 'text', content: message.content })
+        }
       }
 
       return { id, role: 'assistant', parts, timestamp }

@@ -77,11 +77,14 @@ export abstract class BaseToolAgent implements Agent {
         : await context.llm.complete({ profile, messages, tools: toolDefs.length > 0 ? toolDefs : undefined, maxTokens })
 
       if (llmResponse.content || llmResponse.reasoning || llmResponse.toolCalls) {
+        // Capture interleaved parts from streaming (if available)
+        const streamParts = context.getStreamParts?.()
         await context.persistMessage({
           role: 'assistant',
           content: llmResponse.content,
           reasoning: llmResponse.reasoning,
-          toolCalls: llmResponse.toolCalls
+          toolCalls: llmResponse.toolCalls,
+          ...(streamParts && streamParts.length > 0 ? { parts: streamParts } : {}),
         })
 
         if (llmResponse.reasoning) {

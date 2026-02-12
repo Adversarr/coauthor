@@ -2,10 +2,15 @@ import type { ToolDefinition, ToolCallRequest } from './tool.js'
 
 export type LLMProfile = 'fast' | 'writer' | 'reasoning'
 
+export type LLMMessagePart =
+  | { kind: 'text'; content: string }
+  | { kind: 'reasoning'; content: string }
+  | { kind: 'tool_call'; toolCallId: string; toolName: string; arguments: Record<string, unknown> }
+
 export type LLMMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string }
-  | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string }
+  | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string; parts?: LLMMessagePart[] }
   | { role: 'tool'; toolCallId: string; content: string; toolName?: string }
 
 // ============================================================================

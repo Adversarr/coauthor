@@ -5,14 +5,14 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Plus, ListTodo, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timeAgo, truncate } from '@/lib/utils'
 import { useTaskStore, useStreamStore, useRuntimeStore } from '@/stores'
-import { StatusBadge } from '@/components/StatusBadge'
-import { PriorityIcon } from '@/components/PriorityIcon'
-import { CreateTaskDialog } from '@/components/CreateTaskDialog'
+import { StatusBadge } from '@/components/display/StatusBadge'
+import { PriorityIcon } from '@/components/display/PriorityIcon'
+import { CreateTaskDialog } from '@/components/dialogs/CreateTaskDialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Shimmer } from '@/components/ai-elements/shimmer'
@@ -86,7 +86,7 @@ export function DashboardPage() {
   const activeTasks = tasks.filter(t => !['done', 'failed', 'canceled'].includes(t.status))
 
   return (
-    <div className="space-y-6">
+    <div className="h-full overflow-y-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -132,9 +132,9 @@ export function DashboardPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map(task => (
-            <button
+            <Link
               key={task.taskId}
-              onClick={() => navigate(`/tasks/${task.taskId}`)}
+              to={`/tasks/${task.taskId}`}
               className="w-full flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border hover:bg-accent/40 transition-colors text-left group"
             >
               <PriorityIcon priority={task.priority} />
@@ -157,7 +157,7 @@ export function DashboardPage() {
                 <Shimmer className="h-3">streaming</Shimmer>
               )}
               <span className="text-xs text-zinc-600 w-16 text-right shrink-0">{timeAgo(task.updatedAt)}</span>
-            </button>
+            </Link>
           ))}
         </div>
       )}

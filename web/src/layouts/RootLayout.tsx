@@ -5,7 +5,8 @@
 import { useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Sparkles, LayoutDashboard, Settings, Activity } from 'lucide-react'
-import { ConnectionIndicator } from '@/components/ConnectionIndicator'
+import { ConnectionIndicator } from '@/components/display/ConnectionIndicator'
+import { TaskTree } from '@/components/navigation/TaskTree'
 import {
   useTaskStore,
   unregisterTaskStoreSubscriptions,
@@ -24,16 +25,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from '@/components/ui/sidebar'
 
 export function RootLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const activeTasks = useTaskStore(s => s.tasks.filter(t => !['done', 'failed', 'canceled'].includes(t.status)).length)
+  const totalTasks = useTaskStore(s => s.tasks.length)
   const isTasksActive = location.pathname === '/' || location.pathname.startsWith('/tasks')
   const isActivityActive = location.pathname.startsWith('/activity')
   const isSettingsActive = location.pathname.startsWith('/settings')
+
+  // Extract active task ID from route like /tasks/:taskId
+  const taskMatch = location.pathname.match(/^\/tasks\/([^/]+)/)
+  const activeTaskId = taskMatch?.[1]
 
   // Global keyboard shortcuts (Ctrl+N, Escape, g-h / g-a / g-s)
   useKeyboardShortcuts()
@@ -51,10 +60,10 @@ export function RootLayout() {
     <SidebarProvider defaultOpen>
       <Sidebar collapsible="icon" variant="sidebar">
         <SidebarHeader>
-          <div className="flex items-center gap-2 px-2 py-2 cursor-pointer" onClick={() => navigate('/')}>
+          <button className="flex items-center gap-2 px-2 py-2" onClick={() => navigate('/')} aria-label="Go to dashboard">
             <Sparkles size={18} className="text-violet-400" />
             <span className="text-sm font-bold tracking-tight">CoAuthor</span>
-          </div>
+          </button>
         </SidebarHeader>
 
         <SidebarContent>
@@ -87,6 +96,17 @@ export function RootLayout() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+
+          {/* Task tree — shows hierarchical task list when tasks exist */}
+          {totalTasks > 0 && (
+            <>
+              <SidebarSeparator />
+              <SidebarGroup>
+                <SidebarGroupLabel>Tasks</SidebarGroupLabel>
+                <TaskTree activeTaskId={activeTaskId} className="px-1" />
+              </SidebarGroup>
+            </>
+          )}
         </SidebarContent>
 
         <SidebarFooter>
@@ -101,8 +121,8 @@ export function RootLayout() {
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
           </header>
-          <main className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-6 py-8">
+          <main className="flex-1 overflow-hidden">
+            <div className="h-full max-w-4xl mx-auto px-6 py-6">
               <Outlet />
             </div>
           </main>

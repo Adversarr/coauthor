@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Kbd } from '@/components/Kbd'
+import { Kbd } from '@/components/display/Kbd'
 
 export function SettingsPage() {
   const status = useConnectionStore(s => s.status)

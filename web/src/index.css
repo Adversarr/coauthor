@@ -67,7 +67,7 @@
 /* ── Base ──────────────────────────────────────────────────────────────── */
 
 html { scroll-behavior: smooth; }
-body { min-height: 100vh; }
+body { min-height: 100svh; }
 
 /* Monospace for code/events */
 .font-mono { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace; }

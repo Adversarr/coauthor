@@ -48,6 +48,8 @@ export type UiEvent =
   | { type: 'agent_output'; payload: { taskId: string; agentId: string; kind: 'text' | 'reasoning' | 'verbose' | 'error'; content: string } }
   | { type: 'stream_delta'; payload: { taskId: string; agentId: string; kind: 'text' | 'reasoning'; content: string } }
   | { type: 'stream_end'; payload: { taskId: string; agentId: string } }
+  | { type: 'tool_call_start'; payload: { taskId: string; agentId: string; toolCallId: string; toolName: string; arguments: Record<string, unknown> } }
+  | { type: 'tool_call_end'; payload: { taskId: string; agentId: string; toolCallId: string; toolName: string; output: unknown; isError: boolean; durationMs: number } }
   | { type: 'audit_entry'; payload: Record<string, unknown> }
 
 // ── Interaction ────────────────────────────────────────────────────────
@@ -103,8 +105,13 @@ export interface ToolCallRequest {
   arguments: Record<string, unknown>
 }
 
+export type LLMMessagePart =
+  | { kind: 'text'; content: string }
+  | { kind: 'reasoning'; content: string }
+  | { kind: 'tool_call'; toolCallId: string; toolName: string; arguments: Record<string, unknown> }
+
 export type LLMMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string }
-  | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string }
+  | { role: 'assistant'; content?: string; toolCalls?: ToolCallRequest[]; reasoning?: string; parts?: LLMMessagePart[] }
   | { role: 'tool'; toolCallId: string; content: string; toolName?: string }

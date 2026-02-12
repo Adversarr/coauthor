@@ -12,7 +12,7 @@ import { ChevronRight, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/utils'
 import { useTaskStore, useStreamStore } from '@/stores'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusBadge } from '@/components/display/StatusBadge'
 import { Shimmer } from '@/components/ai-elements/shimmer'
 import type { TaskView } from '@/types'
 

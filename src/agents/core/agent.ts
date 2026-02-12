@@ -92,6 +92,14 @@ export type AgentContext = {
   readonly onStreamChunk?: (chunk: import('../../core/ports/llmClient.js').LLMStreamChunk) => void
 
   /**
+   * Get accumulated interleaved parts from the stream chunk handler.
+   * Returns the ordered parts array that preserves the true sequence of
+   * text, reasoning, and tool_call chunks during streaming.
+   * Returns undefined when streaming is not enabled.
+   */
+  readonly getStreamParts?: () => import('../../core/ports/llmClient.js').LLMMessagePart[]
+
+  /**
    * Persist a message to conversation history.
    * Call this after each LLM response or tool result to ensure
    * the message survives pauses, restarts, and crashes.

@@ -98,14 +98,16 @@ export function ActivityPage() {
   }, [status, fetchAudit])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Activity className="h-6 w-6 text-violet-400" />
-        <h1 className="text-2xl font-bold text-zinc-100">Activity</h1>
-      </div>
+    <div className="flex flex-col h-full">
+      <div className="shrink-0 space-y-6 pb-4">
+        <div className="flex items-center gap-3">
+          <Activity className="h-6 w-6 text-violet-400" />
+          <h1 className="text-2xl font-bold text-zinc-100">Activity</h1>
+        </div>
 
-      <Tabs value={tab} onValueChange={v => setTab(v as typeof tab)}>
-        <TabsList className="bg-zinc-900">
+      </div>
+      <Tabs value={tab} onValueChange={v => setTab(v as typeof tab)} className="flex-1 flex flex-col min-h-0">
+        <TabsList className="bg-zinc-900 shrink-0">
           <TabsTrigger value="events" className="gap-1.5">
             <Zap className="h-3.5 w-3.5" /> Events
             <span className="ml-1 text-[10px] text-zinc-500">{events.length}</span>
@@ -116,15 +118,15 @@ export function ActivityPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="events">
+        <TabsContent value="events" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
           {loading ? (
             <p className="text-sm text-zinc-500 py-8 text-center">Loading…</p>
           ) : events.length === 0 ? (
             <p className="text-sm text-zinc-500 italic py-8 text-center">No events yet.</p>
           ) : (
-            <Card className="bg-zinc-950/40">
-              <CardContent className="p-0">
-                <ScrollArea className="h-[600px]">
+            <Card className="bg-zinc-950/40 h-full">
+              <CardContent className="p-0 h-full">
+                <ScrollArea className="h-full">
                   <div className="divide-y divide-zinc-800/50">
                     {[...events].reverse().map(evt => {
                       const payload = evt.payload as Record<string, unknown>
@@ -154,13 +156,13 @@ export function ActivityPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="audit">
+        <TabsContent value="audit" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
           {auditEntries.length === 0 ? (
             <p className="text-sm text-zinc-500 italic py-8 text-center">No audit entries.</p>
           ) : (
-            <Card className="bg-zinc-950/40">
-              <CardContent className="p-0">
-                <ScrollArea className="h-[600px]">
+            <Card className="bg-zinc-950/40 h-full">
+              <CardContent className="p-0 h-full">
+                <ScrollArea className="h-full">
                   <div className="divide-y divide-zinc-800/50">
                     {[...auditEntries].reverse().map((entry, i) => (
                       <div key={i} className="flex items-start gap-3 px-4 py-2.5 hover:bg-accent/20 transition-colors">

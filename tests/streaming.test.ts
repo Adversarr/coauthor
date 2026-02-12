@@ -59,7 +59,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('emits stream_delta for text chunks', () => {
     const ctx = baseCtx()
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'text', content: 'hello' })
 
@@ -73,7 +73,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('emits stream_delta for reasoning chunks', () => {
     const ctx = baseCtx()
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'reasoning', content: 'thinking...' })
 
@@ -87,7 +87,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('emits stream_end on done chunk', () => {
     const ctx = baseCtx()
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'done', stopReason: 'end_turn' })
 
@@ -101,7 +101,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('ignores tool_call_start, tool_call_delta, tool_call_end chunks', () => {
     const ctx = baseCtx()
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'tool_call_start', toolCallId: 'tc1', toolName: 'myTool' })
     onChunk({ type: 'tool_call_delta', toolCallId: 'tc1', argumentsDelta: '{"a":1}' })
@@ -112,7 +112,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('emits full sequence: reasoning → text → done in correct order', () => {
     const ctx = baseCtx()
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'reasoning', content: 'step 1' })
     onChunk({ type: 'reasoning', content: ' step 2' })
@@ -150,7 +150,7 @@ describe('OutputHandler.createStreamChunkHandler', () => {
 
   it('uses the correct taskId and agentId from context', () => {
     const ctx = baseCtx({ taskId: 'task-42', agentId: 'search-agent' })
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
 
     onChunk({ type: 'text', content: 'hi' })
 
@@ -345,7 +345,7 @@ describe('Streaming end-to-end: LLM → OutputHandler → UiBus', () => {
       },
     })
 
-    const onChunk = handler.createStreamChunkHandler(ctx)
+    const { onChunk } = handler.createStreamChunkHandler(ctx)
     const response = await client.stream(
       { profile: 'fast', messages: [{ role: 'user', content: 'hi' }] },
       onChunk,

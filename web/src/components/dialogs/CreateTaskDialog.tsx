@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { AgentSelector } from '@/components/AgentSelector'
+import { AgentSelector } from '@/components/navigation/AgentSelector'
 
 interface Props {
   open: boolean

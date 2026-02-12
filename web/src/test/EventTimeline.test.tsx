@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { EventTimeline } from '@/components/EventTimeline'
+import { EventTimeline } from '@/components/panels/EventTimeline'
 import { eventBus } from '@/stores/eventBus'
 import * as api from '@/services/api'
 import type { StoredEvent } from '@/types'

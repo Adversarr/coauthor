@@ -367,9 +367,11 @@ export class AgentRuntime {
       ? new FilteredToolRegistry(this.#toolRegistry, this.#agent.toolGroups)
       : { register() { throw new Error('read-only') }, get: () => undefined, list: () => [], listByGroups: () => [], toOpenAIFormat: () => [], toOpenAIFormatByGroups: () => [] }
 
-    const onStreamChunk = this.#streamingEnabled
+    const streamHandler = this.#streamingEnabled
       ? this.#outputHandler.createStreamChunkHandler(outputCtx)
       : undefined
+
+    const onStreamChunk = streamHandler?.onChunk
 
     const context: AgentContext = {
       llm: this.#llm,
@@ -379,6 +381,7 @@ export class AgentRuntime {
       pendingInteractionResponse: pendingResponse,
       profileOverride: this.#profileOverride,
       onStreamChunk,
+      getStreamParts: streamHandler?.getParts,
       persistMessage
     }
 

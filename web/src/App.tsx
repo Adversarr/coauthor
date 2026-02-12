@@ -5,8 +5,8 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { RootLayout } from '@/layouts/RootLayout'
-import { PageSkeleton } from '@/components/PageSkeleton'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { PageSkeleton } from '@/components/display/PageSkeleton'
+import { ErrorBoundary } from '@/components/display/ErrorBoundary'
 
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const TaskDetailPage = lazy(() => import('@/pages/TaskDetailPage').then(m => ({ default: m.TaskDetailPage })))
