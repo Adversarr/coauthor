@@ -1,0 +1,48 @@
+% Implementation Details Section
+% This section describes the key implementation aspects of the CoAuthor system
+
+\subsection{Event Sourcing with JSONL Storage}
+\label{subsec:jsonl-storage}
+
+All domain events are persisted in JSONL (JSON Lines) format, providing an append-only log that captures every state transition. This implementation choice offers several advantages:
+
+\begin{itemize}
+    \item Human-readable format for debugging and auditing
+    \item Efficient append operations without complex database setup
+    \item Natural support for event replay and state reconstruction
+    \item Easy integration with version control systems
+\end{itemize}
+
+\subsection{Agent Runtime and Tool Use Workflow}
+\label{subsec:agent-runtime}
+
+The agent runtime implements an AsyncGenerator-based pattern where agents yield outputs incrementally. Each agent operates within a task-scoped runtime that provides:
+
+\begin{enumerate}
+    \item \textbf{Tool Integration}: Agents have access to a registry of tools for file operations, command execution, and subtask delegation.
+    \item \textbf{Risk-Aware Execution}: Tools are classified as safe (read-only) or risky (write operations). Risky tools trigger User Interaction Points (UIPs) requiring explicit confirmation.
+    \item \textbf{Streaming Support}: LLM responses stream in real-time, enabling immediate user feedback and interaction.
+\end{enumerate}
+
+\subsection{User Interaction Point (UIP) Design}
+\label{subsec:uip}
+
+UIPs serve as controlled checkpoints where user consent is required before executing potentially destructive operations. The design ensures:
+
+\begin{itemize}
+    \item Agents remain unaware of risk classifications
+    \item The runtime intercepts risky tool calls and presents confirmation dialogs
+    \item Users can review operation details before approval
+    \item Audit trails capture all UIP interactions for transparency
+\end{itemize}
+
+\subsection{Dual Interface Architecture}
+\label{subsec:dual-interface}
+
+CoAuthor supports two complementary interfaces:
+
+\textbf{Terminal UI (TUI)}: Built with React and Ink, the TUI provides a keyboard-driven interface optimized for developer workflows. Features include command-based navigation (\texttt{/new}, \texttt{/pause}, \texttt{/continue}), real-time streaming output, and task tree visualization.
+
+\textbf{Web UI}: Built with React 19, TailwindCSS, and Radix UI components, the Web UI offers a graphical interface with enhanced visualization capabilities. It connects to the backend via WebSocket for real-time updates and supports Markdown rendering with syntax highlighting, LaTeX math, and Mermaid diagrams.
+
+Both interfaces communicate with the same underlying infrastructure through a shared HTTP/WebSocket server, ensuring consistent behavior across interaction modes.

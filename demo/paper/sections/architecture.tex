@@ -14,8 +14,12 @@ The system consists of the following key components:
 \begin{itemize}
     \item \textbf{Domain Layer}: Contains business logic, event definitions, and type schemas.
     \item \textbf{Application Layer}: Implements use cases through services for tasks, patches, and events.
-    \item \textbf{Infrastructure Layer}: Provides adapters for event storage, LLM clients, and logging.
-    \item \textbf{Interface Layer}: Includes CLI and TUI for user interaction.
+    \item \textbf{Infrastructure Layer}: Provides adapters for event storage, LLM clients, HTTP/WebSocket servers, and logging.
+    \item \textbf{Interface Layer}: Provides dual interfaces for user interaction:
+    \begin{itemize}
+        \item \textit{Terminal UI (TUI)}: React/Ink-based interface with command system, real-time streaming output, and task tree navigation.
+        \item \textit{Web UI}: Modern browser interface built with React, TailwindCSS, and Radix UI components, connected via WebSocket for real-time updates.
+    \end{itemize}
 \end{itemize}
 
 \subsection{Event Flow}
