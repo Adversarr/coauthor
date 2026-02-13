@@ -1,15 +1,16 @@
 /**
- * TaskDetailPage — detailed view of a single task with conversation, live output, and events.
+ * TaskDetailPage — detailed view of a single task with conversation, output, events, and summary.
  *
- * Three-tab layout:
+ * Four-tab layout:
  * 1. Conversation — rich chat interface (ai-elements) with live streaming (default)
  * 2. Output — raw streaming terminal output (power users)
  * 3. Events — raw event timeline (debugging)
+ * 4. Summary — final task summary (when available)
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Pause, Play, X, Bot, Clock, MessageSquare, Terminal, List, GitBranch } from 'lucide-react'
+import { ArrowLeft, Pause, Play, X, Bot, Clock, MessageSquare, Terminal, List, GitBranch, FileText } from 'lucide-react'
 import { formatTime, timeAgo } from '@/lib/utils'
 import { useTaskStore } from '@/stores'
 import { api } from '@/services/api'
@@ -32,7 +33,7 @@ export function TaskDetailPage() {
   const allTasks = useTaskStore(s => s.tasks) // Must be above early returns (Rules of Hooks)
   const fetchTask = useTaskStore(s => s.fetchTask)
   const [interaction, setInteraction] = useState<PendingInteraction | null>(null)
-  const [tab, setTab] = useState<'conversation' | 'output' | 'events'>('conversation')
+  const [tab, setTab] = useState<'conversation' | 'output' | 'events' | 'summary'>('conversation')
   const [taskLoading, setTaskLoading] = useState(false)
   const [taskNotFound, setTaskNotFound] = useState(false)
   const lastFetchIdRef = useRef<string | null>(null)
@@ -173,13 +174,7 @@ export function TaskDetailPage() {
           </div>
         </div>
 
-        {/* Summary / Failure alerts */}
-        {task.summary && (
-          <Alert className="border-emerald-800/40 bg-emerald-950/20 text-emerald-200">
-            <AlertTitle>Summary</AlertTitle>
-            <AlertDescription><p className="whitespace-pre-wrap">{task.summary}</p></AlertDescription>
-          </Alert>
-        )}
+        {/* Failure alert */}
         {task.failureReason && (
           <Alert variant="destructive" className="bg-red-950/20">
             <AlertTitle>Failure</AlertTitle>
@@ -227,21 +222,43 @@ export function TaskDetailPage() {
           <TabsTrigger value="events" className="gap-1.5">
             <List className="h-3.5 w-3.5" /> Events
           </TabsTrigger>
+          <TabsTrigger value="summary" className="gap-1.5">
+            <FileText className="h-3.5 w-3.5" /> Summary
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="conversation" className="flex-1 flex flex-col min-h-0 mt-0 pt-2">
-          <ConversationView taskId={task.taskId} className="flex-1 min-h-0" />
-          <div className="shrink-0 pt-3">
-            <PromptBar taskId={task.taskId} disabled={!isActive} />
+        <TabsContent value="conversation" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
+          <div className="flex h-full min-h-0 flex-col">
+            <ConversationView taskId={task.taskId} className="flex-1 min-h-0" />
+            <div className="shrink-0 pt-3">
+              <PromptBar taskId={task.taskId} disabled={!isActive} />
+            </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="output" className="flex-1 overflow-auto mt-0 pt-2">
-          <StreamOutput taskId={task.taskId} />
+        <TabsContent value="output" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
+          <div className="h-full overflow-auto">
+            <StreamOutput taskId={task.taskId} />
+          </div>
         </TabsContent>
 
-        <TabsContent value="events" className="flex-1 overflow-auto mt-0 pt-2">
-          <EventTimeline taskId={task.taskId} />
+        <TabsContent value="events" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
+          <div className="h-full overflow-auto">
+            <EventTimeline taskId={task.taskId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="summary" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
+          <div className="h-full overflow-auto">
+            {task.summary ? (
+              <Alert className="border-emerald-800/40 bg-emerald-950/20 text-emerald-200">
+                <AlertTitle>Summary</AlertTitle>
+                <AlertDescription><p className="whitespace-pre-wrap">{task.summary}</p></AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-sm text-zinc-500 italic py-8 text-center">No summary available yet.</p>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
