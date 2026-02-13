@@ -54,19 +54,19 @@ function TreeNodeRow({ node, depth, activeTaskId }: { node: TreeNode; depth: num
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {hasChildren ? (
-          <ChevronRight className="h-3 w-3 text-zinc-600 shrink-0" />
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/80" />
         ) : (
           <span className="w-3 shrink-0" />
         )}
         <StatusBadge status={node.task.status} />
         <span className={cn(
           'text-sm truncate flex-1',
-          isActive ? 'text-zinc-100 font-medium' : 'text-zinc-300 group-hover:text-zinc-100',
+          isActive ? 'font-medium text-foreground' : 'text-muted-foreground group-hover:text-foreground',
         )}>
           {node.task.title}
         </span>
         {hasStream && <Shimmer className="h-2.5 shrink-0">…</Shimmer>}
-        <span className="text-[10px] text-zinc-600 shrink-0">{timeAgo(node.task.updatedAt)}</span>
+        <span className="text-[10px] shrink-0 text-muted-foreground/80">{timeAgo(node.task.updatedAt)}</span>
       </Link>
       {node.children.map(child => (
         <TreeNodeRow key={child.task.taskId} node={child} depth={depth + 1} activeTaskId={activeTaskId} />
@@ -86,7 +86,7 @@ export function TaskTree({ activeTaskId, className }: TaskTreeProps) {
 
   if (roots.length === 0) {
     return (
-      <div className={cn('flex flex-col items-center justify-center py-8 text-zinc-600', className)}>
+      <div className={cn('flex flex-col items-center justify-center py-8 text-muted-foreground', className)}>
         <GitBranch className="h-6 w-6 mb-2" />
         <p className="text-xs">No tasks</p>
       </div>

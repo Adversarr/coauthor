@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { EventTimeline } from '@/components/panels/EventTimeline'
 import { eventBus } from '@/stores/eventBus'
@@ -146,5 +146,22 @@ describe('EventTimeline', () => {
     await waitFor(() => {
       expect(screen.getByText('No events yet.')).toBeInTheDocument()
     })
+  })
+
+  it('toggles payload visibility with accessible expanded state', async () => {
+    vi.mocked(api.api.getEvents).mockResolvedValue([
+      makeEvent(1, 'TaskCreated', 'task-1', { title: 'Test Task' }),
+    ])
+
+    renderWithRouter(<EventTimeline taskId="task-1" />)
+
+    const rowButton = await screen.findByRole('button', { name: /TaskCreated/ })
+    expect(rowButton).toHaveAttribute('aria-expanded', 'false')
+    expect(rowButton).toHaveAttribute('aria-controls', 'event-payload-1')
+
+    fireEvent.click(rowButton)
+
+    expect(rowButton).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByText(/"title": "Test Task"/)).toBeInTheDocument()
   })
 })

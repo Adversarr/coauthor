@@ -79,7 +79,7 @@ export function PromptBar({ taskId, disabled = false, className }: PromptBarProp
           className={cn(
             'min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent shadow-none',
             'focus-visible:ring-0 focus-visible:ring-offset-0',
-            'placeholder:text-zinc-600',
+            'placeholder:text-muted-foreground',
           )}
         />
         <Button
@@ -97,7 +97,7 @@ export function PromptBar({ taskId, disabled = false, className }: PromptBarProp
         </Button>
       </div>
       {error && (
-        <p className="text-xs text-red-400 px-2">{error}</p>
+        <p className="px-2 text-xs text-destructive">{error}</p>
       )}
     </div>
   )

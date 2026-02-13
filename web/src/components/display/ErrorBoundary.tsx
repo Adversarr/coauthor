@@ -7,6 +7,8 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface Props {
   children: ReactNode
@@ -47,40 +49,41 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback
 
       return (
-        <div className="flex min-h-full items-center justify-center bg-zinc-950 p-8">
-          <div className="max-w-md w-full space-y-6 text-center">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-red-900/30 p-4">
-                <AlertTriangle className="h-10 w-10 text-red-400" />
+        <div className="flex min-h-full items-center justify-center bg-background p-8">
+          <Card className="w-full max-w-md border-border bg-card/95">
+            <CardHeader className="items-center space-y-4 text-center">
+              <div className="rounded-full bg-destructive/15 p-4">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
               </div>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-zinc-100">Something went wrong</h1>
-              <p className="mt-2 text-sm text-zinc-400">
-                An unexpected error crashed the UI. You can try reloading the page.
-              </p>
-            </div>
-            {this.state.error && (
-              <pre className="rounded-lg bg-zinc-900 border border-zinc-800 p-4 text-left text-xs text-red-300 overflow-x-auto max-h-40 overflow-y-auto">
-                {this.state.error.message}
-              </pre>
-            )}
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={this.handleReset}
-                className="rounded-md bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700 transition-colors"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={this.handleReload}
-                className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reload Page
-              </button>
-            </div>
-          </div>
+              <CardTitle className="text-xl">Something went wrong</CardTitle>
+            <CardDescription>
+              An unexpected error crashed the UI. You can try reloading the page.
+            </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {this.state.error && (
+                <pre className="max-h-40 overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-left text-xs text-destructive">
+                  {this.state.error.message}
+                </pre>
+              )}
+              <div className="flex justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={this.handleReset}
+                >
+                  Try Again
+                </Button>
+                <Button
+                  type="button"
+                  onClick={this.handleReload}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reload Page
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )
     }

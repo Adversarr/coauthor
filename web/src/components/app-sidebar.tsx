@@ -24,6 +24,7 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { useTaskStore } from "@/stores"
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
@@ -48,16 +49,18 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <button
-          className="flex min-w-0 items-center gap-2 px-2 py-2"
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto w-full min-w-0 justify-start gap-2 px-2 py-2"
           onClick={() => navigate("/")}
           aria-label="Go to dashboard"
         >
-          <Sparkles size={18} className="text-violet-400 shrink-0" />
+          <Sparkles size={18} className="shrink-0 text-primary" />
           <span className="truncate text-sm font-bold tracking-tight">
             CoAuthor
           </span>
-        </button>
+        </Button>
       </SidebarHeader>
 
       <SidebarContent>
@@ -120,4 +123,3 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   )
 }
-

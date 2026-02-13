@@ -13,13 +13,13 @@ const statusConfig: Record<
     className: string
   }
 > = {
-  open:          { label: 'Open',          className: 'bg-zinc-700 text-zinc-200 border-transparent' },
-  in_progress:   { label: 'Running',       className: 'bg-violet-900/60 text-violet-200 border-transparent animate-pulse' },
-  awaiting_user: { label: 'Awaiting User', className: 'bg-amber-900/60 text-amber-200 border-transparent' },
-  paused:        { label: 'Paused',        className: 'bg-zinc-600 text-zinc-100 border-transparent' },
-  done:          { label: 'Done',          className: 'bg-emerald-900/60 text-emerald-200 border-transparent' },
-  failed:        { label: 'Failed',        className: 'bg-red-900/60 text-red-200 border-transparent' },
-  canceled:      { label: 'Canceled',      className: 'bg-zinc-700 text-zinc-400 border-transparent line-through' },
+  open:          { label: 'Open',          className: 'border-border bg-secondary text-secondary-foreground' },
+  in_progress:   { label: 'Running',       className: 'animate-pulse border-primary/30 bg-primary/20 text-primary' },
+  awaiting_user: { label: 'Awaiting User', className: 'border-amber-500/30 bg-amber-500/15 text-amber-200' },
+  paused:        { label: 'Paused',        className: 'border-border bg-muted text-muted-foreground' },
+  done:          { label: 'Done',          className: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200' },
+  failed:        { label: 'Failed',        className: 'border-destructive/40 bg-destructive/20 text-destructive' },
+  canceled:      { label: 'Canceled',      className: 'border-border bg-muted text-muted-foreground line-through' },
 }
 
 export function StatusBadge({ status }: { status: TaskStatus }) {

@@ -66,6 +66,7 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
       }}
     >
       <DialogContent
+        className="max-w-[calc(100vw-2rem)] sm:max-w-lg"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
           inputRef.current?.focus()
@@ -75,8 +76,8 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
           <DialogTitle>New Task</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="grid gap-2">
+        <form onSubmit={handleSubmit} className="grid min-w-0 gap-4">
+          <div className="grid min-w-0 gap-2">
             <Label htmlFor={titleId}>Title</Label>
             <Input
               id={titleId}
@@ -84,10 +85,11 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="What should the agent do?"
+              className="max-w-full"
             />
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <Label htmlFor={intentId}>Intent (optional)</Label>
             <Textarea
               id={intentId}
@@ -95,12 +97,13 @@ export function CreateTaskDialog({ open, onClose, onCreated }: Props) {
               onChange={e => setIntent(e.target.value)}
               placeholder="Additional context or instructions…"
               rows={3}
+              className="max-w-full"
             />
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <Label>Agent</Label>
-            <AgentSelector value={agentId} onChange={setAgentId} />
+            <AgentSelector value={agentId} onChange={setAgentId} className="min-w-0 max-w-full" />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

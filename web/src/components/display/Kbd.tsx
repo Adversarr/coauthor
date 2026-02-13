@@ -15,7 +15,7 @@ export function Kbd({ children, className }: KbdProps) {
     <kbd
       className={cn(
         'inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded border',
-        'border-zinc-700 bg-zinc-800 text-xs text-zinc-300 font-mono shadow-sm',
+        'border-border bg-muted text-xs text-muted-foreground font-mono shadow-sm',
         className,
       )}
     >

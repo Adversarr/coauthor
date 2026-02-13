@@ -6,7 +6,15 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { api } from '@/services/api'
 import { CodeBlock } from '@/components/ai-elements/code-block'
-import type { PendingInteraction } from '@/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import type { InteractionOption, PendingInteraction } from '@/types'
+
+function getOptionVariant(style?: InteractionOption['style']): 'default' | 'destructive' | 'secondary' {
+  if (style === 'danger') return 'destructive'
+  if (style === 'default') return 'secondary'
+  return 'default'
+}
 
 export function InteractionPanel({ interaction }: { interaction: PendingInteraction }) {
   const [submitting, setSubmitting] = useState(false)
@@ -29,21 +37,21 @@ export function InteractionPanel({ interaction }: { interaction: PendingInteract
   }
 
   return (
-    <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-4 space-y-3">
+    <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
       <div>
-        <h3 className="font-medium text-amber-200">{interaction.display.title}</h3>
+        <h3 className="font-medium text-foreground">{interaction.display.title}</h3>
         {interaction.display.description && (
-          <p className="text-sm text-zinc-400 mt-1">{interaction.display.description}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{interaction.display.description}</p>
         )}
       </div>
 
       {interaction.display.content != null && (
         typeof interaction.display.content === 'string' && interaction.display.contentKind !== 'Json' ? (
-          <pre className="text-xs bg-zinc-900 rounded p-3 overflow-x-auto overflow-y-auto max-h-60 text-zinc-300 border border-zinc-800">
+          <pre className="max-h-60 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
             {interaction.display.content}
           </pre>
         ) : (
-          <div className="rounded-md border border-zinc-800 overflow-hidden">
+          <div className="overflow-hidden rounded-md border border-border">
             <CodeBlock
               code={typeof interaction.display.content === 'string'
                 ? interaction.display.content
@@ -58,20 +66,18 @@ export function InteractionPanel({ interaction }: { interaction: PendingInteract
       {interaction.options && interaction.options.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {interaction.options.map(opt => (
-            <button
+            <Button
               key={opt.id}
+              type="button"
+              size="sm"
+              variant={getOptionVariant(opt.style)}
               disabled={submitting}
               onClick={() => respond(opt.id)}
               aria-label={`Select option: ${opt.label}`}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50',
-                opt.style === 'primary' && 'bg-violet-600 hover:bg-violet-500 text-white',
-                opt.style === 'danger' && 'bg-red-700 hover:bg-red-600 text-white',
-                (!opt.style || opt.style === 'default') && 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200',
-              )}
+              className={cn(opt.isDefault && 'ring-1 ring-ring/60')}
             >
               {opt.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -79,26 +85,29 @@ export function InteractionPanel({ interaction }: { interaction: PendingInteract
       {/* Input field for Input / Composite kinds */}
       {(interaction.kind === 'Input' || interaction.kind === 'Composite') && (
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             placeholder="Type your response…"
-            className="flex-1 rounded-md bg-zinc-800 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-            onKeyDown={e => e.key === 'Enter' && !submitting && inputValue.trim() && respond()}
+            className="h-8 flex-1 bg-background/70"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !submitting && inputValue.trim()) respond()
+            }}
           />
-          <button
+          <Button
+            type="button"
+            size="sm"
             onClick={() => respond()}
             disabled={submitting || !inputValue.trim()}
             aria-label="Send response"
-            className="px-4 py-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium disabled:opacity-50"
           >
             Send
-          </button>
+          </Button>
         </div>
       )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }
