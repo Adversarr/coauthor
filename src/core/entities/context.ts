@@ -1,7 +1,5 @@
 export interface ProjectContext {
-  outline?: string
-  brief?: string
-  style?: string
+  agentsMd?: string
 }
 
 export interface EnvironmentContext {

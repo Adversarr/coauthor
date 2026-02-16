@@ -95,9 +95,6 @@ export const toolFormatters: Record<string, (output: any) => string | null> = {
   createSubtasks: (output: any) => {
     if (!output || !Array.isArray(output.tasks)) return null
     const total = output.tasks.length
-    if (output.wait === 'none') {
-      return `Created ${total} subtasks (async)`
-    }
     const summary = output.summary
     if (summary && typeof summary.success === 'number' && typeof summary.error === 'number' && typeof summary.cancel === 'number') {
       return `Subtasks: ${summary.success} success, ${summary.error} error, ${summary.cancel} canceled`
@@ -106,7 +103,7 @@ export const toolFormatters: Record<string, (output: any) => string | null> = {
   },
   listSubtask: (output: any) => {
     if (output && typeof output.total === 'number') {
-      return `List ${output.total} subtasks`
+      return `List ${output.total} sub-agents`
     }
     return null
   }
@@ -177,11 +174,10 @@ export const toolInputFormatters: Record<string, (input: any) => string | null> 
   createSubtasks: (input: any) => {
     if (!input || !Array.isArray(input.tasks)) return null
     const total = input.tasks.length
-    const wait = input.wait ? ` (wait: ${input.wait})` : ''
-    return `Create ${total} subtasks${wait}`
+    return `Create ${total} subtasks`
   },
   listSubtask: () => {
-    return 'List subtasks'
+    return 'List sub-agents'
   }
 }
 

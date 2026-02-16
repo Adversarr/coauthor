@@ -12,7 +12,7 @@ export type AgentGroupToolDeps = {
   conversationStore: ConversationStore
   runtimeManager: RuntimeManager
   /**
-   * Maximum wait duration per child when wait='all'.
+   * Maximum wait duration per child.
    * Default: 300_000 ms.
    */
   subtaskTimeoutMs?: number
@@ -35,7 +35,7 @@ type ChildOutcome = {
   taskId: string
   agentId: string
   title: string
-  status: 'Pending' | 'Success' | 'Error' | 'Cancel'
+  status: 'Success' | 'Error' | 'Cancel'
   summary?: string
   failureReason?: string
   finalAssistantMessage?: string
@@ -48,7 +48,7 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
 
   return {
     name: 'createSubtasks',
-    description: 'Create multiple subtasks (agent group members) for the current top-level task. Optionally wait for all subtasks to finish.',
+    description: 'Create multiple subtasks (agent group members) for the current top-level task and wait for terminal outcomes.',
     parameters: {
       type: 'object',
       properties: {
@@ -69,11 +69,6 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
             },
             required: ['agentId', 'title']
           }
-        },
-        wait: {
-          type: 'string',
-          description: 'Wait mode: all (default) waits for terminal outcomes; none returns immediately.',
-          enum: ['all', 'none']
         }
       },
       required: ['tasks']
@@ -83,11 +78,11 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
 
     async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
       const toolCallId = `tool_${nanoid(12)}`
-      const waitMode = (args.wait as 'all' | 'none' | undefined) ?? 'all'
       const inputs = (args.tasks as CreateSubtasksTaskInput[] | undefined) ?? []
 
-      if (waitMode !== 'all' && waitMode !== 'none') {
-        return errorResult(toolCallId, "wait must be either 'all' or 'none'")
+      // Keep legacy compatibility explicit: clients must stop sending `wait`.
+      if (Object.prototype.hasOwnProperty.call(args, 'wait')) {
+        return errorResult(toolCallId, "createSubtasks no longer accepts 'wait'; it always waits for all subtasks to finish")
       }
 
       if (!Array.isArray(inputs) || inputs.length === 0) {
@@ -120,6 +115,20 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
         }
       }
 
+      const viableSubAgents = listViableSubAgents(deps.runtimeManager, callerTask.agentId)
+      const viableAgentIds = new Set(viableSubAgents.map((agent) => agent.agentId))
+      const invalidAgentIds = [...new Set(
+        inputs
+          .map((input) => input.agentId)
+          .filter((agentId) => !viableAgentIds.has(agentId))
+      )]
+      if (invalidAgentIds.length > 0) {
+        return errorResult(
+          toolCallId,
+          `Unknown or unavailable agentId(s): ${invalidAgentIds.join(', ')}. Use listSubtask to discover viable sub-agents.`
+        )
+      }
+
       const createdTasks: CreatedTaskInfo[] = []
       for (const input of inputs) {
         const created = await deps.taskService.createTask({
@@ -135,18 +144,6 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
           taskId: created.taskId,
           agentId: input.agentId,
           title: input.title
-        })
-      }
-
-      if (waitMode === 'none') {
-        const pendingTasks: ChildOutcome[] = createdTasks.map((task) => ({
-          ...task,
-          status: 'Pending'
-        }))
-        return okResult(toolCallId, {
-          groupId: ctx.taskId,
-          wait: waitMode,
-          tasks: pendingTasks
         })
       }
 
@@ -167,7 +164,6 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
 
       return okResult(toolCallId, {
         groupId: ctx.taskId,
-        wait: waitMode,
         summary: {
           total: outcomes.length,
           success: successCount,
@@ -183,7 +179,7 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
 export function listSubtaskTool(deps: AgentGroupToolDeps): Tool {
   return {
     name: 'listSubtask',
-    description: 'List all descendant subtasks in the current top-level task group.',
+    description: 'List viable sub-agents for createSubtasks in the current top-level task group.',
     parameters: {
       type: 'object',
       properties: {}
@@ -201,41 +197,12 @@ export function listSubtaskTool(deps: AgentGroupToolDeps): Tool {
         return errorResult(toolCallId, 'listSubtask is only available to top-level tasks')
       }
 
-      const allTasks = (await deps.taskService.listTasks()).tasks
-      const descendants = collectDescendants(allTasks, ctx.taskId)
-      const statusCounts = {
-        open: 0,
-        in_progress: 0,
-        awaiting_user: 0,
-        paused: 0,
-        done: 0,
-        failed: 0,
-        canceled: 0
-      }
-
-      for (const task of descendants) {
-        statusCounts[task.status] += 1
-      }
+      const agents = listViableSubAgents(deps.runtimeManager, callerTask.agentId)
 
       return okResult(toolCallId, {
         groupId: ctx.taskId,
-        total: descendants.length,
-        statusCounts,
-        tasks: descendants
-          .slice()
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-          .map((task) => ({
-            taskId: task.taskId,
-            title: task.title,
-            agentId: task.agentId,
-            status: task.status,
-            parentTaskId: task.parentTaskId,
-            childTaskIds: task.childTaskIds ?? [],
-            summary: task.summary,
-            failureReason: task.failureReason,
-            createdAt: task.createdAt,
-            updatedAt: task.updatedAt
-          }))
+        total: agents.length,
+        agents
       })
     }
   }
@@ -353,6 +320,30 @@ function isTerminalStatus(status: string): boolean {
   return TERMINAL_STATUSES.has(status)
 }
 
+function listViableSubAgents(runtimeManager: RuntimeManager, currentAgentId: string) {
+  const defaultAgentId = getDefaultAgentId(runtimeManager)
+
+  return [...runtimeManager.agents.values()]
+    .map((agent) => ({
+      agentId: agent.id,
+      displayName: agent.displayName,
+      description: agent.description,
+      toolGroups: [...agent.toolGroups],
+      defaultProfile: agent.defaultProfile,
+      isDefault: agent.id === defaultAgentId,
+      isCurrent: agent.id === currentAgentId
+    }))
+    .sort((a, b) => a.agentId.localeCompare(b.agentId))
+}
+
+function getDefaultAgentId(runtimeManager: RuntimeManager): string | undefined {
+  try {
+    return runtimeManager.defaultAgentId
+  } catch {
+    return undefined
+  }
+}
+
 async function cascadeCancelChild(taskService: TaskService, childTaskId: string): Promise<void> {
   try {
     const task = await taskService.getTask(childTaskId)
@@ -415,26 +406,6 @@ async function extractFinalAssistantMessage(
     // Non-blocking best-effort extraction.
   }
   return undefined
-}
-
-function collectDescendants(allTasks: TaskView[], rootTaskId: string): TaskView[] {
-  const byParent = new Map<string, TaskView[]>()
-  for (const task of allTasks) {
-    if (!task.parentTaskId) continue
-    const siblings = byParent.get(task.parentTaskId) ?? []
-    siblings.push(task)
-    byParent.set(task.parentTaskId, siblings)
-  }
-
-  const descendants: TaskView[] = []
-  const queue = [...(byParent.get(rootTaskId) ?? [])]
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    descendants.push(current)
-    const children = byParent.get(current.taskId)
-    if (children) queue.push(...children)
-  }
-  return descendants
 }
 
 function okResult(toolCallId: string, output: unknown): ToolResult {

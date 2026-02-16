@@ -237,7 +237,7 @@ describe('agentGroupTools', () => {
     }
   })
 
-  test('createSubtasks wait=none returns created child IDs immediately', async () => {
+  test('createSubtasks rejects legacy wait argument', async () => {
     const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
     runtimeManager.start()
 
@@ -265,23 +265,19 @@ describe('agentGroupTools', () => {
         }
       )
 
-      expect(result.isError).toBe(false)
-      const parsed = result.output as any
-      expect(parsed.wait).toBe('none')
-      expect(parsed.tasks).toHaveLength(2)
-      expect(parsed.tasks.every((task: any) => task.status === 'Pending')).toBe(true)
-      expect(parsed.tasks.every((task: any) => typeof task.taskId === 'string')).toBe(true)
+      expect(result.isError).toBe(true)
+      expect((result.output as any).error).toContain("no longer accepts 'wait'")
 
       const allTasks = (await taskService.listTasks()).tasks
       const children = allTasks.filter((task) => task.parentTaskId === parentTaskId)
-      expect(children).toHaveLength(2)
+      expect(children).toHaveLength(0)
     } finally {
       runtimeManager.stop()
       await safeRemoveDir(dir)
     }
   })
 
-  test('createSubtasks wait=all returns terminal outcomes for all children', async () => {
+  test('createSubtasks waits and returns terminal outcomes for all children', async () => {
     const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
     runtimeManager.start()
 
@@ -312,7 +308,6 @@ describe('agentGroupTools', () => {
       expect(result.toolCallId).toMatch(/^tool_/u)
 
       const parsed = result.output as any
-      expect(parsed.wait).toBe('all')
       expect(parsed.tasks).toHaveLength(2)
       expect(parsed.summary.total).toBe(2)
       expect(parsed.summary.success).toBe(1)
@@ -321,6 +316,45 @@ describe('agentGroupTools', () => {
 
       const statuses = parsed.tasks.map((task: any) => task.status).sort()
       expect(statuses).toEqual(['Error', 'Success'])
+    } finally {
+      runtimeManager.stop()
+      await safeRemoveDir(dir)
+    }
+  })
+
+  test('createSubtasks fails before creation when any agentId is invalid', async () => {
+    const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
+    runtimeManager.start()
+
+    try {
+      const { taskId: parentTaskId } = await taskService.createTask({
+        title: 'Parent',
+        agentId: completingAgent.id
+      })
+      await runtimeManager.waitForIdle()
+
+      const tool = toolRegistry.get('createSubtasks')!
+      const result = await tool.execute(
+        {
+          tasks: [
+            { agentId: completingAgent.id, title: 'Valid child' },
+            { agentId: 'agent_missing', title: 'Invalid child' }
+          ]
+        },
+        {
+          taskId: parentTaskId,
+          actorId: DEFAULT_AGENT_ACTOR_ID,
+          baseDir: dir,
+          artifactStore: mockArtifactStore
+        }
+      )
+
+      expect(result.isError).toBe(true)
+      expect((result.output as any).error).toContain('Unknown or unavailable agentId(s): agent_missing')
+
+      const allTasks = (await taskService.listTasks()).tasks
+      const children = allTasks.filter((task) => task.parentTaskId === parentTaskId)
+      expect(children).toHaveLength(0)
     } finally {
       runtimeManager.stop()
       await safeRemoveDir(dir)
@@ -438,7 +472,7 @@ describe('agentGroupTools', () => {
     }
   })
 
-  test('listSubtask returns all descendants with status counts', async () => {
+  test('listSubtask returns viable sub-agents with metadata', async () => {
     const { dir, taskService, runtimeManager, toolRegistry } = await createIntegrationEnv([completingAgent, failingAgent])
     runtimeManager.start()
 
@@ -446,33 +480,6 @@ describe('agentGroupTools', () => {
       const { taskId: parentTaskId } = await taskService.createTask({
         title: 'Parent',
         agentId: completingAgent.id
-      })
-      await runtimeManager.waitForIdle()
-
-      const createTool = toolRegistry.get('createSubtasks')!
-      const createResult = await createTool.execute(
-        {
-          wait: 'none',
-          tasks: [
-            { agentId: completingAgent.id, title: 'Done child' },
-            { agentId: failingAgent.id, title: 'Failed child' }
-          ]
-        },
-        {
-          taskId: parentTaskId,
-          actorId: DEFAULT_AGENT_ACTOR_ID,
-          baseDir: dir,
-          artifactStore: mockArtifactStore
-        }
-      )
-      const createdTasks = (createResult.output as any).tasks as Array<{ taskId: string }>
-      await runtimeManager.waitForIdle()
-
-      await taskService.createTask({
-        title: 'Grandchild',
-        agentId: completingAgent.id,
-        parentTaskId: createdTasks[0]!.taskId,
-        authorActorId: DEFAULT_AGENT_ACTOR_ID
       })
       await runtimeManager.waitForIdle()
 
@@ -489,10 +496,25 @@ describe('agentGroupTools', () => {
 
       expect(listResult.isError).toBe(false)
       const parsed = listResult.output as any
-      expect(parsed.total).toBe(3)
-      expect(parsed.statusCounts.done).toBeGreaterThanOrEqual(2)
-      expect(parsed.statusCounts.failed).toBeGreaterThanOrEqual(1)
-      expect(parsed.tasks.every((task: any) => typeof task.parentTaskId === 'string')).toBe(true)
+      expect(parsed.total).toBe(2)
+      expect(parsed.agents).toHaveLength(2)
+
+      const [firstAgent, secondAgent] = parsed.agents
+      expect(firstAgent.agentId).toBe('agent_completer')
+      expect(firstAgent.displayName).toBe('Completer')
+      expect(firstAgent.description).toBe('Completes immediately with summary.')
+      expect(firstAgent.toolGroups).toEqual([])
+      expect(firstAgent.defaultProfile).toBe('fast')
+      expect(firstAgent.isDefault).toBe(true)
+      expect(firstAgent.isCurrent).toBe(true)
+
+      expect(secondAgent.agentId).toBe('agent_failer')
+      expect(secondAgent.displayName).toBe('Failer')
+      expect(secondAgent.description).toBe('Fails immediately.')
+      expect(secondAgent.toolGroups).toEqual([])
+      expect(secondAgent.defaultProfile).toBe('fast')
+      expect(secondAgent.isDefault).toBe(false)
+      expect(secondAgent.isCurrent).toBe(false)
     } finally {
       runtimeManager.stop()
       await safeRemoveDir(dir)

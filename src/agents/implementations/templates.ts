@@ -47,10 +47,10 @@ Tools use scoped workspace paths:
 
 ## Subtasks
 Use task-group tools to manage parallel agent work:
-- createSubtasks: create one or more child tasks in a single call.
-- listSubtask: list all descendant tasks in the current top-level group.
+- createSubtasks: create one or more child tasks in a single call (fork-join: waits for terminal outcomes).
+- listSubtask: list viable sub-agents in the current top-level group.
 
-createSubtasks accepts tasks: [{ agentId, title, intent?, priority? }] and optional wait: "all" | "none" (default "all").
+createSubtasks accepts tasks: [{ agentId, title, intent?, priority? }].
 Group-management tools are available only to top-level tasks.
 
 <usage-notes>

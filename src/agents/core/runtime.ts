@@ -58,7 +58,7 @@ export class AgentRuntime {
   /**
    * Controller for aborting blocked tool calls on cancel AND pause.
    * Both pause and cancel now abort via this controller so that
-   * long-running tools (e.g. createSubtasks wait='all') unblock promptly (RD-002).
+   * long-running blocking tools (e.g. createSubtasks) unblock promptly (RD-002).
    */
   #abortController: AbortController | null = null
   /** Optional LLM profile override from RuntimeManager. */
@@ -121,7 +121,7 @@ export class AgentRuntime {
   /**
    * Signal that the task should pause at the next safe point.
    *
-   * Also aborts in-flight blocking tool calls (e.g. createSubtasks waits)
+   * Also aborts in-flight blocking tool calls (e.g. createSubtasks)
    * so that pause takes effect promptly even when tools are blocked (RD-002).
    * The AbortError is caught by the agent loop / tool and treated as a
    * cooperative exit rather than a fatal error.
@@ -341,7 +341,7 @@ export class AgentRuntime {
     const persistMessage = this.#conversationManager.createPersistCallback(taskId, conversationHistory)
 
     // Create a fresh AbortController for this loop invocation.
-    // Aborted on cancel so blocking tools (e.g. createSubtasks waits) unblock.
+    // Aborted on cancel so blocking tools (e.g. createSubtasks) unblock.
     this.#abortController = new AbortController()
 
     const outputCtx: OutputContext = {

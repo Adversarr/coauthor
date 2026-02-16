@@ -134,14 +134,8 @@ export abstract class BaseToolAgent implements Agent {
 
     parts.push(rendered)
 
-    if (data.project.outline) {
-      parts.push(`\n## Project Outline\n${data.project.outline}`)
-    }
-    if (data.project.brief) {
-      parts.push(`\n## Project Brief\n${data.project.brief}`)
-    }
-    if (data.project.style) {
-      parts.push(`\n## Style Guide\n${data.project.style}`)
+    if (data.project.agentsMd) {
+      parts.push(`\n## Project Memory (AGENTS.md)\n${data.project.agentsMd}`)
     }
 
     return parts.join('\n')

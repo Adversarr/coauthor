@@ -33,25 +33,37 @@ describe('ContextBuilder', () => {
     expect(data.env.workingDirectory).toBe(dir)
     expect(data.env.platform).toBe(process.platform)
     expect(data.env.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect(data.project.outline).toBeUndefined()
-    expect(data.project.brief).toBeUndefined()
+    expect(data.project.agentsMd).toBeUndefined()
 
     rmSync(dir, { recursive: true, force: true })
   })
 
-  test('getContextData loads project files', async () => {
+  test('getContextData loads AGENTS.md project memory', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'seed-'))
-    writeFileSync(join(dir, 'OUTLINE.md'), '# Outline', 'utf8')
-    writeFileSync(join(dir, 'STYLE.md'), '# Style', 'utf8')
+    writeFileSync(join(dir, 'AGENTS.md'), '# Agent Rules', 'utf8')
     
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
     const data = await builder.getContextData()
 
-    expect(data.project.outline).toBe('# Outline')
-    expect(data.project.style).toBe('# Style')
-    expect(data.project.brief).toBeUndefined()
+    expect(data.project.agentsMd).toBe('# Agent Rules')
+
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('getContextData ignores legacy BRIEF/OUTLINE/STYLE files', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
+    writeFileSync(join(dir, 'OUTLINE.md'), '# Outline', 'utf8')
+    writeFileSync(join(dir, 'BRIEF.md'), '# Brief', 'utf8')
+    writeFileSync(join(dir, 'STYLE.md'), '# Style', 'utf8')
+
+    const store = new FsArtifactStore(dir)
+    const builder = new ContextBuilder(dir, store)
+
+    const data = await builder.getContextData()
+
+    expect(data.project.agentsMd).toBeUndefined()
 
     rmSync(dir, { recursive: true, force: true })
   })

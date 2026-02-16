@@ -16,9 +16,7 @@ export class ContextBuilder {
    * Get structured context data (Environment + Project).
    */
   async getContextData(): Promise<ContextData> {
-    const outline = await this.#tryReadFile('OUTLINE.md')
-    const brief = await this.#tryReadFile('BRIEF.md')
-    const style = await this.#tryReadFile('STYLE.md')
+    const agentsMd = await this.#tryReadFile('AGENTS.md')
 
     return {
       env: {
@@ -27,9 +25,7 @@ export class ContextBuilder {
         date: new Date().toISOString().split('T')[0]
       },
       project: {
-        outline: outline ?? undefined,
-        brief: brief ?? undefined,
-        style: style ?? undefined
+        agentsMd: agentsMd ?? undefined
       }
     }
   }
@@ -86,5 +82,4 @@ export class ContextBuilder {
     return `## Ref: ${ref.kind}\n(skipped)`
   }
 }
-
 

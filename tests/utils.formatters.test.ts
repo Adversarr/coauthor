@@ -152,17 +152,8 @@ describe('toolFormatters.runCommand', () => {
 })
 
 describe('toolFormatters.createSubtasks', () => {
-  it('formats wait=none output', () => {
+  it('formats summary output for fork-join results', () => {
     const output = {
-      wait: 'none',
-      tasks: [{ taskId: 't1', status: 'Pending' }]
-    }
-    expect(toolFormatters.createSubtasks(output)).toBe('Created 1 subtasks (async)')
-  })
-
-  it('formats wait=all summary output', () => {
-    const output = {
-      wait: 'all',
       summary: { success: 2, error: 1, cancel: 0 },
       tasks: [{}, {}, {}]
     }
@@ -173,7 +164,7 @@ describe('toolFormatters.createSubtasks', () => {
 describe('toolFormatters.listSubtask', () => {
   it('formats listSubtask output', () => {
     const output = { total: 4 }
-    expect(toolFormatters.listSubtask(output)).toBe('List 4 subtasks')
+    expect(toolFormatters.listSubtask(output)).toBe('List 4 sub-agents')
   })
 })
 
@@ -228,12 +219,12 @@ describe('formatToolInput', () => {
     expect(formatToolInput('createSubtasks', { tasks: [{ agentId: 'coder', title: 'Implement feature' }] }))
       .toBe('Create 1 subtasks')
     expect(formatToolInput('createSubtasks', { wait: 'none', tasks: [{ agentId: 'coder', title: 'Implement feature' }, { agentId: 'reviewer', title: 'Review code' }] }))
-      .toBe('Create 2 subtasks (wait: none)')
+      .toBe('Create 2 subtasks')
   })
 
   it('formats listSubtask input', () => {
     expect(formatToolInput('listSubtask', {}))
-      .toBe('List subtasks')
+      .toBe('List sub-agents')
   })
 
   it('formats legacy create_subtask_* input for historical messages', () => {
