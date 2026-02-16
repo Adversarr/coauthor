@@ -12,6 +12,7 @@ import type { TaskView, TasksProjectionState, CreateTaskOptions } from '../../ap
 import type { InteractionResponse } from '../../application/services/interactionService.js'
 import type { StoredEvent, UserInteractionRequestedPayload } from '../../core/events/events.js'
 import type { StoredAuditEntry } from '../../core/ports/auditLog.js'
+import type { LLMProfile, LLMProfileCatalog, LLMProvider } from '../../core/ports/llmClient.js'
 import { SeedWsClient } from '../../infrastructure/remote/wsClient.js'
 import { RemoteHttpClient } from '../../infrastructure/remote/httpClient.js'
 import { RemoteEventStore } from '../../infrastructure/remote/remoteEventStore.js'
@@ -145,12 +146,31 @@ class RemoteRuntimeManager {
   readonly #agents: Map<string, { id: string; displayName: string; description: string }>
   #defaultAgentId: string
   #streamingEnabled: boolean
+  readonly #profileCatalog: LLMProfileCatalog
+  readonly #llmProvider: LLMProvider
+  #globalProfileOverride: LLMProfile | undefined
 
-  constructor(http: RemoteHttpClient, runtime: { defaultAgentId: string; streamingEnabled: boolean; agents: Array<{ id: string; displayName: string; description: string }> }) {
+  constructor(http: RemoteHttpClient, runtime: {
+    defaultAgentId: string
+    streamingEnabled: boolean
+    agents: Array<{ id: string; displayName: string; description: string }>
+    llm: {
+      provider: LLMProvider
+      defaultProfile: LLMProfile
+      profiles: LLMProfileCatalog['profiles']
+      globalProfileOverride: LLMProfile | null
+    }
+  }) {
     this.#http = http
     this.#defaultAgentId = runtime.defaultAgentId
     this.#streamingEnabled = runtime.streamingEnabled
     this.#agents = new Map(runtime.agents.map((a) => [a.id, a]))
+    this.#profileCatalog = {
+      defaultProfile: runtime.llm.defaultProfile,
+      profiles: runtime.llm.profiles,
+    }
+    this.#llmProvider = runtime.llm.provider
+    this.#globalProfileOverride = runtime.llm.globalProfileOverride ?? undefined
   }
 
   get defaultAgentId(): string { return this.#defaultAgentId }
@@ -166,14 +186,43 @@ class RemoteRuntimeManager {
     this.#http.post('/api/runtime/streaming', { enabled: val }).catch(() => {})
   }
 
+  get profileCatalog(): LLMProfileCatalog {
+    return this.#profileCatalog
+  }
+
+  get availableProfiles(): readonly LLMProfile[] {
+    return this.#profileCatalog.profiles.map((profile) => profile.id)
+  }
+
+  get llmProvider(): LLMProvider {
+    return this.#llmProvider
+  }
+
+  isValidProfile(profile: LLMProfile): boolean {
+    return this.availableProfiles.includes(profile)
+  }
+
   setProfileOverride(taskId: string, profile: string): void {
+    if (!this.isValidProfile(profile)) {
+      throw new Error(`Invalid profile: ${profile}. Choose: ${this.availableProfiles.join(', ')}`)
+    }
     if (taskId === '*') {
+      this.#globalProfileOverride = profile
       this.#http.post('/api/runtime/profile', { profile }).catch(() => {})
     }
   }
 
-  getProfileOverride(_taskId: string): string | undefined { return undefined }
-  clearProfileOverride(_taskId: string): void {}
+  getProfileOverride(taskId: string): string | undefined {
+    if (taskId === '*') return this.#globalProfileOverride
+    return this.#globalProfileOverride
+  }
+
+  clearProfileOverride(taskId: string): void {
+    if (taskId === '*') {
+      this.#globalProfileOverride = undefined
+      this.#http.post('/api/runtime/profile/clear').catch(() => {})
+    }
+  }
 
   registerAgent(): void {}
   start(): void {}
@@ -202,6 +251,12 @@ export async function createRemoteApp(opts: CreateRemoteAppOptions): Promise<App
     defaultAgentId: string
     streamingEnabled: boolean
     agents: Array<{ id: string; displayName: string; description: string }>
+    llm: {
+      provider: LLMProvider
+      defaultProfile: LLMProfile
+      profiles: LLMProfileCatalog['profiles']
+      globalProfileOverride: LLMProfile | null
+    }
   }>('/api/runtime')
 
   // Build remote adapters
@@ -232,7 +287,17 @@ export async function createRemoteApp(opts: CreateRemoteAppOptions): Promise<App
     telemetry: { emit: noop } as unknown as App['telemetry'],
     toolRegistry: { get: noop, list: () => [], listByGroups: () => [] } as unknown as App['toolRegistry'],
     toolExecutor: { execute: noopAsync } as unknown as App['toolExecutor'],
-    llm: { complete: noopAsync, stream: noopAsync } as unknown as App['llm'],
+    llm: {
+      provider: runtime.llm.provider,
+      label: runtime.llm.provider,
+      description: runtime.llm.profiles.map((profile) => `${profile.id}=${profile.model}`).join(', '),
+      profileCatalog: {
+        defaultProfile: runtime.llm.defaultProfile,
+        profiles: runtime.llm.profiles,
+      },
+      complete: noopAsync,
+      stream: noopAsync,
+    } as unknown as App['llm'],
     uiBus,
     taskService,
     eventService,

@@ -14,15 +14,29 @@ import type { ConversationStore } from '../../src/core/ports/conversationStore.j
 // ── Mock Factories ──
 
 function createMockRuntimeManager() {
+  let globalProfileOverride: string | undefined
+  const profiles = [
+    { id: 'fast', model: 'm-fast', clientPolicy: 'default', builtin: true },
+    { id: 'writer', model: 'm-writer', clientPolicy: 'default', builtin: true },
+    { id: 'reasoning', model: 'm-reasoning', clientPolicy: 'default', builtin: true },
+    { id: 'research_web', model: 'm-web', clientPolicy: 'web', builtin: false },
+  ]
   return {
     defaultAgentId: 'agent-default',
     streamingEnabled: false,
+    llmProvider: 'openai',
+    profileCatalog: {
+      defaultProfile: 'fast',
+      profiles,
+    },
+    availableProfiles: profiles.map((profile) => profile.id),
+    isValidProfile: (profile: string) => profiles.some((item) => item.id === profile),
     agents: new Map([
       ['agent-default', { id: 'agent-default', displayName: 'Default', description: 'Default agent', toolGroups: [], defaultProfile: 'fast' as const, run: async function* () {} }],
     ]),
-    setProfileOverride: () => {},
-    getProfileOverride: () => undefined,
-    clearProfileOverride: () => {},
+    setProfileOverride: (_taskId: string, profile: string) => { globalProfileOverride = profile },
+    getProfileOverride: () => globalProfileOverride,
+    clearProfileOverride: () => { globalProfileOverride = undefined },
     registerAgent: () => {},
     start: () => {},
     stop: () => {},
@@ -395,13 +409,27 @@ describe('HTTP API', () => {
   describe('Runtime', () => {
     it('returns runtime info', async () => {
       const res = await request(app, 'GET', '/api/runtime')
-      const body = await res.json() as { defaultAgentId: string; agents: unknown[] }
+      const body = await res.json() as {
+        defaultAgentId: string
+        agents: unknown[]
+        llm: { provider: string; defaultProfile: string; profiles: Array<{ id: string }>; globalProfileOverride: string | null }
+      }
       expect(body.defaultAgentId).toBe('agent-default')
       expect(body.agents).toHaveLength(1)
+      expect(body.llm.provider).toBe('openai')
+      expect(body.llm.defaultProfile).toBe('fast')
+      expect(body.llm.profiles.some((profile) => profile.id === 'research_web')).toBe(true)
+      expect(body.llm.globalProfileOverride).toBeNull()
     })
 
     it('sets profile override', async () => {
-      const res = await request(app, 'POST', '/api/runtime/profile', { profile: 'writer' })
+      const res = await request(app, 'POST', '/api/runtime/profile', { profile: 'research_web' })
+      expect(res.status).toBe(200)
+    })
+
+    it('clears profile override', async () => {
+      await request(app, 'POST', '/api/runtime/profile', { profile: 'writer' })
+      const res = await request(app, 'POST', '/api/runtime/profile/clear')
       expect(res.status).toBe(200)
     })
 
@@ -412,7 +440,10 @@ describe('HTTP API', () => {
 
     it('rejects invalid profile', async () => {
       const res = await request(app, 'POST', '/api/runtime/profile', { profile: 'invalid' })
-      expect(res.status).toBe(500) // Zod validation
+      const body = await res.json() as { error: string }
+      expect(res.status).toBe(400)
+      expect(body.error).toContain('Invalid profile: invalid')
+      expect(body.error).toContain('fast')
     })
   })
 

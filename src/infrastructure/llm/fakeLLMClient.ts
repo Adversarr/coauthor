@@ -3,9 +3,10 @@ import type {
   LLMCompleteOptions,
   LLMMessage,
   LLMProfile,
+  LLMProfileCatalog,
   LLMResponse,
   LLMStreamChunk,
-  LLMStreamOptions
+  LLMStreamOptions,
 } from '../../core/ports/llmClient.js'
 
 export type FakeLLMRule = {
@@ -25,40 +26,69 @@ function toFlatText(messages: LLMMessage[]): string {
   }).join('\n')
 }
 
+function defaultProfileCatalog(): LLMProfileCatalog {
+  return {
+    defaultProfile: 'fast',
+    profiles: [
+      { id: 'fast', model: 'fake-fast', clientPolicy: 'default', builtin: true },
+      { id: 'writer', model: 'fake-writer', clientPolicy: 'default', builtin: true },
+      { id: 'reasoning', model: 'fake-reasoning', clientPolicy: 'default', builtin: true },
+    ],
+  }
+}
+
 export class FakeLLMClient implements LLMClient {
+  readonly provider = 'fake' as const
   readonly label = 'Fake'
   readonly description = 'Rule-based mock LLM for testing'
+  readonly profileCatalog: LLMProfileCatalog
   readonly #rules: FakeLLMRule[]
   readonly #defaultByProfile: Record<LLMProfile, LLMResponse>
 
-  constructor(opts?: { rules?: FakeLLMRule[]; defaultByProfile?: Partial<Record<LLMProfile, string | LLMResponse>> }) {
+  constructor(opts?: {
+    rules?: FakeLLMRule[]
+    defaultByProfile?: Record<string, string | LLMResponse>
+    profileCatalog?: LLMProfileCatalog
+  }) {
     this.#rules = opts?.rules ?? []
-    
-    const toResponse = (val: string | LLMResponse | undefined, fallback: string): LLMResponse => {
-      if (!val) return { content: fallback, stopReason: 'end_turn' }
-      if (typeof val === 'string') return { content: val, stopReason: 'end_turn' }
-      return val
+    this.profileCatalog = opts?.profileCatalog ?? defaultProfileCatalog()
+
+    const toResponse = (value: string | LLMResponse | undefined, fallback: string): LLMResponse => {
+      if (!value) return { content: fallback, stopReason: 'end_turn' }
+      if (typeof value === 'string') return { content: value, stopReason: 'end_turn' }
+      return value
     }
 
-    this.#defaultByProfile = {
-      fast: toResponse(opts?.defaultByProfile?.fast, FakeLLMClient.defaultResponse()),
-      writer: toResponse(opts?.defaultByProfile?.writer, FakeLLMClient.defaultResponse()),
-      reasoning: toResponse(opts?.defaultByProfile?.reasoning, FakeLLMClient.defaultResponse())
+    const defaults: Record<LLMProfile, LLMResponse> = {}
+    for (const profile of this.profileCatalog.profiles) {
+      defaults[profile.id] = toResponse(
+        opts?.defaultByProfile?.[profile.id],
+        FakeLLMClient.defaultResponse(),
+      )
     }
+
+    if (!defaults[this.profileCatalog.defaultProfile]) {
+      defaults[this.profileCatalog.defaultProfile] = {
+        content: FakeLLMClient.defaultResponse(),
+        stopReason: 'end_turn',
+      }
+    }
+
+    this.#defaultByProfile = defaults
   }
 
   async complete(opts: LLMCompleteOptions): Promise<LLMResponse> {
     const text = toFlatText(opts.messages)
-    const hit = this.#rules.find((r) => text.includes(r.whenIncludes))
-    
+    const hit = this.#rules.find((rule) => text.includes(rule.whenIncludes))
+
     if (hit) {
       if (typeof hit.returns === 'string') {
         return { content: hit.returns, stopReason: 'end_turn' }
       }
       return hit.returns
     }
-    
-    return this.#defaultByProfile[opts.profile]
+
+    return this.#defaultByProfile[opts.profile] ?? this.#defaultByProfile[this.profileCatalog.defaultProfile]
   }
 
   async stream(opts: LLMStreamOptions, onChunk?: (chunk: LLMStreamChunk) => void): Promise<LLMResponse> {
@@ -88,5 +118,3 @@ export class FakeLLMClient implements LLMClient {
     return 'Task acknowledged. Ready to proceed.'
   }
 }
-
-

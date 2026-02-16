@@ -170,8 +170,11 @@ describe('tui/commands', () => {
     it('shows current model and profile', async () => {
       const runtimeManager = {
         getProfileOverride: vi.fn().mockReturnValue('fast'),
+        profileCatalog: { defaultProfile: 'fast' },
+        availableProfiles: ['fast', 'writer', 'reasoning'],
+        isValidProfile: vi.fn().mockReturnValue(true),
         clearProfileOverride: vi.fn(),
-        setProfileOverride: vi.fn()
+        setProfileOverride: vi.fn(),
       }
       const app = {
         runtimeManager,
@@ -181,14 +184,17 @@ describe('tui/commands', () => {
 
       await handleCommand('/model', ctx)
 
-      expect(ctx.setStatus).toHaveBeenCalledWith('LLM: TestLLM – Demo │ Profile: fast')
+      expect(ctx.setStatus).toHaveBeenCalledWith('LLM: TestLLM – Demo │ Profile: fast │ Available: fast, writer, reasoning')
     })
 
     it('clears profile override', async () => {
       const runtimeManager = {
         getProfileOverride: vi.fn(),
+        profileCatalog: { defaultProfile: 'fast' },
+        availableProfiles: ['fast', 'writer', 'reasoning'],
+        isValidProfile: vi.fn().mockReturnValue(true),
         clearProfileOverride: vi.fn(),
-        setProfileOverride: vi.fn()
+        setProfileOverride: vi.fn(),
       }
       const app = {
         runtimeManager,
@@ -205,8 +211,11 @@ describe('tui/commands', () => {
     it('rejects invalid profile', async () => {
       const runtimeManager = {
         getProfileOverride: vi.fn(),
+        profileCatalog: { defaultProfile: 'fast' },
+        availableProfiles: ['fast', 'writer', 'reasoning'],
+        isValidProfile: vi.fn().mockReturnValue(false),
         clearProfileOverride: vi.fn(),
-        setProfileOverride: vi.fn()
+        setProfileOverride: vi.fn(),
       }
       const app = {
         runtimeManager,
@@ -217,6 +226,27 @@ describe('tui/commands', () => {
       await handleCommand('/model unknown', ctx)
 
       expect(ctx.setStatus).toHaveBeenCalledWith('Invalid profile: unknown. Choose: fast, writer, reasoning')
+    })
+
+    it('accepts custom profile IDs', async () => {
+      const runtimeManager = {
+        getProfileOverride: vi.fn(),
+        profileCatalog: { defaultProfile: 'fast' },
+        availableProfiles: ['fast', 'writer', 'reasoning', 'research_web'],
+        isValidProfile: vi.fn().mockReturnValue(true),
+        clearProfileOverride: vi.fn(),
+        setProfileOverride: vi.fn(),
+      }
+      const app = {
+        runtimeManager,
+        llm: { label: 'TestLLM', description: 'Demo' }
+      } as unknown as App
+      const ctx = createContext(app)
+
+      await handleCommand('/model research_web', ctx)
+
+      expect(runtimeManager.setProfileOverride).toHaveBeenCalledWith('*', 'research_web')
+      expect(ctx.setStatus).toHaveBeenCalledWith('Global LLM profile set to: research_web')
     })
   })
 

@@ -1,6 +1,6 @@
 import type { Subscription } from '../../core/ports/subscribable.js'
 import type { EventStore } from '../../core/ports/eventStore.js'
-import type { LLMClient, LLMProfile } from '../../core/ports/llmClient.js'
+import type { LLMClient, LLMProfile, LLMProfileCatalog } from '../../core/ports/llmClient.js'
 import type { ToolRegistry } from '../../core/ports/tool.js'
 import type { DomainEvent, StoredEvent } from '../../core/events/events.js'
 import type { TaskService } from '../../application/services/taskService.js'
@@ -114,10 +114,29 @@ export class RuntimeManager {
     return this.#toolRegistry
   }
 
+  get profileCatalog(): LLMProfileCatalog {
+    return this.#llm.profileCatalog
+  }
+
+  get llmProvider(): LLMClient['provider'] {
+    return this.#llm.provider
+  }
+
+  get availableProfiles(): readonly LLMProfile[] {
+    return this.#llm.profileCatalog.profiles.map((profile) => profile.id)
+  }
+
+  isValidProfile(profile: LLMProfile): boolean {
+    return this.availableProfiles.includes(profile)
+  }
+
   // ======================== profile overrides ========================
 
   /** Set an LLM profile override for a task (or globally with taskId='*'). */
   setProfileOverride(taskId: string, profile: LLMProfile): void {
+    if (!this.isValidProfile(profile)) {
+      throw new Error(`Invalid profile: ${profile}. Choose: ${this.availableProfiles.join(', ')}`)
+    }
     this.#profileOverrides.set(taskId, profile)
   }
 

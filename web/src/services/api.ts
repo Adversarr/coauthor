@@ -11,7 +11,8 @@ import type {
   CreateTaskGroupTaskInput,
   PendingInteraction,
   HealthResponse,
-  LLMMessage
+  LLMMessage,
+  RuntimeInfo,
 } from '@/types'
 
 const BASE = '' // same origin (Vite proxy in dev, served directly in prod)
@@ -78,11 +79,7 @@ export const api = {
     post<void>(`/api/tasks/${taskId}/interaction/${interactionId}/respond`, body),
 
   // Runtime
-  getRuntime: (opts?: { signal?: AbortSignal }) => get<{
-    agents: Array<{ id: string; displayName: string; description: string }>
-    defaultAgentId: string
-    streamingEnabled: boolean
-  }>('/api/runtime', opts),
+  getRuntime: (opts?: { signal?: AbortSignal }) => get<RuntimeInfo>('/api/runtime', opts),
 
   // Audit
   getAudit: (limit = 50, taskId?: string, opts?: { signal?: AbortSignal }) => {

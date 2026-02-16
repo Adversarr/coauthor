@@ -1,6 +1,20 @@
 import type { ToolDefinition, ToolCallRequest } from './tool.js'
 
-export type LLMProfile = 'fast' | 'writer' | 'reasoning'
+export type LLMProvider = 'fake' | 'openai' | 'bailian' | 'volcengine'
+export type LLMBuiltinProfile = 'fast' | 'writer' | 'reasoning'
+export type LLMProfile = string
+
+export type LLMRuntimeProfile = {
+  id: LLMProfile
+  model: string
+  clientPolicy: string
+  builtin: boolean
+}
+
+export type LLMProfileCatalog = {
+  defaultProfile: LLMProfile
+  profiles: LLMRuntimeProfile[]
+}
 
 export type LLMMessagePart =
   | { kind: 'text'; content: string }
@@ -63,11 +77,17 @@ export type LLMStreamChunk =
 // ============================================================================
 
 export interface LLMClient {
+  /** Provider implementation key used by the runtime and API. */
+  readonly provider: LLMProvider
+
   /** Human-readable label, e.g. 'OpenAI' */
   readonly label: string
 
   /** Short description of the client configuration */
   readonly description: string
+
+  /** Runtime-visible profile catalog (profile ID, model, policy linkage). */
+  readonly profileCatalog: LLMProfileCatalog
 
   /**
    * Complete a conversation (non-streaming).

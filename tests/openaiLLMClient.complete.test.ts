@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: () => {
     return (modelId: string) => ({ modelId })
-  }
+  },
 }))
 
 const generateTextMock = vi.fn()
@@ -15,6 +15,25 @@ vi.mock('ai', () => ({
   streamText: streamTextMock,
   jsonSchema: jsonSchemaMock,
 }))
+
+function profileCatalog() {
+  return {
+    defaultProfile: 'fast',
+    clientPolicies: {
+      default: {
+        openaiCompat: {
+          enableThinking: true,
+          webSearch: { enabled: false },
+        },
+      },
+    },
+    profiles: {
+      fast: { model: 'gpt-test', clientPolicy: 'default' },
+      writer: { model: 'gpt-test', clientPolicy: 'default' },
+      reasoning: { model: 'gpt-test', clientPolicy: 'default' },
+    },
+  }
+}
 
 describe('OpenAILLMClient.complete', () => {
   it('should map reasoningText into LLMResponse.reasoning', async () => {
@@ -29,11 +48,7 @@ describe('OpenAILLMClient.complete', () => {
 
     const client = new OpenAILLMClient({
       apiKey: 'test',
-      modelByProfile: {
-        fast: 'gpt-test',
-        writer: 'gpt-test',
-        reasoning: 'gpt-test',
-      },
+      profileCatalog: profileCatalog(),
     })
 
     const result = await client.complete({
@@ -60,11 +75,7 @@ describe('OpenAILLMClient.complete', () => {
 
     const client = new OpenAILLMClient({
       apiKey: 'test',
-      modelByProfile: {
-        fast: 'gpt-test',
-        writer: 'gpt-test',
-        reasoning: 'gpt-test',
-      },
+      profileCatalog: profileCatalog(),
     })
 
     await client.complete({

@@ -31,6 +31,7 @@ import { FakeLLMClient } from '../../infrastructure/llm/fakeLLMClient.js'
 import { OpenAILLMClient } from '../../infrastructure/llm/openaiLLMClient.js'
 import { DEFAULT_USER_ACTOR_ID } from '../../core/entities/actor.js'
 import { loadAppConfig, type AppConfig } from '../../config/appConfig.js'
+import { toRuntimeProfileCatalog } from '../../config/llmProfileCatalog.js'
 import { ConsoleTelemetrySink, NoopTelemetrySink, type TelemetrySink } from '../../core/ports/telemetry.js'
 
 // ============================================================================
@@ -111,7 +112,7 @@ export type CreateAppOptions = {
 export async function createApp(opts: CreateAppOptions): Promise<App> {
   const baseDir = resolve(opts.baseDir)
   const currentActorId = opts.currentActorId ?? DEFAULT_USER_ACTOR_ID
-  const config = opts.config ?? loadAppConfig(process.env)
+  const config = opts.config ?? loadAppConfig(process.env, { workspaceDir: baseDir })
 
   // === Infrastructure Layer ===
   
@@ -160,14 +161,20 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   // LLM Client
   const llm =
     opts.llm ??
-    (config.llm.provider === 'openai'
-      ? new OpenAILLMClient({
-          apiKey: config.llm.openai.apiKey,
-          baseURL: config.llm.openai.baseURL,
-          modelByProfile: config.llm.openai.modelByProfile,
-          toolSchemaStrategy: config.toolSchema.strategy,
+    (() => {
+      if (config.llm.provider === 'fake') {
+        return new FakeLLMClient({
+          profileCatalog: toRuntimeProfileCatalog(config.llm.profiles),
         })
-      : new FakeLLMClient())
+      }
+      return new OpenAILLMClient({
+        provider: config.llm.provider,
+        apiKey: config.llm.apiKey,
+        baseURL: config.llm.baseURL,
+        profileCatalog: config.llm.profiles,
+        toolSchemaStrategy: config.toolSchema.strategy,
+      })
+    })()
 
   // === Application Layer ===
   

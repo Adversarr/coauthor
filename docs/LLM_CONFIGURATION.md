@@ -6,70 +6,126 @@ LLM provider selection is configured via environment variables and loaded by `lo
 
 Supported providers:
 - `fake` (default) — deterministic/local testing behavior.
-- `openai` — OpenAI-compatible API via `OpenAILLMClient`.
+- `openai` — OpenAI-compatible API.
+- `bailian` — Alibaba DashScope compatible API.
+- `volcengine` — Volcengine Ark compatible API.
 
 Env:
-- `SEED_LLM_PROVIDER=fake|openai`
+- `SEED_LLM_PROVIDER=fake|openai|bailian|volcengine`
+- `SEED_LLM_API_KEY` (required for non-`fake` providers)
+- `SEED_LLM_BASE_URL` (optional; provider default is used when omitted)
 
-## OpenAI Settings
+Provider default base URLs:
+- `openai` → `https://api.openai.com/v1`
+- `bailian` → `https://dashscope.aliyuncs.com/compatible-mode/v1`
+- `volcengine` → `https://ark.cn-beijing.volces.com/api/v3`
 
-When provider is `openai`, configure:
-- `SEED_OPENAI_API_KEY`
-- `SEED_OPENAI_BASE_URL` (optional, for compatible gateways/proxies)
+## Canonical Profile Catalog
 
-Profile-to-model mapping:
-- `SEED_OPENAI_MODEL_FAST` (default `gpt-4o-mini`)
-- `SEED_OPENAI_MODEL_WRITER` (default `gpt-4o`)
-- `SEED_OPENAI_MODEL_REASONING` (default `gpt-4o`)
+Use one env var as source of truth:
+- `SEED_LLM_PROFILES_JSON`
 
-## Profiles
+`SEED_LLM_PROFILES_JSON` supports two forms:
+- Inline JSON object string.
+- File path to JSON config:
+  - Absolute path, or
+  - Relative path resolved against the selected workspace directory (`--workspace`).
 
-Profiles used by orchestration:
+Schema:
+- `defaultProfile: string`
+- `clientPolicies: Record<string, ClientPolicy>`
+- `profiles: Record<string, { model: string; clientPolicy: string }>`
+
+Required built-in profile IDs:
 - `fast`
 - `writer`
 - `reasoning`
 
-Agent default profile:
-- `SEED_AGENT_DEFAULT_PROFILE` (default `fast`)
+Custom profile IDs are allowed.
 
-Runtime can apply profile overrides globally (`*`) via runtime API.
+### ClientPolicy schema
 
-## Tool Schema Strategy
+- `openaiCompat?: {`
+  - `enableThinking?: boolean`
+  - `webSearch?: {`
+    - `enabled: boolean`
+    - `onlyWhenNoFunctionTools?: boolean` (default `true`)
+    - `maxKeyword?: number (1..50)`
+    - `limit?: number (1..50)`
+    - `sources?: string[]`
+  - `}`
+- `}`
+- `provider?: {`
+  - `bailian?: {`
+    - `thinkingBudget?: number`
+    - `forcedSearch?: boolean`
+    - `searchStrategy?: turbo|max|agent|agent_max`
+  - `}`
+  - `volcengine?: {`
+    - `thinkingType?: enabled|disabled|auto`
+    - `reasoningEffort?: minimal|low|medium|high`
+  - `}`
+- `}`
 
-OpenAI tool declaration strategy is configurable:
-- `SEED_TOOL_SCHEMA_STRATEGY=zod|jsonschema|auto`
-- default: `auto`
+Provider-specific policy knobs are validated against the active provider and rejected when mismatched.
 
-This controls how tool parameter schema is exported to the LLM API.
+## Example Profile Catalog
 
-## Token/Iteration Limits
+```json
+{
+  "defaultProfile": "fast",
+  "clientPolicies": {
+    "balanced": {
+      "openaiCompat": {
+        "enableThinking": true,
+        "webSearch": {
+          "enabled": false,
+          "onlyWhenNoFunctionTools": true
+        }
+      }
+    },
+    "web_research": {
+      "openaiCompat": {
+        "enableThinking": true,
+        "webSearch": {
+          "enabled": true,
+          "onlyWhenNoFunctionTools": true,
+          "limit": 6
+        }
+      },
+      "provider": {
+        "volcengine": {
+          "thinkingType": "auto",
+          "reasoningEffort": "medium"
+        }
+      }
+    }
+  },
+  "profiles": {
+    "fast": { "model": "gpt-4o-mini", "clientPolicy": "balanced" },
+    "writer": { "model": "gpt-4o", "clientPolicy": "balanced" },
+    "reasoning": { "model": "gpt-4o", "clientPolicy": "balanced" },
+    "research_web": { "model": "gpt-4o", "clientPolicy": "web_research" }
+  }
+}
+```
 
-Agent-level controls:
-- `SEED_AGENT_MAX_ITERATIONS` (default `50`)
-- `SEED_AGENT_MAX_TOKENS` (default `4096`)
+## Runtime Surfaces
 
-Execution timeout and output control:
-- `SEED_TIMEOUT_EXEC` (default `30000` ms)
-- `SEED_MAX_OUTPUT_LENGTH` (default `10000` chars)
+`GET /api/runtime` returns:
+- `defaultAgentId`
+- `streamingEnabled`
+- `agents`
+- `llm.provider`
+- `llm.defaultProfile`
+- `llm.profiles[]` (`id`, `model`, `clientPolicy`, `builtin`)
+- `llm.globalProfileOverride`
 
-## Streaming
+`POST /api/runtime/profile` validates profile IDs dynamically from the catalog.
 
-LLM client supports both:
-- `complete` (non-streaming)
-- `stream` (chunked: text/reasoning/tool-call deltas)
+`POST /api/runtime/profile/clear` clears global profile override.
 
-Runtime streaming is controlled by runtime state (`streamingEnabled`) and can be toggled through HTTP API (`POST /api/runtime/streaming`).
+## Validation
 
-## Validation and Defaults
-
-All env parsing is validated through Zod in `src/config/appConfig.ts`; invalid values fail fast at config load.
-
-## Recommended Development Setup
-
-For local development without external API calls:
-- keep `SEED_LLM_PROVIDER=fake`
-
-For OpenAI mode:
-- set API key,
-- optionally set base URL,
-- set profile models to balance speed/cost/quality.
+All env parsing is validated through Zod in `src/config/appConfig.ts` and `src/config/llmProfileCatalog.ts`.
+Invalid values fail fast at startup.

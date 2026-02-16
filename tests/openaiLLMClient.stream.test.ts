@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: () => {
     return (modelId: string) => ({ modelId })
-  }
+  },
 }))
 
 const generateTextMock = vi.fn()
@@ -19,6 +19,25 @@ vi.mock('ai', () => ({
 async function* createStreamParts(parts: Array<Record<string, unknown>>): AsyncGenerator<Record<string, unknown>> {
   for (const part of parts) {
     yield part
+  }
+}
+
+function defaultCatalog() {
+  return {
+    defaultProfile: 'fast',
+    clientPolicies: {
+      default: {
+        openaiCompat: {
+          enableThinking: true,
+          webSearch: { enabled: false },
+        },
+      },
+    },
+    profiles: {
+      fast: { model: 'gpt-test', clientPolicy: 'default' },
+      writer: { model: 'gpt-test', clientPolicy: 'default' },
+      reasoning: { model: 'gpt-test', clientPolicy: 'default' },
+    },
   }
 }
 
@@ -46,11 +65,7 @@ describe('OpenAILLMClient.stream', () => {
 
     const client = new OpenAILLMClient({
       apiKey: 'test',
-      modelByProfile: {
-        fast: 'gpt-test',
-        writer: 'gpt-test',
-        reasoning: 'gpt-test',
-      },
+      profileCatalog: defaultCatalog(),
     })
 
     const chunks: Array<Record<string, unknown>> = []
@@ -79,7 +94,6 @@ describe('OpenAILLMClient.stream', () => {
       { type: 'done', stopReason: 'end_turn' },
     ])
 
-    // Verify assembled response
     expect(response.content).toBe('hello')
     expect(response.reasoning).toBe('think-more')
     expect(response.stopReason).toBe('end_turn')
@@ -100,11 +114,7 @@ describe('OpenAILLMClient.stream', () => {
 
     const client = new OpenAILLMClient({
       apiKey: 'test',
-      modelByProfile: {
-        fast: 'gpt-test',
-        writer: 'gpt-test',
-        reasoning: 'gpt-test',
-      },
+      profileCatalog: defaultCatalog(),
     })
 
     const response = await client.stream({
@@ -112,7 +122,6 @@ describe('OpenAILLMClient.stream', () => {
       messages: [{ role: 'user', content: 'hi' }],
     })
 
-    // Should use generateText (via complete), not streamText
     expect(generateTextMock).toHaveBeenCalled()
     expect(response.content).toBe('answer')
     expect(response.stopReason).toBe('end_turn')

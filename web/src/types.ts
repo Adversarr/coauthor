@@ -120,6 +120,25 @@ export interface CreateTaskGroupResponse {
 }
 export interface HealthResponse { status: string; uptime: number }
 
+export interface RuntimeLLMProfile {
+  id: string
+  model: string
+  clientPolicy: string
+  builtin: boolean
+}
+
+export interface RuntimeInfo {
+  agents: Array<{ id: string; displayName: string; description: string }>
+  defaultAgentId: string
+  streamingEnabled: boolean
+  llm: {
+    provider: 'fake' | 'openai' | 'bailian' | 'volcengine'
+    defaultProfile: string
+    profiles: RuntimeLLMProfile[]
+    globalProfileOverride: string | null
+  }
+}
+
 // ── LLM Conversation ───────────────────────────────────────────────────
 
 export interface ToolCallRequest {

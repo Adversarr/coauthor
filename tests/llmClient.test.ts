@@ -5,29 +5,51 @@ const mocks = vi.hoisted(() => {
     generateText: vi.fn(),
     streamText: vi.fn(),
     jsonSchema: vi.fn((schema: unknown) => ({ schema })),
-    createOpenAICompatible: vi.fn()
+    createOpenAICompatible: vi.fn(),
   }
 })
 
 vi.mock('nanoid', () => ({
-  nanoid: (size?: number) => `id_${size ?? 21}`
+  nanoid: (size?: number) => `id_${size ?? 21}`,
 }))
 
 vi.mock('ai', () => {
   return {
     generateText: mocks.generateText,
     streamText: mocks.streamText,
-    jsonSchema: mocks.jsonSchema
+    jsonSchema: mocks.jsonSchema,
   }
 })
 
 vi.mock('@ai-sdk/openai-compatible', () => {
   return {
-    createOpenAICompatible: mocks.createOpenAICompatible
+    createOpenAICompatible: mocks.createOpenAICompatible,
   }
 })
 
 import { OpenAILLMClient, toToolCallRequests } from '../src/infrastructure/llm/openaiLLMClient.js'
+
+function createProfileCatalog(models?: { fast?: string; writer?: string; reasoning?: string }) {
+  return {
+    defaultProfile: 'fast',
+    clientPolicies: {
+      default: {
+        openaiCompat: {
+          enableThinking: true,
+          webSearch: {
+            enabled: false,
+            onlyWhenNoFunctionTools: true,
+          },
+        },
+      },
+    },
+    profiles: {
+      fast: { model: models?.fast ?? 'fast-model', clientPolicy: 'default' },
+      writer: { model: models?.writer ?? 'writer-model', clientPolicy: 'default' },
+      reasoning: { model: models?.reasoning ?? 'reasoning-model', clientPolicy: 'default' },
+    },
+  }
+}
 
 describe('OpenAILLMClient (LLMClient port)', () => {
   beforeEach(() => {
@@ -41,31 +63,35 @@ describe('OpenAILLMClient (LLMClient port)', () => {
       () =>
         new OpenAILLMClient({
           apiKey: null,
-          modelByProfile: { fast: 'm1', writer: 'm2', reasoning: 'm3' }
-        })
-    ).toThrow(/SEED_OPENAI_API_KEY/)
+          profileCatalog: createProfileCatalog(),
+        }),
+    ).toThrow(/SEED_LLM_API_KEY/)
   })
 
   test('complete routes by profile and returns LLMResponse', async () => {
     mocks.createOpenAICompatible.mockReturnValue((modelId: string) => ({ modelId }))
-    mocks.generateText.mockResolvedValue({ 
-      text: 'hello', 
+    mocks.generateText.mockResolvedValue({
+      text: 'hello',
       toolCalls: [],
-      finishReason: 'stop'
+      finishReason: 'stop',
     })
 
     const llm = new OpenAILLMClient({
       apiKey: 'k',
-      modelByProfile: { fast: 'fast-model', writer: 'writer-model', reasoning: 'reasoning-model' }
+      profileCatalog: createProfileCatalog({
+        fast: 'fast-model',
+        writer: 'writer-model',
+        reasoning: 'reasoning-model',
+      }),
     })
 
     const response = await llm.complete({
       profile: 'writer',
       messages: [
         { role: 'system', content: 'S' },
-        { role: 'user', content: 'U' }
+        { role: 'user', content: 'U' },
       ],
-      maxTokens: 123
+      maxTokens: 123,
     })
 
     expect(response.content).toBe('hello')
@@ -83,18 +109,22 @@ describe('OpenAILLMClient (LLMClient port)', () => {
         yield { type: 'text-delta', text: 'a' }
         yield { type: 'text-delta', text: 'b' }
         yield { type: 'finish', finishReason: 'stop' }
-      })()
+      })(),
     })
 
     const llm = new OpenAILLMClient({
       apiKey: 'k',
-      modelByProfile: { fast: 'fast-model', writer: 'writer-model', reasoning: 'reasoning-model' }
+      profileCatalog: createProfileCatalog({
+        fast: 'fast-model',
+        writer: 'writer-model',
+        reasoning: 'reasoning-model',
+      }),
     })
 
     const out: unknown[] = []
     const response = await llm.stream({
       profile: 'fast',
-      messages: [{ role: 'user', content: 'hi' }]
+      messages: [{ role: 'user', content: 'hi' }],
     }, (chunk) => {
       out.push(chunk)
     })
@@ -120,17 +150,17 @@ describe('toToolCallRequests', () => {
 
   test('converts valid tool calls', () => {
     const input = [
-      { toolCallId: 'call_1', toolName: 'test_tool', args: { foo: 'bar' } }
+      { toolCallId: 'call_1', toolName: 'test_tool', args: { foo: 'bar' } },
     ]
     const expected = [
-      { toolCallId: 'call_1', toolName: 'test_tool', arguments: { foo: 'bar' } }
+      { toolCallId: 'call_1', toolName: 'test_tool', arguments: { foo: 'bar' } },
     ]
     expect(toToolCallRequests(input)).toEqual(expected)
   })
 
   test('generates id if missing', () => {
     const input = [
-      { toolName: 'test_tool', args: { foo: 'bar' } }
+      { toolName: 'test_tool', args: { foo: 'bar' } },
     ]
     const result = toToolCallRequests(input)
     expect(result[0].toolCallId).toBe('tool_id_12')
@@ -139,7 +169,7 @@ describe('toToolCallRequests', () => {
 
   test('defaults arguments to empty object if missing', () => {
     const input = [
-      { toolCallId: 'call_1', toolName: 'test_tool' }
+      { toolCallId: 'call_1', toolName: 'test_tool' },
     ]
     const result = toToolCallRequests(input)
     expect(result[0].arguments).toEqual({})

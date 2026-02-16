@@ -7,6 +7,7 @@
 
 import { create } from 'zustand'
 import { api } from '@/services/api'
+import type { RuntimeLLMProfile } from '@/types'
 
 export interface AgentInfo {
   id: string
@@ -18,6 +19,10 @@ interface RuntimeState {
   agents: AgentInfo[]
   defaultAgentId: string | null
   streamingEnabled: boolean
+  llmProvider: 'fake' | 'openai' | 'bailian' | 'volcengine' | null
+  defaultProfile: string | null
+  globalProfileOverride: string | null
+  profiles: RuntimeLLMProfile[]
   loading: boolean
   error: string | null
 
@@ -32,6 +37,10 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   agents: [],
   defaultAgentId: null,
   streamingEnabled: false,
+  llmProvider: null,
+  defaultProfile: null,
+  globalProfileOverride: null,
+  profiles: [],
   loading: false,
   error: null,
 
@@ -43,6 +52,10 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         agents: data.agents,
         defaultAgentId: data.defaultAgentId,
         streamingEnabled: data.streamingEnabled,
+        llmProvider: data.llm.provider,
+        defaultProfile: data.llm.defaultProfile,
+        globalProfileOverride: data.llm.globalProfileOverride,
+        profiles: data.llm.profiles,
         loading: false,
       })
     } catch (e) {

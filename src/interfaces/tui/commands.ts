@@ -1,5 +1,5 @@
 import { readFile, access } from 'node:fs/promises'
-import type { LLMMessage, LLMProfile } from '../../core/ports/llmClient.js'
+import type { LLMMessage } from '../../core/ports/llmClient.js'
 import type { App } from '../app/createApp.js'
 import { formatToolOutput, formatToolInput } from '../../shared/toolFormatters.js'
 
@@ -248,25 +248,27 @@ export async function handleCommand(line: string, ctx: CommandContext) {
 
       case 'model':
       case 'm': {
-        const VALID_PROFILES: readonly LLMProfile[] = ['fast', 'writer', 'reasoning']
         const target = args[0]?.trim()
+        const runtimeManager = ctx.app.runtimeManager
+        const availableProfiles = runtimeManager.availableProfiles
         if (!target) {
-          const current = ctx.app.runtimeManager.getProfileOverride('*')
-          const currentLabel = current ?? 'default (per-agent)'
+          const current = runtimeManager.getProfileOverride('*')
+          const defaultProfile = runtimeManager.profileCatalog.defaultProfile
+          const currentLabel = current ?? `default (${defaultProfile})`
           const llm = ctx.app.llm
-          ctx.setStatus(`LLM: ${llm.label} – ${llm.description} │ Profile: ${currentLabel}`)
+          ctx.setStatus(`LLM: ${llm.label} – ${llm.description} │ Profile: ${currentLabel} │ Available: ${availableProfiles.join(', ')}`)
           return
         }
         if (target === 'reset' || target === 'clear') {
-          ctx.app.runtimeManager.clearProfileOverride('*')
+          runtimeManager.clearProfileOverride('*')
           ctx.setStatus('Profile override cleared. Agents will use their own defaults.')
           return
         }
-        if (!VALID_PROFILES.includes(target as LLMProfile)) {
-          ctx.setStatus(`Invalid profile: ${target}. Choose: ${VALID_PROFILES.join(', ')}`)
+        if (!runtimeManager.isValidProfile(target)) {
+          ctx.setStatus(`Invalid profile: ${target}. Choose: ${availableProfiles.join(', ')}`)
           return
         }
-        ctx.app.runtimeManager.setProfileOverride('*', target as LLMProfile)
+        runtimeManager.setProfileOverride('*', target)
         ctx.setStatus(`Global LLM profile set to: ${target}`)
         return
       }
@@ -286,7 +288,7 @@ export async function handleCommand(line: string, ctx: CommandContext) {
           { variant: 'plain', content: '', dim: true },
           { variant: 'plain', content: '── Agent & LLM ──', color: 'cyan', bold: true },
           { variant: 'plain', content: '  /agent [name]        List agents or switch default', dim: true },
-          { variant: 'plain', content: '  /model [profile]     Show/set LLM profile (fast|writer|reasoning|reset)', dim: true },
+          { variant: 'plain', content: '  /model [profile]     Show/set LLM profile (or reset)', dim: true },
           { variant: 'plain', content: '', dim: true },
           { variant: 'plain', content: '── Debug ──', color: 'cyan', bold: true },
           { variant: 'plain', content: '  /replay [taskId]     Replay conversation history', dim: true },

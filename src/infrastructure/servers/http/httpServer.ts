@@ -71,7 +71,7 @@ const RespondBodySchema = z.object({
 })
 
 const ProfileBodySchema = z.object({
-  profile: z.enum(['fast', 'writer', 'reasoning']),
+  profile: z.string().min(1),
 })
 
 const StreamingBodySchema = z.object({
@@ -314,12 +314,30 @@ export function createHttpApp(deps: HttpAppDeps): Hono {
       defaultAgentId: deps.runtimeManager.defaultAgentId,
       streamingEnabled: deps.runtimeManager.streamingEnabled,
       agents,
+      llm: {
+        provider: deps.runtimeManager.llmProvider,
+        defaultProfile: deps.runtimeManager.profileCatalog.defaultProfile,
+        profiles: deps.runtimeManager.profileCatalog.profiles,
+        globalProfileOverride: deps.runtimeManager.getProfileOverride('*') ?? null,
+      },
     })
   })
 
   app.post('/api/runtime/profile', async (c) => {
     const body = ProfileBodySchema.parse(await c.req.json())
+    if (!deps.runtimeManager.isValidProfile(body.profile)) {
+      const validProfiles = deps.runtimeManager.availableProfiles
+      return c.json(
+        { error: `Invalid profile: ${body.profile}. Choose: ${validProfiles.join(', ')}` },
+        400,
+      )
+    }
     deps.runtimeManager.setProfileOverride('*', body.profile)
+    return c.json({ ok: true })
+  })
+
+  app.post('/api/runtime/profile/clear', (c) => {
+    deps.runtimeManager.clearProfileOverride('*')
     return c.json({ ok: true })
   })
 
