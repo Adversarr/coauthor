@@ -15,7 +15,7 @@ import type { App } from '../../src/interfaces/app/createApp.js'
 // ============================================================================
 
 async function createTestApp(): Promise<{ app: App; dir: string }> {
-  const dir = mkdtempSync(join(tmpdir(), 'coauthor-tui-focus-'))
+  const dir = mkdtempSync(join(tmpdir(), 'seed-tui-focus-'))
   const app = await createApp({
     baseDir: dir,
     eventsPath: join(dir, 'events.jsonl'),

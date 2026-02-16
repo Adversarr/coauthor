@@ -88,7 +88,7 @@ describe('Per-task serialization (CC-001)', () => {
   })
 
   test('concurrent executeTask calls on SAME task are serialized', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     dirs.push(dir)
     const infra = await makeInfra(dir)
 
@@ -172,7 +172,7 @@ describe('Per-task serialization (CC-001)', () => {
   })
 
   test('concurrent events for DIFFERENT tasks run in parallel', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     dirs.push(dir)
     const infra = await makeInfra(dir)
 
@@ -228,7 +228,7 @@ describe('Single-flight execution guard (CC-008)', () => {
   })
 
   test('isExecuting prevents overlapping agent loops for same runtime', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     dirs.push(dir)
     const infra = await makeInfra(dir)
 

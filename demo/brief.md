@@ -1,33 +1,27 @@
-# Research Brief: CoAuthor System
+# Seed Demo Brief
 
-## Project Overview
+## Objective
 
-**CoAuthor** is an intelligent co-authoring system designed for STEM academic writing using Large Language Models (LLMs). It provides a task-driven, event-sourced architecture for collaborative writing with LaTeX support.
+Demonstrate Seed as a personal AI assistant team for general workspace execution.
 
-## Core Innovation
+## Scenario
 
-The system addresses a critical gap in current AI-assisted writing tools: **transparency and reproducibility**. By using event sourcing, every change made by human authors or AI agents is recorded in an immutable log, enabling:
+A user asks Seed to improve clarity in `demo/data/sample.txt`.
 
-- Complete audit trails
-- Temporal queries and state reconstruction
-- Conflict resolution through event ordering
-- Safe experimentation with AI-generated content
+Expected execution pattern:
+1. Inspect relevant files.
+2. Propose one focused edit.
+3. Require user confirmation for the risky edit.
+4. Apply and summarize outcome.
 
-## Technical Architecture
+## Why This Matters
 
-- **Hexagonal Architecture**: Clean separation between domain, application, and infrastructure layers
-- **Event Sourcing**: All state changes captured as domain events in JSONL format
-- **Agent Runtime**: Tool use workflow with UIP (User Interaction Points) for risky operations
-- **CLI + TUI**: Flexible interfaces for different user preferences
+This validates the core Seed promises:
+- explicit task lifecycle,
+- auditable tool actions,
+- human-in-the-loop safety,
+- domain-agnostic goal execution.
 
-## Interfaces
+## Optional Domain Extension
 
-- **Terminal UI (TUI)**: React/Ink-based terminal interface with command system, streaming output, and task management
-- **Web UI**: Modern web interface built with React 19, TailwindCSS, and Radix UI components for enhanced user experience
-
-## Current Status
-
-- M1 (Core event sourcing and CLI scaffolding) - Complete
-- M2 (Agent runtime with tool use) - Complete
-- M3 (Dual interfaces: TUI + Web UI) - Complete
-- M4 (LaTeX compilation and preview) - Planned
+`demo/paper/` remains as an optional writing-domain sample; it is not the primary Seed positioning.

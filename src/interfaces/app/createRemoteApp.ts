@@ -12,7 +12,7 @@ import type { TaskView, TasksProjectionState, CreateTaskOptions } from '../../ap
 import type { InteractionResponse } from '../../application/services/interactionService.js'
 import type { StoredEvent, UserInteractionRequestedPayload } from '../../core/events/events.js'
 import type { StoredAuditEntry } from '../../core/ports/auditLog.js'
-import { CoAuthorWsClient } from '../../infrastructure/remote/wsClient.js'
+import { SeedWsClient } from '../../infrastructure/remote/wsClient.js'
 import { RemoteHttpClient } from '../../infrastructure/remote/httpClient.js'
 import { RemoteEventStore } from '../../infrastructure/remote/remoteEventStore.js'
 import { RemoteUiBus } from '../../infrastructure/remote/remoteUiBus.js'
@@ -195,7 +195,7 @@ export interface CreateRemoteAppOptions {
 export async function createRemoteApp(opts: CreateRemoteAppOptions): Promise<App> {
   const baseDir = resolve(opts.baseDir)
   const http = new RemoteHttpClient(opts.port, opts.token)
-  const ws = new CoAuthorWsClient({ port: opts.port, token: opts.token })
+  const ws = new SeedWsClient({ port: opts.port, token: opts.token })
 
   // Fetch runtime info
   const runtime = await http.get<{

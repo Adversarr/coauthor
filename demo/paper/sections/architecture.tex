@@ -1,35 +1,26 @@
 % System Architecture Section
-% This section describes the technical design of the CoAuthor system
+% Technical design of Seed
 
 \subsection{Overview}
 \label{subsec:overview}
 
-CoAuthor is built on a hexagonal architecture that separates domain logic from infrastructure concerns. This design enables testability, flexibility, and clear separation of responsibilities.
+Seed uses a layered architecture that separates domain decisions, application logic, infrastructure adapters, and user interfaces. This structure supports testability and controlled evolution of each layer.
 
 \subsection{Core Components}
 \label{subsec:components}
 
-The system consists of the following key components:
-
 \begin{itemize}
-    \item \textbf{Domain Layer}: Contains business logic, event definitions, and type schemas.
-    \item \textbf{Application Layer}: Implements use cases through services for tasks, patches, and events.
-    \item \textbf{Infrastructure Layer}: Provides adapters for event storage, LLM clients, HTTP/WebSocket servers, and logging.
-    \item \textbf{Interface Layer}: Provides dual interfaces for user interaction:
-    \begin{itemize}
-        \item \textit{Terminal UI (TUI)}: React/Ink-based interface with command system, real-time streaming output, and task tree navigation.
-        \item \textit{Web UI}: Modern browser interface built with React, TailwindCSS, and Radix UI components, connected via WebSocket for real-time updates.
-    \end{itemize}
+    \item \textbf{Core Layer}: domain entities, event contracts, and service ports.
+    \item \textbf{Application Layer}: task lifecycle, interaction handling, projections, and audit queries.
+    \item \textbf{Infrastructure Layer}: JSONL persistence, tool execution, LLM clients, HTTP/WS transport.
+    \item \textbf{Interface Layer}: terminal UI and web UI built on shared backend contracts.
 \end{itemize}
 
-\subsection{Event Flow}
+\subsection{Execution Planes}
 \label{subsec:event-flow}
 
-All state changes in CoAuthor are captured as domain events and stored in an append-only log. This event-sourced approach provides:
-
 \begin{enumerate}
-    \item Complete audit trails of all changes
-    \item Ability to reconstruct any historical state
-    \item Natural support for temporal queries
-    \item Built-in conflict resolution through event ordering
+    \item \textbf{Domain event plane}: append-only lifecycle and interaction events.
+    \item \textbf{Audit plane}: tool request/result records with execution metadata.
+    \item \textbf{UI plane}: realtime updates for streaming output and interaction state.
 \end{enumerate}

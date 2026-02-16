@@ -38,71 +38,71 @@ export type AppConfig = {
 }
 
 const EnvSchema = z.object({
-  COAUTHOR_TELEMETRY_SINK: z.enum(['none', 'console']).default('none'),
-  COAUTHOR_TOOL_SCHEMA_STRATEGY: z.enum(['zod', 'jsonschema', 'auto']).default('auto'),
-  COAUTHOR_LLM_PROVIDER: z.enum(['fake', 'openai']).default('fake'),
-  COAUTHOR_OPENAI_API_KEY: z.string().min(1).optional(),
-  COAUTHOR_OPENAI_BASE_URL: z.string().min(1).optional(),
-  COAUTHOR_OPENAI_MODEL_FAST: z.string().min(1).default('gpt-4o-mini'),
-  COAUTHOR_OPENAI_MODEL_WRITER: z.string().min(1).default('gpt-4o'),
-  COAUTHOR_OPENAI_MODEL_REASONING: z.string().min(1).default('gpt-4o'),
-  COAUTHOR_MAX_SUBTASK_DEPTH: z.coerce.number().int().min(0).default(3),
+  SEED_TELEMETRY_SINK: z.enum(['none', 'console']).default('none'),
+  SEED_TOOL_SCHEMA_STRATEGY: z.enum(['zod', 'jsonschema', 'auto']).default('auto'),
+  SEED_LLM_PROVIDER: z.enum(['fake', 'openai']).default('fake'),
+  SEED_OPENAI_API_KEY: z.string().min(1).optional(),
+  SEED_OPENAI_BASE_URL: z.string().min(1).optional(),
+  SEED_OPENAI_MODEL_FAST: z.string().min(1).default('gpt-4o-mini'),
+  SEED_OPENAI_MODEL_WRITER: z.string().min(1).default('gpt-4o'),
+  SEED_OPENAI_MODEL_REASONING: z.string().min(1).default('gpt-4o'),
+  SEED_MAX_SUBTASK_DEPTH: z.coerce.number().int().min(0).default(3),
   
   // Agent
-  COAUTHOR_AGENT_MAX_ITERATIONS: z.coerce.number().int().min(0).default(50),
-  COAUTHOR_AGENT_MAX_TOKENS: z.coerce.number().int().min(0).default(4096),
-  COAUTHOR_AGENT_DEFAULT_PROFILE: z.enum(['fast', 'writer', 'reasoning']).default('fast'),
+  SEED_AGENT_MAX_ITERATIONS: z.coerce.number().int().min(0).default(50),
+  SEED_AGENT_MAX_TOKENS: z.coerce.number().int().min(0).default(4096),
+  SEED_AGENT_DEFAULT_PROFILE: z.enum(['fast', 'writer', 'reasoning']).default('fast'),
 
   // Timeouts
-  COAUTHOR_TIMEOUT_INTERACTION: z.coerce.number().int().min(0).default(300000), // 5 min
-  COAUTHOR_TIMEOUT_EXEC: z.coerce.number().int().min(0).default(30000), // 30 sec
+  SEED_TIMEOUT_INTERACTION: z.coerce.number().int().min(0).default(300000), // 5 min
+  SEED_TIMEOUT_EXEC: z.coerce.number().int().min(0).default(30000), // 30 sec
 
   // Resources
-  COAUTHOR_AUDIT_LOG_LIMIT: z.coerce.number().int().min(1).default(20),
-  COAUTHOR_MAX_OUTPUT_LENGTH: z.coerce.number().int().min(0).default(10000),
+  SEED_AUDIT_LOG_LIMIT: z.coerce.number().int().min(1).default(20),
+  SEED_MAX_OUTPUT_LENGTH: z.coerce.number().int().min(0).default(10000),
 
   // Task
-  COAUTHOR_TASK_DEFAULT_PRIORITY: z.enum(['foreground', 'background']).default('foreground')
+  SEED_TASK_DEFAULT_PRIORITY: z.enum(['foreground', 'background']).default('foreground')
 })
 
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const parsed = EnvSchema.parse(env)
   const config = {
     telemetry: {
-      sink: parsed.COAUTHOR_TELEMETRY_SINK,
+      sink: parsed.SEED_TELEMETRY_SINK,
     },
     toolSchema: {
-      strategy: parsed.COAUTHOR_TOOL_SCHEMA_STRATEGY,
+      strategy: parsed.SEED_TOOL_SCHEMA_STRATEGY,
     },
     llm: {
-      provider: parsed.COAUTHOR_LLM_PROVIDER,
+      provider: parsed.SEED_LLM_PROVIDER,
       openai: {
-        apiKey: parsed.COAUTHOR_OPENAI_API_KEY ?? null,
-        baseURL: parsed.COAUTHOR_OPENAI_BASE_URL ?? null,
+        apiKey: parsed.SEED_OPENAI_API_KEY ?? null,
+        baseURL: parsed.SEED_OPENAI_BASE_URL ?? null,
         modelByProfile: {
-          fast: parsed.COAUTHOR_OPENAI_MODEL_FAST,
-          writer: parsed.COAUTHOR_OPENAI_MODEL_WRITER,
-          reasoning: parsed.COAUTHOR_OPENAI_MODEL_REASONING
+          fast: parsed.SEED_OPENAI_MODEL_FAST,
+          writer: parsed.SEED_OPENAI_MODEL_WRITER,
+          reasoning: parsed.SEED_OPENAI_MODEL_REASONING
         }
       }
     },
     agent: {
-      maxIterations: parsed.COAUTHOR_AGENT_MAX_ITERATIONS,
-      maxTokens: parsed.COAUTHOR_AGENT_MAX_TOKENS,
-      defaultProfile: parsed.COAUTHOR_AGENT_DEFAULT_PROFILE as LLMProfile
+      maxIterations: parsed.SEED_AGENT_MAX_ITERATIONS,
+      maxTokens: parsed.SEED_AGENT_MAX_TOKENS,
+      defaultProfile: parsed.SEED_AGENT_DEFAULT_PROFILE as LLMProfile
     },
     timeouts: {
-      interaction: parsed.COAUTHOR_TIMEOUT_INTERACTION,
-      exec: parsed.COAUTHOR_TIMEOUT_EXEC
+      interaction: parsed.SEED_TIMEOUT_INTERACTION,
+      exec: parsed.SEED_TIMEOUT_EXEC
     },
     resources: {
-      auditLogLimit: parsed.COAUTHOR_AUDIT_LOG_LIMIT,
-      maxOutputLength: parsed.COAUTHOR_MAX_OUTPUT_LENGTH
+      auditLogLimit: parsed.SEED_AUDIT_LOG_LIMIT,
+      maxOutputLength: parsed.SEED_MAX_OUTPUT_LENGTH
     },
     task: {
-      defaultPriority: parsed.COAUTHOR_TASK_DEFAULT_PRIORITY as TaskPriority
+      defaultPriority: parsed.SEED_TASK_DEFAULT_PRIORITY as TaskPriority
     },
-    maxSubtaskDepth: parsed.COAUTHOR_MAX_SUBTASK_DEPTH
+    maxSubtaskDepth: parsed.SEED_MAX_SUBTASK_DEPTH
   }
 
   return config

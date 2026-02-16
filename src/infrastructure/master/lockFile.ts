@@ -1,7 +1,7 @@
 /**
  * Master lock file — enables multiple TUI/Web clients to discover a running master process.
  *
- * Lock file path: <baseDir>/.coauthor/server.lock
+ * Lock file path: <baseDir>/.seed/server.lock
  * Content: JSON with { pid, port, token, startedAt }
  *
  * Design:
@@ -32,7 +32,7 @@ export type LockFileData = z.infer<typeof LockFileDataSchema>
 // ============================================================================
 
 export function lockFilePath(baseDir: string): string {
-  return join(baseDir, '.coauthor', 'server.lock')
+  return join(baseDir, '.seed', 'server.lock')
 }
 
 export function writeLockFile(path: string, data: LockFileData): void {

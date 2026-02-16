@@ -9,7 +9,7 @@ import { TaskService } from '../../src/application/services/taskService.js'
 import { RuntimeManager } from '../../src/agents/orchestration/runtimeManager.js'
 import { ConversationManager } from '../../src/agents/orchestration/conversationManager.js'
 import { OutputHandler } from '../../src/agents/orchestration/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.js'
 import { FakeLLMClient } from '../../src/infrastructure/llm/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../../src/infrastructure/tools/toolExecutor.js'
@@ -97,7 +97,7 @@ function stubAgent(id: string): Agent {
 
 describe('RuntimeManager — Agent Registration', () => {
   test('first registered agent becomes default', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
 
     const manager = new RuntimeManager(infra)
@@ -114,7 +114,7 @@ describe('RuntimeManager — Agent Registration', () => {
   })
 
   test('throws when no agents registered and defaultAgentId accessed', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
 
@@ -124,7 +124,7 @@ describe('RuntimeManager — Agent Registration', () => {
   })
 
   test('agents map exposes registered agents', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
 
@@ -140,7 +140,7 @@ describe('RuntimeManager — Agent Registration', () => {
 
 describe('RuntimeManager — Lifecycle', () => {
   test('start()/stop() toggles isRunning', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
     manager.registerAgent(stubAgent(DEFAULT_AGENT_ACTOR_ID))
@@ -155,7 +155,7 @@ describe('RuntimeManager — Lifecycle', () => {
   })
 
   test('double start is idempotent', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
     manager.registerAgent(stubAgent(DEFAULT_AGENT_ACTOR_ID))
@@ -169,10 +169,10 @@ describe('RuntimeManager — Lifecycle', () => {
   })
 
   test('stop cleans up runtimes', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
-    manager.registerAgent(new DefaultCoAuthorAgent({ contextBuilder: new ContextBuilder(dir) }))
+    manager.registerAgent(new DefaultSeedAgent({ contextBuilder: new ContextBuilder(dir) }))
 
     manager.start()
     await infra.taskService.createTask({ title: 'T', agentId: DEFAULT_AGENT_ACTOR_ID })
@@ -188,10 +188,10 @@ describe('RuntimeManager — Lifecycle', () => {
 
 describe('RuntimeManager — Event Routing', () => {
   test('routes TaskCreated to correct agent', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
-    manager.registerAgent(new DefaultCoAuthorAgent({ contextBuilder: new ContextBuilder(dir) }))
+    manager.registerAgent(new DefaultSeedAgent({ contextBuilder: new ContextBuilder(dir) }))
 
     manager.start()
 
@@ -212,7 +212,7 @@ describe('RuntimeManager — Event Routing', () => {
   })
 
   test('ignores TaskCreated for unregistered agent', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
     manager.registerAgent(stubAgent('agent_x'))
@@ -243,10 +243,10 @@ describe('RuntimeManager — Event Routing', () => {
   })
 
   test('routes TaskCanceled and cleans up runtime', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
-    manager.registerAgent(new DefaultCoAuthorAgent({ contextBuilder: new ContextBuilder(dir) }))
+    manager.registerAgent(new DefaultSeedAgent({ contextBuilder: new ContextBuilder(dir) }))
 
     manager.start()
 
@@ -284,7 +284,7 @@ describe('RuntimeManager — Event Routing', () => {
   })
 
   test('executeTask throws for unknown task', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
     manager.registerAgent(stubAgent(DEFAULT_AGENT_ACTOR_ID))
@@ -297,11 +297,11 @@ describe('RuntimeManager — Event Routing', () => {
 
 describe('RuntimeManager — Multi-Agent Routing', () => {
   test('two registered agents each handle their own tasks', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const infra = await makeInfra(dir)
     const manager = new RuntimeManager(infra)
 
-    // Use proper stub agents — DefaultCoAuthorAgent uses private fields
+    // Use proper stub agents — DefaultSeedAgent uses private fields
     // so Object.create won't work.
     const agentA = stubAgent(DEFAULT_AGENT_ACTOR_ID)
     const agentB = stubAgent('agent_b')

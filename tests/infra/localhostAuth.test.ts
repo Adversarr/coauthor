@@ -12,21 +12,21 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WebSocket } from 'ws'
 import { createApp, type App } from '../../src/interfaces/app/createApp.js'
-import { CoAuthorServer } from '../../src/infrastructure/servers/server.js'
+import { SeedServer } from '../../src/infrastructure/servers/server.js'
 
-const RUN_SERVER_INTEGRATION = process.env.COAUTHOR_RUN_SERVER_INTEGRATION === '1'
+const RUN_SERVER_INTEGRATION = process.env.SEED_RUN_SERVER_INTEGRATION === '1'
 const describeLocalhostAuth = RUN_SERVER_INTEGRATION ? describe : describe.skip
 
 describeLocalhostAuth('Localhost Auth Bypass', () => {
   let tmpDir: string
   let app: App
-  let server: CoAuthorServer
+  let server: SeedServer
   const TOKEN = 'localhost-bypass-test-token'
 
   beforeEach(async () => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'coauthor-localhost-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'seed-localhost-'))
     app = await createApp({ baseDir: tmpDir })
-    server = new CoAuthorServer(app, { authToken: TOKEN, port: 0 })
+    server = new SeedServer(app, { authToken: TOKEN, port: 0 })
     await server.start()
   })
 

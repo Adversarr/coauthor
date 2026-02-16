@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { DefaultCoAuthorAgent } from '../../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.js'
 import { ContextBuilder } from '../../src/application/context/contextBuilder.js'
 import type { AgentContext } from '../../src/agents/core/agent.js'
 import type { TaskView } from '../../src/application/services/taskService.js'
 import type { ToolRegistry, Tool } from '../../src/core/ports/tool.js'
 import type { LLMClient } from '../../src/core/ports/llmClient.js'
 
-describe('DefaultCoAuthorAgent Diff Generation', () => {
+describe('DefaultSeedAgent Diff Generation', () => {
   const mockStore = {
     readFile: async () => '',
     readFileRange: async () => '',
@@ -19,7 +19,7 @@ describe('DefaultCoAuthorAgent Diff Generation', () => {
   }
   // @ts-ignore
   const contextBuilder = new ContextBuilder('/tmp', mockStore)
-  const agent = new DefaultCoAuthorAgent({ contextBuilder })
+  const agent = new DefaultSeedAgent({ contextBuilder })
 
   const mockTask: TaskView = {
     taskId: 't1',
@@ -57,7 +57,7 @@ describe('DefaultCoAuthorAgent Diff Generation', () => {
         arguments: {
           path: 'test.txt',
           oldString: 'Hello World',
-          newString: 'Hello CoAuthor'
+          newString: 'Hello Seed'
         }
       }],
       stopReason: 'tool_use'
@@ -94,7 +94,7 @@ describe('DefaultCoAuthorAgent Diff Generation', () => {
         arguments: {
           path: 'test.txt',
           oldString: 'Hello World',
-          newString: 'Hello CoAuthor'
+          newString: 'Hello Seed'
         }
       }]
     })

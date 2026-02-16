@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { DefaultCoAuthorAgent } from '../../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.js'
 import { ContextBuilder } from '../../src/application/context/contextBuilder.js'
 import type { AgentContext } from '../../src/agents/core/agent.js'
 import type { TaskView } from '../../src/application/services/taskService.js'
 import type { ToolRegistry, Tool } from '../../src/core/ports/tool.js'
 import type { LLMClient, LLMMessage } from '../../src/core/ports/llmClient.js'
 
-describe('DefaultCoAuthorAgent - Risk-Unaware Behavior', () => {
+describe('DefaultSeedAgent - Risk-Unaware Behavior', () => {
   const contextBuilder = new ContextBuilder('/tmp', {
     readFile: async () => '',
     readFileRange: async () => '',
@@ -16,7 +16,7 @@ describe('DefaultCoAuthorAgent - Risk-Unaware Behavior', () => {
     mkdir: async () => {},
     stat: async () => null
   })
-  const agent = new DefaultCoAuthorAgent({ contextBuilder })
+  const agent = new DefaultSeedAgent({ contextBuilder })
 
   const mockTask: TaskView = {
     taskId: 't1',

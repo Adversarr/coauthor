@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Web UI is a React + Vite SPA under `web/` and is served by the CoAuthor server in production mode.
+The Web UI is a React + Vite SPA under `web/` and is served by the Seed server in production mode.
 
 Core stack:
 - React + React Router
@@ -41,7 +41,7 @@ This keeps store modules decoupled and testable.
 - conversation retrieval
 - file read
 
-Auth token is read from `sessionStorage` (`coauthor-token`) and sent as bearer header when present.
+Auth token is read from `sessionStorage` (`seed-token`) and sent as bearer header when present.
 
 ## WebSocket Usage
 
@@ -58,7 +58,7 @@ Realtime UI therefore remains consistent across brief disconnects.
 
 Server static root selection:
 - prefer local `web/dist` when available,
-- fallback to packaged `node_modules/.coauthor-web`.
+- fallback to packaged `node_modules/.seed-web`.
 
 SPA fallback serves `index.html` for non-API and non-WS routes.
 

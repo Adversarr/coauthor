@@ -2,7 +2,7 @@
  * Tests for server default configuration values.
  *
  * Validates that DEFAULT_PORT matches the Vite proxy (web/vite.config.ts)
- * and that CoAuthorServer uses it when no port is explicitly provided.
+ * and that SeedServer uses it when no port is explicitly provided.
  */
 
 import { describe, it, expect } from 'vitest'

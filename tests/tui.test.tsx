@@ -32,7 +32,7 @@ function makeTasks(): TaskView[] {
 }
 
 async function createTestApp(): Promise<{ app: App; dir: string }> {
-  const dir = mkdtempSync(join(tmpdir(), 'coauthor-tui-'))
+  const dir = mkdtempSync(join(tmpdir(), 'seed-tui-'))
   const app = await createApp({
     baseDir: dir,
     eventsPath: join(dir, 'events.jsonl'),

@@ -100,7 +100,7 @@ export class OpenAILLMClient implements LLMClient {
     verbose?: boolean
   }) {
     if (!opts.apiKey) {
-      throw new Error('Missing COAUTHOR_OPENAI_API_KEY (or inject apiKey via config)')
+      throw new Error('Missing SEED_OPENAI_API_KEY (or inject apiKey via config)')
     }
     this.#apiKey = opts.apiKey
     this.#openai = createOpenAICompatible({ 
@@ -110,7 +110,7 @@ export class OpenAILLMClient implements LLMClient {
     })
     this.#modelByProfile = opts.modelByProfile
     this.#toolSchemaStrategy = opts.toolSchemaStrategy ?? 'auto'
-    const envVerbose = process.env.COAUTHOR_LLM_VERBOSE
+    const envVerbose = process.env.SEED_LLM_VERBOSE
     const envVerboseEnabled = envVerbose === '1' || envVerbose === 'true'
     this.#verboseEnabled = opts.verbose ?? envVerboseEnabled
     this.description = `fast=${opts.modelByProfile.fast}, writer=${opts.modelByProfile.writer}, reasoning=${opts.modelByProfile.reasoning}`

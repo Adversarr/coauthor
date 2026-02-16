@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import { WebSocket } from 'ws'
 import { Subject } from 'rxjs'
-import { CoAuthorWsServer, type WsServerDeps } from '../../src/infrastructure/servers/ws/wsServer.js'
+import { SeedWsServer, type WsServerDeps } from '../../src/infrastructure/servers/ws/wsServer.js'
 import type { StoredEvent } from '../../src/core/events/events.js'
 import type { UiEvent } from '../../src/core/ports/uiBus.js'
 
@@ -58,16 +58,16 @@ function waitMs(ms: number): Promise<void> {
 
 // ── Tests ──
 
-const RUN_SERVER_INTEGRATION = process.env.COAUTHOR_RUN_SERVER_INTEGRATION === '1'
+const RUN_SERVER_INTEGRATION = process.env.SEED_RUN_SERVER_INTEGRATION === '1'
 const describeWsServer = RUN_SERVER_INTEGRATION ? describe : describe.skip
 
-describeWsServer('CoAuthorWsServer', () => {
+describeWsServer('SeedWsServer', () => {
   const TOKEN = 'test-token-123'
   let events$: Subject<StoredEvent>
   let uiEvents$: Subject<UiEvent>
   let storedEvents: StoredEvent[]
   let httpServer: Server
-  let wsServer: CoAuthorWsServer
+  let wsServer: SeedWsServer
   let port: number
 
   beforeEach(async () => {
@@ -83,7 +83,7 @@ describeWsServer('CoAuthorWsServer', () => {
     }
 
     httpServer = createServer()
-    wsServer = new CoAuthorWsServer(deps)
+    wsServer = new SeedWsServer(deps)
     wsServer.attach(httpServer)
 
     await new Promise<void>((resolve) => {

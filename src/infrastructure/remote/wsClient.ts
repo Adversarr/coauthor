@@ -1,5 +1,5 @@
 /**
- * WebSocket client — connects to a CoAuthor master server.
+ * WebSocket client — connects to a Seed master server.
  *
  * Features:
  * - Auto-reconnect with exponential backoff (1s → 2s → 4s → max 30s).
@@ -33,7 +33,7 @@ export type WsConnectionStatus = 'connecting' | 'connected' | 'disconnected' | '
 // Client
 // ============================================================================
 
-export class CoAuthorWsClient {
+export class SeedWsClient {
   readonly #opts: Required<Omit<WsClientOptions, 'channels'>> & { channels: Channel[] }
   readonly #events$ = new Subject<StoredEvent>()
   readonly #uiEvents$ = new Subject<UiEvent>()

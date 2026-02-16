@@ -10,7 +10,7 @@ import { ContextBuilder } from '../../src/application/context/contextBuilder.js'
 import { RuntimeManager } from '../../src/agents/orchestration/runtimeManager.js'
 import { ConversationManager } from '../../src/agents/orchestration/conversationManager.js'
 import { OutputHandler } from '../../src/agents/orchestration/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.js'
 import { FakeLLMClient } from '../../src/infrastructure/llm/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../../src/infrastructure/tools/toolExecutor.js'
@@ -35,7 +35,7 @@ async function createTestInfra(dir: string, opts?: { llm?: LLMClient }) {
   const taskService = new TaskService(store, DEFAULT_USER_ACTOR_ID)
   const contextBuilder = new ContextBuilder(dir)
   const llm = opts?.llm ?? new FakeLLMClient()
-  const agent = new DefaultCoAuthorAgent({ contextBuilder })
+  const agent = new DefaultSeedAgent({ contextBuilder })
 
   const artifactStore = {
     readFile: async () => '',
@@ -75,7 +75,7 @@ async function createTestInfra(dir: string, opts?: { llm?: LLMClient }) {
 
 describe('Task Control & Session', () => {
   test('Pause and Resume updates status and triggers execution', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-control-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-control-'))
 
     // Deferred LLM: first call blocks until we release it, allowing us to pause mid-execution
     let releaseLLM!: () => void
@@ -135,7 +135,7 @@ describe('Task Control & Session', () => {
   })
 
   test('Add Instruction to Done task resumes it', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-session-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-session-'))
     const { store, conversationStore, taskService, manager } = await createTestInfra(dir)
 
     manager.start()

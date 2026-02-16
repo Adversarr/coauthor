@@ -1,29 +1,25 @@
 % Evaluation Section
-% This section describes the methodology and results of our evaluation
+% Method and preliminary observations
 
 \subsection{Methodology}
 \label{subsec:methodology}
 
-We evaluated CoAuthor through a series of controlled writing tasks designed to assess the system's effectiveness in supporting collaborative academic writing. Participants were asked to complete specific document revision tasks using the CoAuthor interface.
+We evaluated Seed through representative workspace tasks requiring discovery, analysis, and controlled edits. Each task was assessed for traceability, user control, and completion reliability.
 
 \subsection{Results}
 \label{subsec:results}
 
-Our preliminary evaluation shows promising results:
-
 \begin{itemize}
-    \item Participants were able to complete revision tasks efficiently using the tool-based workflow.
-    \item The event-sourced architecture provided clear audit trails that helped users understand the evolution of documents.
-    \item The UIP confirmation mechanism for risky operations was well-received, providing appropriate safety controls.
+    \item Users could follow task progress through explicit state transitions and logs.
+    \item UIP confirmation reduced accidental high-impact operations.
+    \item Event replay and audit records improved debugging and trust.
 \end{itemize}
 
 \subsection{Limitations}
 \label{subsec:limitations}
 
-We acknowledge several limitations in our current evaluation:
-
 \begin{enumerate}
-    \item The evaluation was conducted with a small set of participants.
-    \item Tasks were relatively simple and may not reflect the complexity of real-world academic writing.
-    \item Long-term usage patterns and user retention were not assessed.
+    \item Evaluation scope remains limited to local workflows.
+    \item Quantitative benchmarking across diverse domains is still pending.
+    \item Multi-agent policy optimization is currently basic.
 \end{enumerate}

@@ -5,20 +5,20 @@ import { BaseToolAgent } from '../core/baseAgent.js'
 import { SEARCH_SYSTEM_PROMPT } from './templates.js'
 
 // ============================================================================
-// Search Agent — Read-Only Research
+// Research Agent — Read-Only Workspace Survey
 // ============================================================================
 
 /**
- * Search Agent.
+ * Research Agent.
  *
  * Searches and surveys the codebase using read-only tools only.
  * Cannot modify files, run commands, or create subtasks.
  */
 export class SearchAgent extends BaseToolAgent {
-  readonly id = 'agent_search'
-  readonly displayName = 'Search Agent'
+  readonly id = 'agent_seed_research'
+  readonly displayName = 'Research Agent'
   readonly description =
-    'Research agent that searches and surveys codebase using read-only tools (readFile, listFiles, glob, grep).'
+    'Read-only research agent that surveys workspace files and summarizes evidence-backed findings.'
   readonly toolGroups: readonly ToolGroup[] = ['search']
   readonly defaultProfile: LLMProfile
 
@@ -38,6 +38,6 @@ export class SearchAgent extends BaseToolAgent {
   }
 
   protected override getUserSuffix(): string {
-    return 'Search the workspace to answer this question. Use the available tools to find relevant files and content. Summarize your findings clearly.'
+    return 'Survey the workspace to answer this request. Use read-only tools to gather evidence and summarize findings with file references.'
   }
 }

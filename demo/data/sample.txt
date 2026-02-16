@@ -1,17 +1,5 @@
-# Sample Data File
+# Seed Demo Data
 
-This is a sample data file for the CoAuthor demo.
-
-## Purpose
-
-This file can be used to demonstrate file reading capabilities in the demo workflow.
-
-## Content
-
-Line 1: Sample data point A
+Line 1: Baseline note - review current onboarding checklist
 Line 2: Sample data point B
-Line 3: Sample data point C
-
-## Conclusion
-
-End of sample data.
+Line 3: Follow-up - confirm owner and due date

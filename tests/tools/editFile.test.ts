@@ -34,12 +34,12 @@ describe('editFileTool', () => {
     const result = await editFileTool.execute({
       path: 'file.txt',
       oldString: 'World',
-      newString: 'CoAuthor'
+      newString: 'Seed'
     }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
 
     expect(result.isError).toBe(false)
     expect(result.output).toMatchObject({ success: true, action: 'edited' })
-    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello CoAuthor')
+    expect(vol.readFileSync(join(baseDir, 'file.txt'), 'utf8')).toBe('Hello Seed')
   })
 
   it('should fail if oldString is not found', async () => {
@@ -50,7 +50,7 @@ describe('editFileTool', () => {
     const result = await editFileTool.execute({
       path: 'file.txt',
       oldString: 'Universe',
-      newString: 'CoAuthor'
+      newString: 'Seed'
     }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
 
     expect(result.isError).toBe(true)
@@ -66,7 +66,7 @@ describe('editFileTool', () => {
     const result = await editFileTool.execute({
       path: 'file.txt',
       oldString: 'World',
-      newString: 'CoAuthor'
+      newString: 'Seed'
     }, { baseDir, taskId: 't1', actorId: 'a1', artifactStore: store })
 
     expect(result.isError).toBe(true)

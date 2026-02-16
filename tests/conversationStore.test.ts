@@ -10,7 +10,7 @@ describe('ConversationStore', () => {
   let store: JsonlConversationStore
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'coauthor-conv-'))
+    dir = mkdtempSync(join(tmpdir(), 'seed-conv-'))
     store = new JsonlConversationStore({
       conversationsPath: join(dir, 'conversations.jsonl')
     })

@@ -19,7 +19,7 @@ function createTestIO(opts: { stdinText?: string }) {
 
 describe('CLI smoke', () => {
   test('status reports not running for new workspace', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'seed-'))
     await writeFile(join(workspace, 'doc.tex'), 'hello\nworld\n', 'utf8')
 
     const io1 = createTestIO({})
@@ -31,7 +31,7 @@ describe('CLI smoke', () => {
   })
 
   test('stop is idempotent when no lock exists', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'seed-'))
 
     const io1 = createTestIO({})
     const code = await runCli({ argv: ['stop'], defaultWorkspace: workspace, io: io1.io })
@@ -40,8 +40,8 @@ describe('CLI smoke', () => {
   })
 
   test('--workspace overrides defaultWorkspace', async () => {
-    const workspace1 = await mkdtemp(join(tmpdir(), 'coauthor-'))
-    const workspace2 = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace1 = await mkdtemp(join(tmpdir(), 'seed-'))
+    const workspace2 = await mkdtemp(join(tmpdir(), 'seed-'))
 
     const io1 = createTestIO({})
     const code = await runCli({ argv: ['status', '--workspace', workspace2], defaultWorkspace: workspace1, io: io1.io })
@@ -50,7 +50,7 @@ describe('CLI smoke', () => {
   })
 
   test('status detects running server via lock + health', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'seed-'))
     const port = 33221
     const originalFetch = globalThis.fetch
     globalThis.fetch = (async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) as typeof fetch
@@ -72,7 +72,7 @@ describe('CLI smoke', () => {
   }, 10_000)
 
   test('removed commands show a clear message', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'seed-'))
     const io1 = createTestIO({})
     const code = await runCli({ argv: ['task', 'list'], defaultWorkspace: workspace, io: io1.io })
     expect(code).toBe(1)
@@ -80,7 +80,7 @@ describe('CLI smoke', () => {
   })
 
   test('unknown commands return exit code 1', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'coauthor-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'seed-'))
     const io1 = createTestIO({})
     const code = await runCli({ argv: ['does-not-exist'], defaultWorkspace: workspace, io: io1.io })
     expect(code).toBe(1)

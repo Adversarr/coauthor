@@ -21,7 +21,7 @@ import { TaskService, EventService, InteractionService, AuditService } from '../
 import { ContextBuilder } from '../../application/context/contextBuilder.js'
 import { ConversationManager } from '../../agents/orchestration/conversationManager.js'
 import { OutputHandler } from '../../agents/orchestration/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../../agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../agents/implementations/defaultAgent.js'
 import { SearchAgent } from '../../agents/implementations/searchAgent.js'
 import { MinimalAgent } from '../../agents/implementations/minimalAgent.js'
 import { FakeLLMClient } from '../../infrastructure/llm/fakeLLMClient.js'
@@ -113,7 +113,7 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   // === Infrastructure Layer ===
   
   // Event Store (User ↔ Agent decisions)
-  const eventsPath = opts.eventsPath ?? join(baseDir, '.coauthor', 'events.jsonl')
+  const eventsPath = opts.eventsPath ?? join(baseDir, '.seed', 'events.jsonl')
   const store = new JsonlEventStore({ eventsPath, projectionsPath: opts.projectionsPath })
   await store.ensureSchema()
 
@@ -121,12 +121,12 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   const artifactStore = new FsArtifactStore(baseDir)
 
   // Audit Log (Agent ↔ Tools/Files)
-  const auditLogPath = opts.auditLogPath ?? join(baseDir, '.coauthor', 'audit.jsonl')
+  const auditLogPath = opts.auditLogPath ?? join(baseDir, '.seed', 'audit.jsonl')
   const auditLog = new JsonlAuditLog({ auditPath: auditLogPath })
   await auditLog.ensureSchema()
 
   // Conversation Store (Agent ↔ LLM context persistence)
-  const conversationsPath = opts.conversationsPath ?? join(baseDir, '.coauthor', 'conversations.jsonl')
+  const conversationsPath = opts.conversationsPath ?? join(baseDir, '.seed', 'conversations.jsonl')
   const conversationStore = opts.conversationStore ?? new JsonlConversationStore({ conversationsPath })
   if (!opts.conversationStore) {
     await conversationStore.ensureSchema()
@@ -176,7 +176,7 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
 
   // === Agent Layer ===
   
-  const defaultAgent = opts.agent ?? new DefaultCoAuthorAgent({
+  const defaultAgent = opts.agent ?? new DefaultSeedAgent({
     contextBuilder,
     maxIterations: config.agent.maxIterations,
     maxTokens: config.agent.maxTokens,

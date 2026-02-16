@@ -3,10 +3,10 @@
 ## Runtime Commands
 
 Primary CLI commands:
-- `coauthor` / `coauthor ui` — start TUI and attach/start local server
-- `coauthor serve [--host ...] [--port ...]` — start headless server
-- `coauthor status` — inspect server status for workspace
-- `coauthor stop` — send SIGTERM to workspace server (best effort)
+- `seed` / `seed ui` — start TUI and attach/start local server
+- `seed serve [--host ...] [--port ...]` — start headless server
+- `seed status` — inspect server status for workspace
+- `seed stop` — send SIGTERM to workspace server (best effort)
 
 Task/agent mutation commands are intentionally UI-driven rather than exposed as direct CLI subcommands.
 
@@ -38,10 +38,10 @@ In client mode:
 ## Persistence Layout
 
 Workspace state directory:
-- `.coauthor/events.jsonl`
-- `.coauthor/projections.jsonl`
-- `.coauthor/audit.jsonl`
-- `.coauthor/conversations.jsonl`
+- `.seed/events.jsonl`
+- `.seed/projections.jsonl`
+- `.seed/audit.jsonl`
+- `.seed/conversations.jsonl`
 - lock file for server ownership metadata
 
 ## Health and Diagnostics

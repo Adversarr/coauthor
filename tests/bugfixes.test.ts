@@ -14,7 +14,7 @@ import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entit
 
 describe('Bug #13 — JsonlEventStore cache recovery', () => {
   test('append to a non-existent stream directory does not corrupt cache', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-b13-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-b13-'))
     const nonExistentPath = join(dir, 'does-not-exist', 'events.jsonl')
     const store = new JsonlEventStore({
       eventsPath: nonExistentPath,
@@ -48,7 +48,7 @@ describe('Bug #13 — JsonlEventStore cache recovery', () => {
   })
 
   test('events$ emission happens inside mutex (no race)', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-b13-mutex-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-b13-mutex-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl'),
@@ -83,7 +83,7 @@ describe('Bug #13 — JsonlEventStore cache recovery', () => {
 
 describe('Bug #29 — FsArtifactStore symlink protection', () => {
   test('_resolveAndVerify blocks symlinks pointing outside sandbox', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-b29-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-b29-'))
     const sandboxDir = join(dir, 'sandbox')
     mkdirSync(sandboxDir, { recursive: true })
 

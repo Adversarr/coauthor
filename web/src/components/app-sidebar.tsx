@@ -58,7 +58,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         >
           <Sparkles size={18} className="shrink-0 text-primary" />
           <span className="truncate text-sm font-bold tracking-tight">
-            CoAuthor
+            Seed
           </span>
         </Button>
       </SidebarHeader>

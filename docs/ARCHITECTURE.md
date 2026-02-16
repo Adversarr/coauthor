@@ -1,8 +1,8 @@
-# CoAuthor Architecture
+# Seed Architecture
 
 ## Overview
 
-CoAuthor is an event-sourced, task-oriented AI orchestration system for code and writing workflows.
+Seed is an event-sourced, task-oriented AI orchestration system for general goal execution in a local workspace.
 
 Core principles:
 - **Task as unit of work**: every agent run is attached to a task stream.
@@ -34,7 +34,7 @@ Code is organized into explicit layers:
 
 When no active lockfile-backed process exists for a workspace:
 - CLI creates a local `App` via `createApp`.
-- HTTP + WS server starts (`CoAuthorServer`) on localhost (default port `3120`).
+- HTTP + WS server starts (`SeedServer`) on localhost (default port `3120`).
 - Process writes lock file with `pid`, `port`, and auth token.
 - `RuntimeManager` runs in-process and subscribes to event store stream.
 
@@ -70,7 +70,7 @@ Implications:
 
 ## Persistence Model
 
-Workspace-local data under `.coauthor/`:
+Workspace-local data under `.seed/`:
 - `events.jsonl` — domain events (task lifecycle + UIP)
 - `projections.jsonl` — materialized projection cursor/state
 - `audit.jsonl` — tool call request/completion trace
@@ -81,9 +81,9 @@ Implementations are append-oriented, async, and cache-backed (`JsonlEventStore`,
 ## Agent Catalog
 
 Current built-in agents registered at app startup:
-- `default` agent (`DefaultCoAuthorAgent`)
-- `search` agent (`SearchAgent`)
-- `minimal` agent (`MinimalAgent`)
+- `agent_seed_coordinator` (`DefaultSeedAgent`) — default execution and subtask delegation
+- `agent_seed_research` (`SearchAgent`) — read-only workspace research
+- `agent_seed_chat` (`MinimalAgent`) — chat-only advisory agent
 
 `RuntimeManager` exposes global/default profile override and global streaming toggle.
 

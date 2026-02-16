@@ -101,7 +101,7 @@ describe('ConversationView', () => {
         id: 'm-user',
         role: 'user',
         timestamp: new Date().toISOString(),
-        parts: [{ kind: 'text', content: 'Summarize this paper' }],
+        parts: [{ kind: 'text', content: 'Summarize the current deployment checklist' }],
       },
       {
         id: 'm-assistant',
@@ -109,7 +109,7 @@ describe('ConversationView', () => {
         timestamp: new Date().toISOString(),
         parts: [
           { kind: 'reasoning', content: 'Planning summary' },
-          { kind: 'tool_call', toolCallId: 'tc-1', toolName: 'search_docs', arguments: { q: 'paper' } },
+          { kind: 'tool_call', toolCallId: 'tc-1', toolName: 'search_docs', arguments: { q: 'deployment checklist' } },
           { kind: 'text', content: 'Here is the summary.' },
         ],
       },
@@ -124,7 +124,7 @@ describe('ConversationView', () => {
     render(<ConversationView taskId="task-1" />)
 
     expect(mockFetchConversation).toHaveBeenCalledWith('task-1')
-    expect(screen.getByText('Summarize this paper')).toBeInTheDocument()
+    expect(screen.getByText('Summarize the current deployment checklist')).toBeInTheDocument()
     expect(screen.getByText('Planning summary')).toBeInTheDocument()
     expect(screen.getByText('Here is the summary.')).toBeInTheDocument()
     expect(screen.getByText('tool-header:search_docs:output-available')).toBeInTheDocument()

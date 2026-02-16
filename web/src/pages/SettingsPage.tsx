@@ -14,7 +14,7 @@ export function SettingsPage() {
   const status = useConnectionStore(s => s.status)
   const connect = useConnectionStore(s => s.connect)
   const disconnect = useConnectionStore(s => s.disconnect)
-  const [token, setToken] = useState(sessionStorage.getItem('coauthor-token') ?? '')
+  const [token, setToken] = useState(sessionStorage.getItem('seed-token') ?? '')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
   const [isReconnecting, setIsReconnecting] = useState(false)
   const isReconnectingRef = useRef(false)
@@ -34,7 +34,7 @@ export function SettingsPage() {
     isReconnectingRef.current = true
     setIsReconnecting(true)
     try {
-      sessionStorage.setItem('coauthor-token', token)
+      sessionStorage.setItem('seed-token', token)
     } catch {
       setSaveStatus('error')
       setIsReconnecting(false)
@@ -66,9 +66,9 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="coauthor-token">Auth Token</Label>
+            <Label htmlFor="seed-token">Auth Token</Label>
             <Input
-              id="coauthor-token"
+              id="seed-token"
               type="password"
               value={token}
               onChange={e => setToken(e.target.value)}

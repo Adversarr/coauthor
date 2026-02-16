@@ -7,14 +7,14 @@
 import type { EventStore } from '../../core/ports/eventStore.js'
 import type { Subscribable } from '../../core/ports/subscribable.js'
 import type { DomainEvent, StoredEvent } from '../../core/events/events.js'
-import type { CoAuthorWsClient } from './wsClient.js'
+import type { SeedWsClient } from './wsClient.js'
 import type { RemoteHttpClient } from './httpClient.js'
 
 export class RemoteEventStore implements EventStore {
   readonly #http: RemoteHttpClient
-  readonly #ws: CoAuthorWsClient
+  readonly #ws: SeedWsClient
 
-  constructor(http: RemoteHttpClient, ws: CoAuthorWsClient) {
+  constructor(http: RemoteHttpClient, ws: SeedWsClient) {
     this.#http = http
     this.#ws = ws
   }

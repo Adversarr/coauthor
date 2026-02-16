@@ -93,7 +93,7 @@ Subtasks are normal tasks with `parentTaskId` set.
 - wait for child terminal state,
 - return structured status (`Success | Error | Cancel`).
 
-Nesting is bounded by config (`COAUTHOR_MAX_SUBTASK_DEPTH`, default `3`).
+Nesting is bounded by config (`SEED_MAX_SUBTASK_DEPTH`, default `3`).
 
 ## Domain vs Audit Boundary
 

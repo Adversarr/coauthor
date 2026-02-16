@@ -59,7 +59,7 @@ class SingleToolCallAgent implements Agent {
 
 describe('AgentRuntime - context recovery', () => {
   test('repairs missing tool result messages using AuditLog ToolCallCompleted', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-repair-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-repair-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl'),
@@ -160,7 +160,7 @@ describe('AgentRuntime - context recovery', () => {
   })
 
   test('persists tool results immediately after execution in Runtime', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-toolpersist-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-toolpersist-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl'),

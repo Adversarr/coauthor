@@ -17,7 +17,7 @@ describe('Security: FsArtifactStore Boundary Enforement', () => {
     //   base/ (baseDir)
     //     inside.txt
     
-    rootDir = mkdtempSync(join(tmpdir(), 'coauthor-security-'))
+    rootDir = mkdtempSync(join(tmpdir(), 'seed-security-'))
     baseDir = join(rootDir, 'base')
     outsideFile = join(rootDir, 'outside.txt')
     

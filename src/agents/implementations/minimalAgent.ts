@@ -15,9 +15,9 @@ import { MINIMAL_SYSTEM_PROMPT } from './templates.js'
  * Single LLM call per task — no tool loop.
  */
 export class MinimalAgent implements Agent {
-  readonly id = 'agent_minimal'
-  readonly displayName = 'Minimal Chat'
-  readonly description = 'Simple chat agent with no tool access. Just answers questions directly.'
+  readonly id = 'agent_seed_chat'
+  readonly displayName = 'Chat Agent'
+  readonly description = 'Lightweight chat-only agent with no tool access for quick answers and guidance.'
   readonly toolGroups: readonly ToolGroup[] = []
   readonly defaultProfile: LLMProfile
 

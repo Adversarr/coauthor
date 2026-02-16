@@ -3,19 +3,19 @@ import { toolFormatters, formatToolPayload, formatToolOutput, formatToolInput } 
 
 describe('toolFormatters.listFiles', () => {
   it('formats path + count when provided', () => {
-    const output = { path: 'paper', count: 2 }
+    const output = { path: 'workspace', count: 2 }
     const formatted = toolFormatters.listFiles(output)
-    expect(formatted).toBe('List paper (2 entries)')
+    expect(formatted).toBe('List workspace (2 entries)')
   })
 
   it('infers path from content string', () => {
     const output = {
-      content: 'Directory listing for paper:\n[DIR] sections - 2026-02-05\nmain.tex (1.2KB) - 2026-02-09',
+      content: 'Directory listing for workspace:\n[DIR] tasks - 2026-02-05\nplan.md (1.2KB) - 2026-02-09',
       count: 2,
       ignored: 0
     }
     const formatted = toolFormatters.listFiles(output)
-    expect(formatted).toBe('List paper (2 entries)')
+    expect(formatted).toBe('List workspace (2 entries)')
   })
 
   it('falls back to count when path cannot be inferred', () => {

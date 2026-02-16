@@ -122,7 +122,7 @@ describe('SettingsPage — race condition prevention (Task 5)', () => {
       fireEvent.click(button)
     })
 
-    expect(sessionStorage.getItem('coauthor-token')).toBe('test-token-123')
+    expect(sessionStorage.getItem('seed-token')).toBe('test-token-123')
   })
 
   it('shows saved status after reconnect', async () => {

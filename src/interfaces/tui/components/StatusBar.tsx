@@ -29,7 +29,7 @@ export function StatusBar({ focusedTask, columns, breadcrumb, activeAgentId, act
       <Box height={1} width="100%" paddingX={1}>
         <Box flexGrow={1}>
           <Text color="cyan" bold>
-            CoAuthor
+            Seed
           </Text>
           <Text dimColor> │ </Text>
           {agentLabel ? (

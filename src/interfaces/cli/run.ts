@@ -5,7 +5,7 @@ import { createRemoteApp } from '../app/createRemoteApp.js'
 import type { IO } from './io.js'
 import { discoverMaster } from '../../infrastructure/master/discovery.js'
 import { lockFilePath, writeLockFile, readLockFile, removeLockFile, isProcessAlive } from '../../infrastructure/master/lockFile.js'
-import { CoAuthorServer } from '../../infrastructure/servers/server.js'
+import { SeedServer } from '../../infrastructure/servers/server.js'
 
 /**
  * CLI adapter: parse commands → call application services
@@ -58,7 +58,7 @@ export async function runCli(opts: {
     printToken?: boolean
   }): Promise<{ started: boolean; url: string; token: string }> => {
     const host = opts?.host ?? '127.0.0.1'
-    const port = opts?.port  // undefined → CoAuthorServer defaults to DEFAULT_PORT (3120)
+    const port = opts?.port  // undefined → SeedServer defaults to DEFAULT_PORT (3120)
     const printToken = opts?.printToken ?? false
 
     const d = await getDiscovery()
@@ -68,7 +68,7 @@ export async function runCli(opts: {
 
     const authToken = nanoid(32)
     const localApp = await getApp()
-    const server = new CoAuthorServer(localApp, { authToken, host, port })
+    const server = new SeedServer(localApp, { authToken, host, port })
     await server.start()
     const addr = server.address!
     const lockPath = lockFilePath(workspace)
@@ -85,7 +85,7 @@ export async function runCli(opts: {
   }
 
   const parser = yargs(argv)
-    .scriptName('coauthor')
+    .scriptName('seed')
     .option('workspace', { alias: 'w', type: 'string', default: workspace })
     .strict()
     .help()

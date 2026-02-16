@@ -17,7 +17,7 @@ function createTask(overrides: Partial<TaskView> = {}): TaskView {
     title: 'Minimal Task',
     intent: 'Answer directly',
     createdBy: DEFAULT_USER_ACTOR_ID,
-    agentId: 'agent_minimal',
+    agentId: 'agent_seed_chat',
     priority: 'foreground',
     status: 'open',
     createdAt: '2026-02-02T00:00:00Z',
@@ -48,7 +48,7 @@ function createToolRegistry(): ToolRegistry {
 
 describe('MinimalAgent', () => {
   test('seeds system and user messages on first run', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const contextBuilder = new ContextBuilder(dir, store)
     const agent = new MinimalAgent({ contextBuilder })
@@ -83,7 +83,7 @@ describe('MinimalAgent', () => {
   })
 
   test('does not reseed when conversation history exists', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const contextBuilder = new ContextBuilder(dir, store)
     const agent = new MinimalAgent({ contextBuilder })

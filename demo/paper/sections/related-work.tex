@@ -1,17 +1,17 @@
 % Related Work Section
-% This section discusses prior research and existing systems
+% Prior approaches and relevant patterns
 
-\subsection{AI-Assisted Writing}
-\label{subsec:ai-writing}
+\subsection{General AI Assistants}
+\label{subsec:ai-assistants}
 
-Recent advances in large language models have enabled new possibilities for automated text generation. Systems such as GPT-4 and Claude have demonstrated impressive capabilities in generating coherent, contextually appropriate text across various domains.
+Modern assistants provide strong single-turn generation, but reliable multi-step execution still depends on explicit state models, tool boundaries, and user checkpoints.
 
-\subsection{Collaborative Authoring Systems}
+\subsection{Collaborative Task Systems}
 \label{subsec:collaborative}
 
-Collaborative writing platforms have evolved significantly since the introduction of Google Docs and similar real-time editing systems. These platforms typically use operational transformation (OT) or conflict-free replicated data types (CRDTs) to manage concurrent edits.
+Task systems commonly focus on issue tracking or workflow routing. Seed extends this with runtime orchestration where LLM-generated plans, tool actions, and user interactions are all represented in a replayable lifecycle.
 
-\subsection{Event Sourcing in Document Management}
+\subsection{Event Sourcing in Execution Platforms}
 \label{subsec:event-sourcing}
 
-Event sourcing has gained traction as an architectural pattern for systems requiring complete audit trails and temporal queries. By storing state changes as a sequence of events, systems can reconstruct past states and maintain comprehensive histories.
+Event-sourced architectures provide durable history, deterministic replay, and clearer debugging for systems with long-running workflows and asynchronous interactions. These properties are especially useful for assistant-mediated execution.

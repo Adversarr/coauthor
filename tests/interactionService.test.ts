@@ -11,7 +11,7 @@ describe('InteractionService', () => {
   let eventsPath: string
 
   beforeEach(() => {
-    baseDir = join(tmpdir(), `coauthor-interaction-${nanoid()}`)
+    baseDir = join(tmpdir(), `seed-interaction-${nanoid()}`)
     mkdirSync(baseDir, { recursive: true })
     eventsPath = join(baseDir, 'events.jsonl')
   })

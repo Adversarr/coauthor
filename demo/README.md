@@ -1,199 +1,63 @@
-# CoAuthor Demo - M2 Tool Use Workflow
+# Seed Demo - General Workspace Task
 
-This directory provides a complete demonstration of the CoAuthor M2 milestone: **Agent Runtime with Tool Use and UIP (User Interaction Points)**.
+This demo shows Seed handling a general maintenance task (not paper-specific):
 
-## Overview
+- discover files (`listFiles`),
+- inspect context (`readFile`),
+- propose a risky edit (`editFile`),
+- wait for UIP confirmation,
+- finalize with a task summary.
 
-This demo showcases the `DefaultCoAuthorAgent` implementing the full tool use workflow:
+## Demo Assets
 
-1. **Tool Loop**: LLM calls → tool execution → repeat until completion
-2. **Safe Tools** (`listFiles`, `readFile`): Execute directly without confirmation
-3. **Risky Tools** (`editFile`): Require UIP confirmation with Diff preview
-4. **Crash Recovery**: Conversation persistence via `ConversationStore`
-
-## Demo Structure
-
-```
+```text
 demo/
-├── README.md                    # This file
-├── outline.md                   # Paper outline (for ContextBuilder)
-├── brief.md                     # Research brief with project overview
-├── fake-llm-config.ts          # Fake LLM preset responses for demo
-├── paper/                       # LaTeX paper directory
-│   ├── main.tex               # Main document with sections
-│   └── sections/              # Individual section files
-│       ├── introduction.tex   # Introduction (will be edited)
-│       ├── related-work.tex   # Related work
-│       ├── architecture.tex   # System architecture
-│       ├── evaluation.tex     # Evaluation
-│       └── conclusion.tex     # Conclusion
-└── data/                      # Additional data files
-    └── sample.txt             # Sample data for readFile demos
+├── README.md
+├── fake-llm-config.ts        # Deterministic response sequence used for scripted demos/tests
+├── brief.md                  # Project brief for context
+├── outline.md                # Goal and execution outline
+├── data/
+│   └── sample.txt            # Primary file edited in this demo
+└── paper/                    # Optional writing-domain sample assets
 ```
 
-## Tool Use Coverage
+## Recommended Walkthrough (TUI)
 
-This demo verifies all three tool types in `DefaultCoAuthorAgent`:
-
-| Tool | Risk Level | UIP | Demo Scenario | Code Reference |
-|------|-----------|-----|---------------|----------------|
-| `listFiles` | safe | ❌ | Browse `paper/` directory | `#toolLoop` → execute safe tool |
-| `readFile` | safe | ❌ | Read `main.tex` structure | `#toolLoop` → execute safe tool |
-| `editFile` | **risky** | ✅ Diff | Edit `introduction.tex` | `#buildRiskyToolDisplay` → Diff preview → UIP |
-
-## Running the Demo
-
-### Prerequisites
-
-Ensure your `.env` file is configured for Fake LLM mode:
-
-```bash
-# Use Fake LLM for repeatable demo
-LLM_MODE=fake
-FAKE_LLM_CONFIG_PATH=./demo/fake-llm-config.ts
-```
-
-### Step-by-Step Demo
-
-#### 1. Create a Task
-
-```bash
-npm run dev -- task create "Improve paper introduction" \
-  --file demo/paper/sections/introduction.tex \
-  --lines 1-200
-
-# Optional: add a more specific instruction
-npm run dev -- task continue <taskId> "Edit introduction.tex to make the opening more engaging and clearly state the research contribution."
-```
-
-#### 2. Run the Agent
-
-```bash
-npm run dev -- agent run <taskId>
-```
-
-#### 3. Observe the Tool Loop
-
-The agent will execute the following sequence (from `fake-llm-config.ts`):
-
-**Iteration 1: `listFiles`**
-- Agent sends: "I'll start by exploring the paper structure..."
-- Tool call: `listFiles(path: "demo/paper")`
-- Result: Directory listing showing `main.tex` and `sections/`
-
-**Iteration 2: `readFile`**
-- Agent sends: "Now let me read the main.tex file..."
-- Tool call: `readFile(path: "demo/paper/main.tex")`
-- Result: Content of main.tex showing document structure
-
-**Iteration 3: `editFile` (Risky - UIP Triggered)**
-- Agent sends: "I'll modify the first paragraph to make it more engaging..."
-- Tool call: `editFile(path: "demo/paper/sections/introduction.tex", ...)`
-- **UIP Shown**: Diff preview of the proposed changes
-
-#### 4. Confirm the UIP
-
-When the UIP appears, you'll see:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Confirm Risky Operation                                     │
-├─────────────────────────────────────────────────────────────┤
-│ Agent requests to edit file: introduction.tex               │
-├─────────────────────────────────────────────────────────────┤
-│ --- a/introduction.tex                                      │
-│ +++ b/introduction.tex                                      │
-│ @@ -1,5 +1,5 @@                                             │
-│  This is the introduction section of our research paper.    │
-│ +This paper presents a novel approach to collaborative...  │
-├─────────────────────────────────────────────────────────────┤
-│ [Approve (Danger)]  [Reject (Default)]                        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Select **Approve** to allow the edit.
-
-#### 5. View Results
-
-After approval, the agent continues and completes the task. View the updated file:
-
-```bash
-cat demo/paper/sections/introduction.tex
-```
-
-### Running in TUI Mode
-
-For an interactive graphical experience:
+1. Start Seed:
 
 ```bash
 npm run dev
 ```
 
-Then use the TUI commands:
-- `task create "Demo task" --file demo/paper/sections/introduction.tex --lines 1-200`
-- `task continue <taskId> "Edit the intro for clarity and impact"`
-- `agent run <taskId>`
+2. In TUI, create and run a task:
 
-## Fake LLM Configuration
-
-The `fake-llm-config.ts` file defines preset responses that simulate a real LLM conversation:
-
-```typescript
-// Preset response sequence
-demoResponseSequence: LLMResponse[] = [
-  // 1. listFiles - Safe tool, executes immediately
-  { content: "Exploring paper structure...", toolCalls: [{ toolName: 'listFiles', ... }] },
-
-  // 2. readFile - Safe tool, executes immediately
-  { content: "Reading main.tex...", toolCalls: [{ toolName: 'readFile', ... }] },
-
-  // 3. editFile - Risky tool, triggers UIP with Diff preview
-  { content: "Updating introduction...", toolCalls: [{ toolName: 'editFile', ... }] },
-
-  // 4. Completion
-  { content: "Task completed successfully!", toolCalls: [] }
-]
+```text
+/new Improve task clarity in demo/data/sample.txt
+/continue Read the file, propose a single focused improvement, and apply only after confirmation.
 ```
 
-To customize the demo, modify the `demoResponseSequence` array.
+3. Observe expected behavior:
+- Safe reads execute directly.
+- Risky edit triggers UIP with diff preview.
+- After approval, task transitions to completion.
 
-## Verification Checklist
+4. Verify the file change:
 
-After running the demo, verify:
+```bash
+cat demo/data/sample.txt
+```
 
-- [ ] **listFiles** executed without UIP (safe tool)
-- [ ] **readFile** executed without UIP (safe tool)
-- [ ] **editFile** triggered UIP with Diff preview (risky tool)
-- [ ] UIP displayed correct file path and diff content
-- [ ] File was actually modified after UIP approval
-- [ ] Conversation persisted across iterations
+## What This Verifies
 
-## Troubleshooting
+- Tool loop execution with deterministic state transitions.
+- UIP safety guard for risky operations.
+- Event + audit separation in `.seed/`.
+- End-to-end behavior for a non-writing workspace task.
 
-### "Unknown tool" errors
-- Check that tool names match exactly (case-sensitive)
-- Verify tools are registered in `AgentRuntime`
+## Optional: Scripted Fake Sequence
 
-### UIP not showing for editFile
-- Check `riskLevel` is set to `'risky'` in tool definition
-- Verify `DefaultCoAuthorAgent.#buildRiskyToolDisplay` handles the tool
+`demo/fake-llm-config.ts` contains a deterministic sequence for a scripted fake-LLM run. Use it in custom harness/tests where you inject `FakeLLMClient` responses.
 
-### File not being modified
-- Check file permissions
-- Ensure path is relative to working directory
-- Verify UIP was approved (not rejected)
+## Optional Writing Domain Sample
 
-## Next Steps
-
-After understanding this demo:
-
-1. **Try Real LLM Mode**: Change `LLM_MODE=openai` and set `OPENAI_API_KEY`
-2. **Customize Tools**: Add new tools to `ToolRegistry` and handle them in `DefaultCoAuthorAgent`
-3. **Extend UIP Types**: Implement `Select` and `Input` UIP types beyond `Confirm`
-4. **Build M3 Features**: Add LaTeX compilation and preview capabilities
-
----
-
-**Milestone**: M2 - Agent Runtime with Tool Use and UIP
-**Agent**: `DefaultCoAuthorAgent`
-**Architecture**: Hexagonal with Event Sourcing
+The `demo/paper/` directory is retained as a writing-domain example only. Seed core behavior is domain-agnostic.

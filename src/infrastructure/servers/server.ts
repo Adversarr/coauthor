@@ -1,8 +1,8 @@
 /**
- * CoAuthor Server — combines HTTP (Hono) + WebSocket on a single port.
+ * Seed Server — combines HTTP (Hono) + WebSocket on a single port.
  *
  * Usage:
- *   const server = new CoAuthorServer(app, { authToken })
+ *   const server = new SeedServer(app, { authToken })
  *   await server.start()        // binds to localhost:PORT
  *   console.log(server.address) // { host, port }
  *   await server.stop()         // graceful shutdown
@@ -19,14 +19,14 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { createHttpApp, type HttpAppDeps } from './http/httpServer.js'
-import { CoAuthorWsServer, type WsServerDeps } from './ws/wsServer.js'
+import { SeedWsServer, type WsServerDeps } from './ws/wsServer.js'
 import type { App } from '../../interfaces/app/createApp.js'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/** Default port for the CoAuthor dev server. Matches Vite proxy in web/vite.config.ts. */
+/** Default port for the Seed dev server. Matches Vite proxy in web/vite.config.ts. */
 export const DEFAULT_PORT = 3120
 
 export interface ServerOptions {
@@ -39,11 +39,11 @@ export interface ServerOptions {
 // Server
 // ============================================================================
 
-export class CoAuthorServer {
+export class SeedServer {
   readonly #app: App
   readonly #opts: Required<ServerOptions>
   #httpServer: Server | undefined
-  #wsServer: CoAuthorWsServer | undefined
+  #wsServer: SeedWsServer | undefined
   #actualPort: number | undefined
 
   constructor(app: App, opts: ServerOptions) {
@@ -71,7 +71,7 @@ export class CoAuthorServer {
     const honoApp = createHttpApp(httpDeps)
 
     // Serve static Web UI if built
-    const webDistDir = join(this.#app.baseDir, 'node_modules', '.coauthor-web')
+    const webDistDir = join(this.#app.baseDir, 'node_modules', '.seed-web')
     const localWebDist = join(process.cwd(), 'web', 'dist')
     const staticRoot = existsSync(localWebDist) ? localWebDist : existsSync(webDistDir) ? webDistDir : undefined
 
@@ -155,7 +155,7 @@ export class CoAuthorServer {
       getEventsAfter: (id) => this.#app.eventService.getEventsAfter(id),
       authToken: this.#opts.authToken,
     }
-    this.#wsServer = new CoAuthorWsServer(wsDeps)
+    this.#wsServer = new SeedWsServer(wsDeps)
     this.#wsServer.attach(this.#httpServer)
 
     // Listen

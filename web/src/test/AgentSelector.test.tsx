@@ -11,13 +11,13 @@ const mockFetchRuntime = vi.fn()
 const runtimeState = {
   agents: [
     {
-      id: 'default',
-      displayName: 'Default Agent',
+      id: 'agent_seed_coordinator',
+      displayName: 'Coordinator Agent',
       description:
-        'General-purpose agent with a long description that should never stretch dialog layouts',
+        'General execution agent with a long description that should never stretch dialog layouts',
     },
   ],
-  defaultAgentId: 'default' as string | null,
+  defaultAgentId: 'agent_seed_coordinator' as string | null,
   loading: false,
   fetchRuntime: mockFetchRuntime,
 }
@@ -31,13 +31,13 @@ describe('AgentSelector', () => {
     mockFetchRuntime.mockClear()
     runtimeState.agents = [
       {
-        id: 'default',
-        displayName: 'Default Agent',
+        id: 'agent_seed_coordinator',
+        displayName: 'Coordinator Agent',
         description:
-          'General-purpose agent with a long description that should never stretch dialog layouts',
+          'General execution agent with a long description that should never stretch dialog layouts',
       },
     ]
-    runtimeState.defaultAgentId = 'default'
+    runtimeState.defaultAgentId = 'agent_seed_coordinator'
     runtimeState.loading = false
   })
 
@@ -51,15 +51,14 @@ describe('AgentSelector', () => {
     render(<AgentSelector onChange={vi.fn()} />)
     const trigger = screen.getByRole('combobox')
     expect(trigger).toHaveClass('min-w-0')
-    expect(trigger).toHaveClass('max-w-full')
+    expect(trigger).toHaveClass('w-full')
   })
 
   it('shows only the selected agent label in the closed trigger', () => {
     render(<AgentSelector onChange={vi.fn()} />)
-    expect(screen.getByText('Default Agent')).toBeInTheDocument()
+    expect(screen.getByText('Coordinator Agent')).toBeInTheDocument()
     expect(
-      screen.queryByText(/General-purpose agent with a long description/i)
+      screen.queryByText(/General execution agent with a long description/i)
     ).not.toBeInTheDocument()
   })
 })
-

@@ -8,7 +8,7 @@ import type { StoredEvent } from '../src/core/events/events.js'
 
 describe('EventStore', () => {
   test('append/readStream keeps seq ordering', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')
@@ -33,7 +33,7 @@ describe('EventStore', () => {
   })
 
   test('events$ Observable emits on append', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')
@@ -63,7 +63,7 @@ describe('EventStore', () => {
   })
 
   test('readAll returns globally ordered events by id', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')
@@ -87,7 +87,7 @@ describe('EventStore', () => {
   })
 
   test('saveProjection overwrites instead of appending (no bloat)', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')

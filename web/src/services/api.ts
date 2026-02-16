@@ -1,5 +1,5 @@
 /**
- * HTTP API client for the CoAuthor backend.
+ * HTTP API client for the Seed backend.
  * All methods throw on non-ok responses.
  */
 
@@ -8,7 +8,7 @@ import type { TaskView, StoredEvent, CreateTaskResponse, PendingInteraction, Hea
 const BASE = '' // same origin (Vite proxy in dev, served directly in prod)
 
 function authHeaders(): HeadersInit {
-  const token = sessionStorage.getItem('coauthor-token')
+  const token = sessionStorage.getItem('seed-token')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 

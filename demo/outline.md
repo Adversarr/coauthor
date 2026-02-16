@@ -1,39 +1,19 @@
-# CoAuthor: Towards Intelligent Collaborative Academic Writing
+# Seed Demo Outline
 
-## Paper Structure
+## 1. User Goal
+Improve clarity and actionability in `demo/data/sample.txt`.
 
-1. **Introduction**
-   - Problem statement: Lack of transparency in AI-assisted academic writing
-   - Current limitations in collaborative tools
-   - Our contribution: Event-sourced architecture with agent workflows
+## 2. Execution Steps
+1. List and inspect target files.
+2. Read current content for context.
+3. Propose one minimal, high-value edit.
+4. Ask for confirmation through UIP.
+5. Apply the approved edit and summarize changes.
 
-2. **Related Work**
-   - AI-assisted writing systems (GPT-4, Claude, etc.)
-   - Collaborative authoring platforms (Google Docs, Overleaf)
-   - Event sourcing in document management
+## 3. Validation
+- Edit appears in file content.
+- Task reaches `done` after approval.
+- Audit log records tool request + result.
 
-3. **System Architecture**
-   - Hexagonal architecture overview
-   - Core components (Domain, Application, Infrastructure, Interface)
-   - Event flow and persistence
-
-4. **Implementation Details**
-   - Event sourcing with JSONL storage
-   - Agent runtime and tool use workflow
-   - UIP (User Interaction Point) design
-
-5. **Evaluation**
-   - Methodology
-   - Preliminary results
-   - Limitations
-
-6. **Conclusion and Future Work**
-   - Summary of contributions
-   - Future directions: Enhanced context, multi-agent, external integrations
-
-## Key Points to Cover
-
-- Transparency in AI-assisted writing
-- Event-sourced architecture benefits
-- Tool use workflow with safety controls
-- Hexagonal architecture for maintainability
+## 4. Notes
+This scenario is intentionally generic and non-domain-specific.

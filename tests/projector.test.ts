@@ -44,7 +44,7 @@ function reduceTasksProjection(state: DeprecatedTasksProjectionState, event: Sto
 
 describe('Projection', () => {
   test('tasks projection advances cursor and is idempotent', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')

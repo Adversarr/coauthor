@@ -1,8 +1,15 @@
-# CoAuthor
+# Seed
 
-**AI-powered co-authoring for STEM academic writing.**
+**Personal AI assistant team for goal-driven work in a local workspace.**
 
-CoAuthor is a task-driven, event-sourced system that pairs you with LLM agents to write LaTeX documents. It tracks every decision, supports human-in-the-loop interactions, and never blindly overwrites your work.
+Seed turns a user goal into coordinated execution across specialized agents. The goal acts as the initial seed for planning, tool use, subtasks, and human checkpoints.
+
+Seed is event-sourced and task-oriented:
+- every task decision is replayable,
+- risky actions require explicit confirmation,
+- tool execution is audit logged separately from domain lifecycle.
+
+Writing support is one use case, not the primary product boundary.
 
 ---
 
@@ -12,17 +19,10 @@ CoAuthor is a task-driven, event-sourced system that pairs you with LLM agents t
 # Install dependencies
 npm install
 
-# Start the interactive TUI
-npm run dev
-```
-
-### Create and Run Your First Task
-
-```bash
-# Start the interactive TUI for the current directory workspace
+# Start interactive TUI (and local server)
 npm run dev
 
-# Or: start the Web UI server only (headless)
+# Or run headless Web UI server only
 npm run dev -- serve
 ```
 
@@ -30,88 +30,89 @@ npm run dev -- serve
 
 ## Core Concepts
 
-### Tasks
-Everything starts with a **Task**. A task represents a unit of work (e.g., "improve the introduction" or "fix grammar in section 3"). Tasks have a lifecycle: created → started → [paused/resumed] → completed/failed/canceled.
+### Goal -> Tasks
+A user goal is decomposed into tasks and subtasks. Each task has a lifecycle:
+`created -> started -> (awaiting_user | paused) -> completed | failed | canceled`.
 
-### User Interaction Protocol (UIP)
-When the agent needs your input—like confirming a risky file edit or choosing between options—it creates a **UIP request**. The system pauses and waits for your response. No blind overwrites, ever.
+### Human-in-the-loop safety
+Risky operations (for example file edits or command execution) trigger a UIP request with context. Nothing is applied silently.
 
-### Event Sourcing
-All collaboration decisions are stored as **Domain Events** in an append-only log (`.coauthor/events.jsonl`). You can replay the entire history of any task. File edits and command executions are recorded separately in an **Audit Log**.
+### Event sourcing + audit separation
+- Domain lifecycle: `.seed/events.jsonl`
+- Tool execution trace: `.seed/audit.jsonl`
+- LLM conversation durability: `.seed/conversations.jsonl`
 
-### Tools
-Agents use tools to interact with your workspace:
-- `readFile` / `editFile` — File operations with diff previews
-- `listFiles` / `glob` / `grep` — File discovery and search
-- `runCommand` — Execute shell commands (requires confirmation)
-- `createSubtask` — Decompose work into subtasks
+### Agent team
+- `Coordinator Agent` (`agent_seed_coordinator`): default execution + delegation
+- `Research Agent` (`agent_seed_research`): read-only workspace survey
+- `Chat Agent` (`agent_seed_chat`): quick no-tool advisory
 
 ---
 
 ## CLI Reference
 
 ```bash
-# Workspace selection (where .coauthor/ lives). Defaults to current directory.
-coauthor --workspace <path> status
-coauthor -w <path> status
+# Workspace selection (where .seed/ lives). Defaults to current directory.
+seed --workspace <path> status
+seed -w <path> status
 
-# Start UI (TUI) for the selected workspace (default command)
-coauthor --workspace <path>
-coauthor --workspace <path> ui
+# Start TUI (default command)
+seed --workspace <path>
+seed --workspace <path> ui
 
-# Start Web UI server (headless, no TUI)
-coauthor --workspace <path> serve [--host 127.0.0.1] [--port 3000]
+# Start Web UI server (headless)
+seed --workspace <path> serve [--host 127.0.0.1] [--port 3000]
 
 # Show server status
-coauthor --workspace <path> status
+seed --workspace <path> status
 
-# Stop the server for the workspace (best-effort)
-coauthor --workspace <path> stop
+# Stop workspace server (best-effort)
+seed --workspace <path> stop
 ```
 
-Task management and agent execution are intentionally not exposed via CLI; use the TUI or Web UI for explicit and controllable workflows.
+Task mutation/agent control flows are intentionally UI-driven (TUI/Web) rather than exposed as broad direct CLI mutation commands.
 
 ---
 
 ## Development
 
 ```bash
-# Run in development mode
-npm run dev
-
-# Run tests
+# Run all tests
 npm test
 
 # Run tests in watch mode
 npm run test:watch
 
-# Build for production
+# Build
 npm run build
 
-# Run built version
+# Run built CLI
 npm start
 ```
 
 ### Project Structure
 
-```
+```text
 src/
-├── domain/        # Domain layer: events, types, ports
-├── application/   # Application services (use cases)
-├── agents/        # Agent runtime and orchestration
-├── infra/         # Infrastructure adapters
-├── cli/           # Command-line interface
-├── tui/           # Terminal UI (Ink + React)
-└── app/           # Application composition root
+├── core/            # Domain entities, events, and ports
+├── application/     # Use-case services and projections
+├── agents/          # Agent implementations and orchestration runtime
+├── infrastructure/  # Persistence, servers, tools, remote adapters, LLM clients
+└── interfaces/      # App composition, CLI, TUI
+
+web/                 # React Web UI
+docs/                # Current architecture/domain/ops/security docs
+demo/                # End-to-end demo assets and fake LLM script
 ```
 
 ---
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) — System design and principles
-- [Domain Model](docs/DOMAIN.md) — Domain events and types
-- [Milestones](docs/MILESTONES.md) — Development roadmap
+- [Architecture](docs/ARCHITECTURE.md)
+- [Domain Model](docs/DOMAIN.md)
+- [Operations](docs/OPERATIONS.md)
+- [Roadmap](roadmap.md)
 
 ---
 

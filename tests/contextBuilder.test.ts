@@ -13,7 +13,7 @@ function createTestTask(overrides: Partial<TaskView> = {}): TaskView {
     title: 'Test Task',
     intent: 'Do something useful',
     createdBy: DEFAULT_USER_ACTOR_ID,
-    agentId: 'agent_coauthor_default',
+    agentId: 'agent_seed_coordinator',
     priority: 'foreground',
     status: 'open',
     createdAt: '2026-02-02T00:00:00Z',
@@ -24,7 +24,7 @@ function createTestTask(overrides: Partial<TaskView> = {}): TaskView {
 
 describe('ContextBuilder', () => {
   test('getContextData returns correct structure', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
@@ -40,7 +40,7 @@ describe('ContextBuilder', () => {
   })
 
   test('getContextData loads project files', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     writeFileSync(join(dir, 'OUTLINE.md'), '# Outline', 'utf8')
     writeFileSync(join(dir, 'STYLE.md'), '# Style', 'utf8')
     
@@ -57,7 +57,7 @@ describe('ContextBuilder', () => {
   })
 
   test('buildUserTaskContent returns task details', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
@@ -72,7 +72,7 @@ describe('ContextBuilder', () => {
   })
 
   test('buildUserTaskContent includes file range content when artifactRefs provided', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const testDir = join(dir, 'docs')
     mkdirSync(testDir, { recursive: true })
 
@@ -122,7 +122,7 @@ describe('ContextBuilder', () => {
   })
 
   test('buildUserTaskContent handles multiple artifact refs', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     mkdirSync(dir, { recursive: true })
 
     writeFileSync(join(dir, 'file1.tex'), 'Content of file 1\nSecond line', 'utf8')
@@ -151,7 +151,7 @@ describe('ContextBuilder', () => {
   })
 
   test('buildUserTaskContent skips non-file_range artifact kinds', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
@@ -173,7 +173,7 @@ describe('ContextBuilder', () => {
   })
 
   test('buildUserTaskContent works with task without artifactRefs', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const store = new FsArtifactStore(dir)
     const builder = new ContextBuilder(dir, store)
 
@@ -193,7 +193,7 @@ describe('ContextBuilder', () => {
   })
 
   test('readFileRange handles boundary cases correctly', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const filePath = join(dir, 'boundary.tex')
     writeFileSync(filePath, 'L1\nL2\nL3\nL4\nL5', 'utf8')
 

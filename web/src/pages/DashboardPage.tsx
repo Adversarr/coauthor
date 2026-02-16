@@ -20,7 +20,7 @@ import type { TaskView, TaskStatus } from '@/types'
 
 const STATUS_ORDER: TaskStatus[] = ['in_progress', 'awaiting_user', 'open', 'paused', 'done', 'failed', 'canceled']
 
-const FILTER_STORAGE_KEY = 'coauthor-task-filter'
+const FILTER_STORAGE_KEY = 'seed-task-filter'
 
 function getInitialFilter(): 'all' | 'active' | 'done' {
   try {

@@ -265,7 +265,7 @@ describe('createSubtaskTool', () => {
   }
 
   async function createIntegrationEnv(agents: Agent[]) {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-subtask-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-subtask-'))
     const store = new JsonlEventStore({
       eventsPath: join(dir, 'events.jsonl'),
       projectionsPath: join(dir, 'projections.jsonl')

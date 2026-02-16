@@ -11,7 +11,7 @@ import { ContextBuilder } from '../src/application/context/contextBuilder.js'
 import { RuntimeManager } from '../src/agents/orchestration/runtimeManager.js'
 import { ConversationManager } from '../src/agents/orchestration/conversationManager.js'
 import { OutputHandler } from '../src/agents/orchestration/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../src/agents/implementations/defaultAgent.js'
 import { FakeLLMClient } from '../src/infrastructure/llm/fakeLLMClient.js'
 
 /**
@@ -85,7 +85,7 @@ async function createTestInfra(dir: string, opts?: { llm?: LLMClient, toolExecut
   const interactionService = new InteractionService(store, DEFAULT_USER_ACTOR_ID)
   const contextBuilder = new ContextBuilder(dir)
   const llm = opts?.llm ?? new FakeLLMClient()
-  const agent = new DefaultCoAuthorAgent({ contextBuilder })
+  const agent = new DefaultSeedAgent({ contextBuilder })
 
   const conversationManager = new ConversationManager({
     conversationStore,
@@ -118,7 +118,7 @@ async function createTestInfra(dir: string, opts?: { llm?: LLMClient, toolExecut
 
 describe('AgentRuntime (via RuntimeManager)', () => {
   test('executeTask writes TaskStarted and completes without confirm_task', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, taskService, manager } = await createTestInfra(dir)
 
     await store.append('t1', [
@@ -162,7 +162,7 @@ describe('AgentRuntime (via RuntimeManager)', () => {
   })
 
   test('start executes assigned tasks without confirm_task', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, manager } = await createTestInfra(dir)
 
     manager.start()
@@ -194,7 +194,7 @@ describe('AgentRuntime (via RuntimeManager)', () => {
   })
 
   test('queues instruction added while task is running and re-executes after completion', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     const baseLLM = new FakeLLMClient()
     let releaseLLM!: () => void
@@ -239,7 +239,7 @@ describe('AgentRuntime (via RuntimeManager)', () => {
   })
 
   test('ignores tasks assigned to other agents', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, manager } = await createTestInfra(dir)
 
     manager.start()
@@ -273,7 +273,7 @@ describe('AgentRuntime (via RuntimeManager)', () => {
 
 describe('Conversation Persistence (via RuntimeManager)', () => {
   test('conversation history is persisted during automatic task execution', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, conversationStore, manager } = await createTestInfra(dir)
 
     // Start manager first (to subscribe to events)
@@ -308,7 +308,7 @@ describe('Conversation Persistence (via RuntimeManager)', () => {
   })
 
   test('conversation history survives runtime re-instantiation', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     
     // First runtime instance
     const infra1 = await createTestInfra(dir)
@@ -334,7 +334,7 @@ describe('Conversation Persistence (via RuntimeManager)', () => {
 
 describe('Concurrency & State Management (via RuntimeManager)', () => {
   test('pause waits for pending tool calls to complete', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     
     // 1. Mock LLM to return 2 tool calls
     const mockLLM: LLMClient = {
@@ -405,7 +405,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('instruction added during unsafe state is queued and injected later', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     
     const mockLLM: LLMClient = {
       complete: vi.fn().mockImplementationOnce(async () => {
@@ -469,7 +469,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('auto-repairs dangling tool calls on resume', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, conversationStore, manager, taskService } = await createTestInfra(dir)
 
     // 1. Manually create a broken history
@@ -505,7 +505,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('retries dangling safe tool calls on resume and persists result', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     const mockLLM: LLMClient = {
       complete: vi.fn().mockResolvedValue({ stopReason: 'end_turn', content: 'Done' }),
@@ -548,7 +548,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('does not inject interrupted error for dangling risky tools on resume', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
     const { store, conversationStore, manager, taskService, toolRegistry } = await createTestInfra(dir)
     
     // Register risky tool
@@ -594,7 +594,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('executes dangling risky tool call when approved', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     const toolExec = vi.fn(async (call: ToolCallRequest, ctx: any) => {
       return { toolCallId: call.toolCallId, output: { ok: true, confirmedInteractionId: ctx.confirmedInteractionId }, isError: false } as ToolResult
@@ -646,7 +646,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('writes rejection tool result when risky tool rejected', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     const toolExec = vi.fn(async () => {
       return { toolCallId: 'call_risky', output: { ok: true }, isError: false } as ToolResult
@@ -698,7 +698,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('queues instruction while awaiting risky confirmation and injects after tool result', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     const mockLLM: LLMClient = {
       complete: vi
@@ -772,7 +772,7 @@ describe('Concurrency & State Management (via RuntimeManager)', () => {
   })
 
   test('stress randomized pause/resume/instruction/interaction sequencing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'))
 
     let llmCalls = 0
     const mockLLM: LLMClient = {

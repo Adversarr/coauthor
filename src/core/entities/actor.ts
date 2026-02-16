@@ -11,7 +11,7 @@ export const ActorCapabilitySchema = z.enum([
   'tool_read_file',
   'tool_edit_file',
   'tool_run_command',
-  'run_latex_build',
+  'run_build_or_checks',
   'read_assets',
   'create_task'
   // V1: 'claim_task' - Agent proactively claims task
@@ -40,7 +40,7 @@ export const SYSTEM_ACTOR_ID = 'system'
 export const DEFAULT_USER_ACTOR_ID = 'user_default'
 
 /** Default agent actor ID */
-export const DEFAULT_AGENT_ACTOR_ID = 'agent_coauthor_default'
+export const DEFAULT_AGENT_ACTOR_ID = 'agent_seed_coordinator'
 
 // ============================================================================
 // Factory Functions

@@ -1,48 +1,27 @@
 % Implementation Details Section
-% This section describes the key implementation aspects of the CoAuthor system
+% Key implementation aspects of Seed
 
-\subsection{Event Sourcing with JSONL Storage}
+\subsection{JSONL-backed Event and Audit Stores}
 \label{subsec:jsonl-storage}
 
-All domain events are persisted in JSONL (JSON Lines) format, providing an append-only log that captures every state transition. This implementation choice offers several advantages:
+Seed persists task lifecycle events and tool audit records in append-only JSONL files under a workspace-local state directory. This enables replay, debugging, and post-hoc analysis without external infrastructure.
 
-\begin{itemize}
-    \item Human-readable format for debugging and auditing
-    \item Efficient append operations without complex database setup
-    \item Natural support for event replay and state reconstruction
-    \item Easy integration with version control systems
-\end{itemize}
-
-\subsection{Agent Runtime and Tool Use Workflow}
+\subsection{Agent Runtime and Tool Loop}
 \label{subsec:agent-runtime}
 
-The agent runtime implements an AsyncGenerator-based pattern where agents yield outputs incrementally. Each agent operates within a task-scoped runtime that provides:
+The runtime executes task-scoped agents that produce text, reasoning, tool calls, interaction requests, and terminal outcomes. Tool calls are mediated through a registry and executor boundary.
 
-\begin{enumerate}
-    \item \textbf{Tool Integration}: Agents have access to a registry of tools for file operations, command execution, and subtask delegation.
-    \item \textbf{Risk-Aware Execution}: Tools are classified as safe (read-only) or risky (write operations). Risky tools trigger User Interaction Points (UIPs) requiring explicit confirmation.
-    \item \textbf{Streaming Support}: LLM responses stream in real-time, enabling immediate user feedback and interaction.
-\end{enumerate}
-
-\subsection{User Interaction Point (UIP) Design}
+\subsection{UIP Safety Gate}
 \label{subsec:uip}
 
-UIPs serve as controlled checkpoints where user consent is required before executing potentially destructive operations. The design ensures:
+Risky tools are intercepted by a user interaction protocol (UIP) before execution. Users review context and decide whether to approve or reject, ensuring explicit control over high-impact actions.
 
-\begin{itemize}
-    \item Agents remain unaware of risk classifications
-    \item The runtime intercepts risky tool calls and presents confirmation dialogs
-    \item Users can review operation details before approval
-    \item Audit trails capture all UIP interactions for transparency
-\end{itemize}
-
-\subsection{Dual Interface Architecture}
+\subsection{Role-based Agent Team}
 \label{subsec:dual-interface}
 
-CoAuthor supports two complementary interfaces:
-
-\textbf{Terminal UI (TUI)}: Built with React and Ink, the TUI provides a keyboard-driven interface optimized for developer workflows. Features include command-based navigation (\texttt{/new}, \texttt{/pause}, \texttt{/continue}), real-time streaming output, and task tree visualization.
-
-\textbf{Web UI}: Built with React 19, TailwindCSS, and Radix UI components, the Web UI offers a graphical interface with enhanced visualization capabilities. It connects to the backend via WebSocket for real-time updates and supports Markdown rendering with syntax highlighting, LaTeX math, and Mermaid diagrams.
-
-Both interfaces communicate with the same underlying infrastructure through a shared HTTP/WebSocket server, ensuring consistent behavior across interaction modes.
+Seed ships with three specialized agents:
+\begin{itemize}
+    \item Coordinator Agent: full tool access and delegation.
+    \item Research Agent: read-only workspace survey.
+    \item Chat Agent: no-tool quick advisory mode.
+\end{itemize}

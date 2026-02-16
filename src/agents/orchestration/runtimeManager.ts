@@ -187,7 +187,7 @@ export class RuntimeManager {
 
   /**
    * Manually trigger execution for a specific task.
-   * Used by CLI `agent run <taskId>` and `agent test`.
+   * Used by interactive surfaces (TUI/Web) and tests.
    *
    * Serialized via the per-task lock so it cannot overlap with
    * event-driven execution for the same task (CC-007).

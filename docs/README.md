@@ -1,4 +1,4 @@
-# CoAuthor Documentation (Current)
+# Seed Documentation (Current)
 
 This directory contains the **current** documentation for the live codebase.
 
@@ -18,3 +18,4 @@ The old documents are preserved in `docs/legacy/` for historical context.
 
 - Current source-of-truth is code under `src/` and `web/src/`.
 - `docs/legacy/` documents are intentionally not updated and may diverge from current behavior.
+- Legacy documents may still reference historical `coauthor` naming and STEM-paper-focused framing.

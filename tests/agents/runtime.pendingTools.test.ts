@@ -10,7 +10,7 @@ import { RuntimeManager } from '../../src/agents/orchestration/runtimeManager.js
 import { AgentRuntime } from '../../src/agents/core/runtime.js'
 import { ConversationManager } from '../../src/agents/orchestration/conversationManager.js'
 import { OutputHandler } from '../../src/agents/orchestration/outputHandler.js'
-import { DefaultCoAuthorAgent } from '../../src/agents/implementations/defaultAgent.js'
+import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.js'
 import { FakeLLMClient } from '../../src/infrastructure/llm/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../../src/infrastructure/tools/toolExecutor.js'
@@ -77,7 +77,7 @@ async function createTestInfra(
   const taskService = new TaskService(store, DEFAULT_USER_ACTOR_ID)
   const contextBuilder = new ContextBuilder(dir, artifactStore)
   const llm = new FakeLLMClient()
-  const agent = new DefaultCoAuthorAgent({ contextBuilder })
+  const agent = new DefaultSeedAgent({ contextBuilder })
 
   const conversationManager = new ConversationManager({
     conversationStore,
@@ -124,7 +124,7 @@ describe('Runtime Pending Tool Execution', () => {
   let dir: string
 
   test('executes pending tool calls from previous turn', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'coauthor-test-'))
+    dir = mkdtempSync(join(tmpdir(), 'seed-test-'))
     const { runtimeManager, taskService, conversationStore, tool1, tool2, llm, agent } = await createTestInfra(dir)
 
     // Create task
@@ -183,7 +183,7 @@ describe('Runtime Pending Tool Execution', () => {
   })
 
   test('rejects only the bound risky tool call in a batch', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'coauthor-test-'))
+    dir = mkdtempSync(join(tmpdir(), 'seed-test-'))
     const { store, taskService, conversationStore, tool1, tool2, llm, agent, toolRegistry, conversationManager, outputHandler } =
       await createTestInfra(dir, { tool1RiskLevel: 'risky', tool2RiskLevel: 'risky' })
 

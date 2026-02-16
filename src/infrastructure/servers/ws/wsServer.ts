@@ -61,7 +61,7 @@ interface ClientState {
 // WebSocket Server
 // ============================================================================
 
-export class CoAuthorWsServer {
+export class SeedWsServer {
   readonly #wss: WSServer
   readonly #deps: WsServerDeps
   readonly #clients = new Map<WebSocket, ClientState>()

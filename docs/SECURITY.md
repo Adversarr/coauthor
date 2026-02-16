@@ -2,7 +2,7 @@
 
 ## Security Posture
 
-CoAuthor is designed primarily for local, developer-machine operation with a localhost server and per-workspace state.
+Seed is designed primarily for local, developer-machine operation with a localhost server and per-workspace state.
 
 Primary security goals:
 - prevent unauthorized command/control access,
@@ -12,7 +12,7 @@ Primary security goals:
 
 ## Trust Boundaries
 
-- Browser/TUI client ↔ HTTP/WS server (`CoAuthorServer`)
+- Browser/TUI client ↔ HTTP/WS server (`SeedServer`)
 - Server ↔ local filesystem (`FsArtifactStore`)
 - Agent ↔ tool execution (`ToolExecutor`)
 - Domain events ↔ audit trail (separate storage)
@@ -54,9 +54,9 @@ Tools are classified as:
 ## Resource/Abuse Controls
 
 - HTTP request body max size: 10 MB.
-- command execution timeout defaults (`COAUTHOR_TIMEOUT_EXEC`).
-- command output truncation (`COAUTHOR_MAX_OUTPUT_LENGTH`).
-- interaction timeout defaults (`COAUTHOR_TIMEOUT_INTERACTION`).
+- command execution timeout defaults (`SEED_TIMEOUT_EXEC`).
+- command output truncation (`SEED_MAX_OUTPUT_LENGTH`).
+- interaction timeout defaults (`SEED_TIMEOUT_INTERACTION`).
 - API list endpoints clamp limits (e.g., max 500 events/audit entries per query).
 
 ## Process and Multi-Client Safety

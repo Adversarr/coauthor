@@ -1,6 +1,8 @@
 node_modules
 dist
+.seed
 .coauthor
+demo/.coauthor
 .DS_Store
 coverage
 .trae

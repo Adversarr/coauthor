@@ -4,12 +4,12 @@
 
 import type { UiBus, UiEvent } from '../../core/ports/uiBus.js'
 import type { Subscribable } from '../../core/ports/subscribable.js'
-import type { CoAuthorWsClient } from './wsClient.js'
+import type { SeedWsClient } from './wsClient.js'
 
 export class RemoteUiBus implements UiBus {
-  readonly #ws: CoAuthorWsClient
+  readonly #ws: SeedWsClient
 
-  constructor(ws: CoAuthorWsClient) {
+  constructor(ws: SeedWsClient) {
     this.#ws = ws
   }
 

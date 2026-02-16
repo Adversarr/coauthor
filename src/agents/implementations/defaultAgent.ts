@@ -2,14 +2,14 @@ import type { ContextBuilder } from '../../application/context/contextBuilder.js
 import type { LLMProfile } from '../../core/ports/llmClient.js'
 import type { ToolGroup } from '../../core/ports/tool.js'
 import { BaseToolAgent } from '../core/baseAgent.js'
-import { DEFAULT_COAUTHOR_SYSTEM_PROMPT } from './templates.js'
+import { DEFAULT_SEED_SYSTEM_PROMPT } from './templates.js'
 
 // ============================================================================
-// Default CoAuthor Agent - Tool Use Workflow
+// Coordinator Agent - Tool Use Workflow
 // ============================================================================
 
 /**
- * Default CoAuthor Agent.
+ * Coordinator Agent.
  *
  * Full-capability agent with access to all tool groups.
  * Implements the tool loop: call LLM → yield tool calls → repeat.
@@ -18,11 +18,11 @@ import { DEFAULT_COAUTHOR_SYSTEM_PROMPT } from './templates.js'
  * gating. The Runtime/OutputHandler intercepts risky tools and handles UIP
  * confirmation before execution — agents never need to know about risk.
  */
-export class DefaultCoAuthorAgent extends BaseToolAgent {
-  readonly id = 'agent_coauthor_default'
-  readonly displayName = 'Default Agent'
+export class DefaultSeedAgent extends BaseToolAgent {
+  readonly id = 'agent_seed_coordinator'
+  readonly displayName = 'Coordinator Agent'
   readonly description =
-    'General-purpose agent that uses available tools to analyze tasks, edit files, and execute commands.'
+    'General execution agent that plans work, uses tools, and delegates subtasks when useful.'
   readonly toolGroups: readonly ToolGroup[] = ['search', 'edit', 'exec', 'subtask']
   readonly defaultProfile: LLMProfile
 
@@ -37,7 +37,7 @@ export class DefaultCoAuthorAgent extends BaseToolAgent {
       contextBuilder: opts.contextBuilder,
       maxIterations: opts.maxIterations,
       maxTokens: opts.maxTokens,
-      systemPromptTemplate: opts.systemPromptTemplate ?? DEFAULT_COAUTHOR_SYSTEM_PROMPT
+      systemPromptTemplate: opts.systemPromptTemplate ?? DEFAULT_SEED_SYSTEM_PROMPT
     })
     this.defaultProfile = opts.defaultProfile ?? 'fast'
   }

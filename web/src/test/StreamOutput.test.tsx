@@ -75,7 +75,7 @@ describe('StreamOutput', () => {
         timestamp: new Date().toISOString(),
         parts: [
           { kind: 'reasoning', content: 'I should condense the content.' },
-          { kind: 'tool_call', toolCallId: 'tc-1', toolName: 'search_docs', arguments: { query: 'paper' } },
+          { kind: 'tool_call', toolCallId: 'tc-1', toolName: 'search_docs', arguments: { query: 'deployment checklist' } },
           { kind: 'text', content: 'Final replay answer.' },
         ],
       },
@@ -98,7 +98,7 @@ describe('StreamOutput', () => {
     expect(screen.getByText('Please summarize.')).toBeInTheDocument()
     expect(screen.getByText('I should condense the content.')).toBeInTheDocument()
     expect(screen.getByText('Final replay answer.')).toBeInTheDocument()
-    expect(screen.getByText(/"query": "paper"/)).toBeInTheDocument()
+    expect(screen.getByText(/"query": "deployment checklist"/)).toBeInTheDocument()
     expect(screen.getByText('search results')).toBeInTheDocument()
   })
 

@@ -1,10 +1,10 @@
 {
-  "name": "coauthor",
+  "name": "seed",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "coauthor": "./dist/index.js"
+    "seed": "./dist/index.js"
   },
   "engines": {
     "node": ">=20"

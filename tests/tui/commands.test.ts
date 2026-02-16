@@ -225,7 +225,7 @@ describe('tui/commands', () => {
       const createTask = vi.fn().mockResolvedValue({ taskId: 'task_123' })
       const app = {
         taskService: { createTask },
-        runtimeManager: { defaultAgentId: 'agent_minimal' }
+        runtimeManager: { defaultAgentId: 'agent_seed_chat' }
       } as unknown as App
       const ctx = createContext(app)
 
@@ -264,7 +264,7 @@ describe('tui/commands', () => {
 
   describe('replay-raw command', () => {
     it('replays raw conversation lines for a task', async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'coauthor-'))
+      const dir = mkdtempSync(join(tmpdir(), 'seed-'))
       const conversationsPath = join(dir, 'conversations.jsonl')
       writeFileSync(
         conversationsPath,

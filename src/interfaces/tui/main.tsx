@@ -232,7 +232,7 @@ export function MainTui(props: Props) {
   useEffect(() => {
     app.runtimeManager.start()
     refresh().catch((e) => setStatus(e instanceof Error ? e.message : String(e)))
-    addPlainLog('Welcome to CoAuthor — multi-agent coding assistant. Type /help for commands, /agent to list agents.', { color: 'cyan', dim: true })
+    addPlainLog('Welcome to Seed — multi-agent coding assistant. Type /help for commands, /agent to list agents.', { color: 'cyan', dim: true })
 
     const storeSub = app.store.events$.subscribe(() => {
       refresh().catch(console.error)

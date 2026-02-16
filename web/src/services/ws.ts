@@ -1,5 +1,5 @@
 /**
- * WebSocket service — connects to the CoAuthor backend for real-time events.
+ * WebSocket service — connects to the Seed backend for real-time events.
  *
  * Features:
  * - Auto-reconnect with exponential backoff
@@ -17,7 +17,7 @@ export interface WsCallbacks {
   onStatusChange?: (status: ConnectionStatus) => void
 }
 
-const LAST_EVENT_ID_STORAGE_KEY = 'coauthor-last-event-id'
+const LAST_EVENT_ID_STORAGE_KEY = 'seed-last-event-id'
 
 function readPersistedLastEventId(): number {
   if (typeof window === 'undefined') return 0
@@ -55,7 +55,7 @@ export class WsService {
 
   connect(): void {
     if (this.#disposed) return
-    const token = sessionStorage.getItem('coauthor-token') ?? ''
+    const token = sessionStorage.getItem('seed-token') ?? ''
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`
 

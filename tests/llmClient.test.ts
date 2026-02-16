@@ -43,7 +43,7 @@ describe('OpenAILLMClient (LLMClient port)', () => {
           apiKey: null,
           modelByProfile: { fast: 'm1', writer: 'm2', reasoning: 'm3' }
         })
-    ).toThrow(/COAUTHOR_OPENAI_API_KEY/)
+    ).toThrow(/SEED_OPENAI_API_KEY/)
   })
 
   test('complete routes by profile and returns LLMResponse', async () => {

@@ -1,4 +1,4 @@
-// ESLint Flat Config for CoAuthor
+// ESLint Flat Config for Seed
 // https://typescript-eslint.io/getting-started/
 
 import tseslint from 'typescript-eslint';
@@ -12,7 +12,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'node_modules/**',
-      '.coauthor/**',
+      '.seed/**',
       'coverage/**',
     ],
   },

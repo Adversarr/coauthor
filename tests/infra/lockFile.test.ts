@@ -19,7 +19,7 @@ describe('Lock File', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'coauthor-lock-test-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'seed-lock-test-'))
   })
 
   afterEach(() => {
@@ -34,11 +34,11 @@ describe('Lock File', () => {
   }
 
   it('lockFilePath returns correct path', () => {
-    expect(lockFilePath('/home/user/project')).toBe('/home/user/project/.coauthor/server.lock')
+    expect(lockFilePath('/home/user/project')).toBe('/home/user/project/.seed/server.lock')
   })
 
   it('writes and reads lock file', () => {
-    const path = join(tmpDir, '.coauthor', 'server.lock')
+    const path = join(tmpDir, '.seed', 'server.lock')
     writeLockFile(path, sampleData)
     expect(existsSync(path)).toBe(true)
 

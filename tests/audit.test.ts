@@ -12,7 +12,7 @@ describe('Audit System', () => {
   let auditPath: string
 
   beforeEach(() => {
-    baseDir = join(tmpdir(), `coauthor-audit-${nanoid()}`)
+    baseDir = join(tmpdir(), `seed-audit-${nanoid()}`)
     mkdirSync(baseDir, { recursive: true })
     auditPath = join(baseDir, 'audit.jsonl')
   })

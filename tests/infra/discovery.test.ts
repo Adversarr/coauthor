@@ -14,7 +14,7 @@ describe('Master Discovery', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'coauthor-disc-test-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'seed-disc-test-'))
   })
 
   afterEach(() => {
