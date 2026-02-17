@@ -36,6 +36,13 @@ describe('SettingsPage — race condition prevention (Task 5)', () => {
     expect(screen.getByText('Settings')).toBeInTheDocument()
   })
 
+  it('uses a scrollable page container so lower settings remain reachable', () => {
+    const { container } = render(<SettingsPage />)
+    const root = container.firstElementChild
+    expect(root).toHaveClass('overflow-y-auto')
+    expect(root).toHaveClass('h-full')
+  })
+
   it('shows connection status', () => {
     render(<SettingsPage />)
     expect(screen.getByText('connected')).toBeInTheDocument()

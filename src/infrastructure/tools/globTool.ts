@@ -11,7 +11,7 @@ import { posix as posixPath } from 'node:path'
 import { mapStorePathToLogicalPath, resolveToolPattern } from '../workspace/toolWorkspace.js'
 
 export const globTool: Tool = {
-  name: 'globTool',
+  name: 'GlobTool',
   description: 'Find files matching a glob pattern. Pattern supports private:/, shared:/, public:/ prefixes. Unscoped patterns default to private:/.',
   parameters: {
     type: 'object',

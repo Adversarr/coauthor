@@ -83,7 +83,7 @@ export function createRunCommandTool(opts?: { maxOutputLength?: number; defaultT
   const defaultTimeout = opts?.defaultTimeout ?? DEFAULT_TIMEOUT
 
   return {
-    name: 'runCommand',
+    name: 'RunCommand',
     description: 'Execute a shell command in a scoped workspace directory. By default runs in private:/ for the current task. Supports cwd with private:/, shared:/, public:/ prefixes.',
     parameters: {
       type: 'object',

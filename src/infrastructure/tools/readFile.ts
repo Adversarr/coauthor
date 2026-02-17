@@ -10,7 +10,7 @@ import type { Tool, ToolContext, ToolResult } from '../../core/ports/tool.js'
 import { resolveToolPath } from '../workspace/toolWorkspace.js'
 
 export const readFileTool: Tool = {
-  name: 'readFile',
+  name: 'ReadFile',
   description: 'Read the content of a file. Path supports private:/, shared:/, public:/ prefixes. Unscoped paths default to private:/. Supports paging via offset and limit.',
   parameters: {
     type: 'object',

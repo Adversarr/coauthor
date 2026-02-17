@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { ConversationView } from '@/components/panels/ConversationView'
 
@@ -140,5 +140,26 @@ describe('ConversationView', () => {
     render(<ConversationView taskId="task-1" />)
 
     expect(screen.getByText('No conversation yet.')).toBeInTheDocument()
+  })
+
+  it('truncates long system message and toggles show all/show less', () => {
+    const longSystemText = `System instructions: ${'A'.repeat(360)}`
+    mockMessages = [
+      {
+        id: 'm-system',
+        role: 'system',
+        timestamp: new Date().toISOString(),
+        parts: [{ kind: 'text', content: longSystemText }],
+      },
+    ]
+
+    render(<ConversationView taskId="task-1" />)
+
+    expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+    expect(screen.queryByText(longSystemText)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(screen.getByText(longSystemText)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument()
   })
 })

@@ -295,8 +295,28 @@ describe('TaskDetailPage replay-only tabs', () => {
 
     render(<TaskDetailPage />)
 
+    const trigger = screen.getByRole('button', { name: /Todo Queue/i })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+
     expect(screen.getByText('No pending todos.')).toBeInTheDocument()
     expect(screen.getByText('No completed todos.')).toBeInTheDocument()
+  })
+
+  it('auto-collapses todo queue when all todos are completed', async () => {
+    mockTasks = [makeTask({
+      todos: [
+        { id: 'todo-1', title: 'Done item', status: 'completed' },
+      ]
+    })]
+
+    render(<TaskDetailPage />)
+
+    const trigger = screen.getByRole('button', { name: /Todo Queue/i })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+
+    expect(screen.getByText('Done item')).toBeInTheDocument()
   })
 
   it('renders agent group section for root tasks and allows creating group members', async () => {

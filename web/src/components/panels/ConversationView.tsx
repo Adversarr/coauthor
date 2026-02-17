@@ -5,7 +5,7 @@
  * No live stream chunks are rendered in the web UI.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/utils'
@@ -350,13 +350,28 @@ function AssistantPartsRenderer({ parts, followingToolResults }: {
 function SystemMessage({ msg }: { msg: ConversationMessage }) {
   const textPart = msg.parts.find(p => p.kind === 'text')
   if (!textPart || textPart.kind !== 'text') return null
+  const [expanded, setExpanded] = useState(false)
+  const content = textPart.content
+  const shouldTruncate = content.length > 320
+  const displayContent = expanded || !shouldTruncate
+    ? content
+    : `${content.slice(0, 320).trimEnd()}…`
 
   return (
-    <div className="flex items-center justify-center gap-2 py-1.5">
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-        <span>{textPart.content}</span>
+    <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-zinc-500 whitespace-pre-wrap break-words">{displayContent}</p>
+        <span className="shrink-0 text-[10px] text-zinc-700">{timeAgo(msg.timestamp)}</span>
       </div>
-      <span className="text-[10px] text-zinc-700">{timeAgo(msg.timestamp)}</span>
+      {shouldTruncate && (
+        <button
+          type="button"
+          onClick={() => setExpanded(prev => !prev)}
+          className="mt-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+        >
+          {expanded ? 'Show less' : 'Show all'}
+        </button>
+      )}
     </div>
   )
 }

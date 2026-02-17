@@ -56,7 +56,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 space-y-6 overflow-y-auto pr-1">
       <h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
 
       <Card className="max-w-md bg-zinc-950/40">

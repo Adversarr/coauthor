@@ -35,7 +35,7 @@ function validatePattern(pattern: string): void {
 }
 
 export const grepTool: Tool = {
-  name: 'grepTool',
+  name: 'GrepTool',
   description: 'Search for patterns in files. Path supports private:/, shared:/, public:/ prefixes. Unscoped paths default to private:/. Uses git-grep or grep if available, falling back to JS implementation.',
   parameters: {
     type: 'object',

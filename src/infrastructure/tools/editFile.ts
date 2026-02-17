@@ -11,7 +11,7 @@ import type { Tool, ToolContext, ToolResult } from '../../core/ports/tool.js'
 import { resolveToolPath } from '../workspace/toolWorkspace.js'
 
 export const editFileTool: Tool = {
-  name: 'editFile',
+  name: 'EditFile',
   description: `Edit a file by replacing oldString with newString. Path supports private:/, shared:/, public:/ prefixes and unscoped paths default to private:/. For new files, use oldString="" and newString with full content. The replacement must match exactly unless regex is used.`,
   parameters: {
     type: 'object',

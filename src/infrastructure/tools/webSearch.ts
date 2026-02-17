@@ -19,7 +19,7 @@ export function createWebSearchTool(opts: {
   profile: LLMProfile
 }): Tool {
   return {
-    name: 'web_search',
+    name: 'WebSearch',
     description: 'Search the web using provider-native search. Use for current events or external facts not present in local files.',
     parameters: {
       type: 'object',

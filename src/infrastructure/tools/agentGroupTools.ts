@@ -42,7 +42,7 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
   const timeoutMs = deps.subtaskTimeoutMs ?? 300_000
 
   return {
-    name: 'createSubtasks',
+    name: 'CreateSubtasks',
     description: 'Create multiple subtasks (agent group members) for the current top-level task and wait for terminal outcomes.',
     parameters: {
       type: 'object',
@@ -133,7 +133,7 @@ export function createSubtasksTool(deps: AgentGroupToolDeps): Tool {
 
 export function listSubtaskTool(deps: AgentGroupToolDeps): Tool {
   return {
-    name: 'listSubtask',
+    name: 'ListSubtask',
     description: 'List viable sub-agents for createSubtasks in the current top-level task group.',
     parameters: {
       type: 'object',

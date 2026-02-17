@@ -13,7 +13,7 @@ import { minimatch } from 'minimatch'
 import { resolveToolPath } from '../workspace/toolWorkspace.js'
 
 export const listFilesTool: Tool = {
-  name: 'listFiles',
+  name: 'ListFiles',
   description: 'List files and directories in a path. Path supports private:/, shared:/, public:/ prefixes. Unscoped paths default to private:/. Returns names with [DIR] prefix, size, and modification time.',
   parameters: {
     type: 'object',
