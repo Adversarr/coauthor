@@ -1,44 +1,45 @@
 {
-  "defaultProfile":"fast",
-  "clientPolicies":{
-    "volc_default":{
-      "openaiCompat":{
-        "enableThinking":true,
-        "webSearch":{
-          "enabled":false,
-          "onlyWhenNoFunctionTools":true
-        }
+  "defaultProfile": "fast",
+  "clientPolicies": {
+    "volc_default": {
+      "openaiCompat": {
+        "enableThinking": true
       },
-      "provider":{
-        "volcengine":{
-          "thinkingType":"auto",
-          "reasoningEffort":"medium"
+      "provider": {
+        "volcengine": {
+          "thinkingType": "enabled",
+          "reasoningEffort": "medium"
         }
       }
     },
-    "volc_web":{
-      "openaiCompat":{
-        "enableThinking":true,
-        "webSearch":{
-          "enabled":true,
-          "onlyWhenNoFunctionTools":true,
-          "maxKeyword":5,
-          "limit":10,
-          "sources":["toutiao","douyin"]
-        }
+    "volc_web": {
+      "openaiCompat": {
+        "enableThinking": true
       },
-      "provider":{
-        "volcengine":{
-          "thinkingType":"auto",
-          "reasoningEffort":"high"
+      "provider": {
+        "volcengine": {
+          "thinkingType": "enabled",
+          "reasoningEffort": "high"
         }
       }
     }
   },
-  "profiles":{
-    "fast":{"model":"doubao-seed-1-6-251015","clientPolicy":"volc_web"},
-    "writer":{"model":"doubao-seed-1-6-251015","clientPolicy":"volc_web"},
-    "reasoning":{"model":"doubao-seed-1-6-251015","clientPolicy":"volc_web"},
-    "research_web":{"model":"doubao-seed-1-6-251015","clientPolicy":"volc_web"}
+  "profiles": {
+    "fast": {
+      "model": "doubao-seed-2-0-pro-260215",
+      "clientPolicy": "volc_web"
+    },
+    "writer": {
+      "model": "doubao-seed-2-0-pro-260215",
+      "clientPolicy": "volc_web"
+    },
+    "reasoning": {
+      "model": "doubao-seed-2-0-pro-260215",
+      "clientPolicy": "volc_web"
+    },
+    "research_web": {
+      "model": "doubao-seed-2-0-pro-260215",
+      "clientPolicy": "volc_web"
+    }
   }
 }

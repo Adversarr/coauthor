@@ -1,36 +1,26 @@
 {
-  "defaultProfile":"fast",
-  "clientPolicies":{
-    "bailian_default":{
-      "openaiCompat":{
-        "enableThinking":true,
-        "webSearch":{
-          "enabled":false,
-          "onlyWhenNoFunctionTools":false
-        }
+  "defaultProfile": "fast",
+  "clientPolicies": {
+    "bailian_default": {
+      "openaiCompat": {
+        "enableThinking": true
       }
     },
-    "bailian_search":{
-      "openaiCompat":{
-        "enableThinking":true,
-        "webSearch":{
-          "enabled":true,
-          "onlyWhenNoFunctionTools":false
-        }
+    "bailian_search": {
+      "openaiCompat": {
+        "enableThinking": true
       },
-      "provider":{
-        "bailian":{
-          "thinkingBudget":256,
-          "forcedSearch":true,
-          "searchStrategy":"max"
+      "provider": {
+        "bailian": {
+          "thinkingBudget": 256
         }
       }
     }
   },
-  "profiles":{
-    "fast":{"model":"qwen3.5-plus","clientPolicy":"bailian_search"},
-    "writer":{"model":"qwen3.5-plus","clientPolicy":"bailian_search"},
-    "reasoning":{"model":"qwen3.5-plus","clientPolicy":"bailian_search"},
-    "research_web":{"model":"qwen3.5-plus","clientPolicy":"bailian_search"}
+  "profiles": {
+    "fast": { "model": "qwen3.5-plus", "clientPolicy": "bailian_search" },
+    "writer": { "model": "qwen3.5-plus", "clientPolicy": "bailian_search" },
+    "reasoning": { "model": "qwen3.5-plus", "clientPolicy": "bailian_search" },
+    "research_web": { "model": "qwen3.5-plus", "clientPolicy": "bailian_search" }
   }
 }

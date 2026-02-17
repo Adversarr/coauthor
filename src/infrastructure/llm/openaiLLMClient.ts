@@ -107,56 +107,29 @@ export type OpenAICompatibleProvider = Exclude<LLMProvider, 'fake'>
 
 type ProviderAdapterBuildInput = {
   policy: ClientPolicy
-  hasFunctionTools: boolean
 }
+
+type OpenAICompatibleProviderPayload = Record<string, unknown>
+type OpenAICompatibleProviderOptions = Record<string, OpenAICompatibleProviderPayload>
 
 type OpenAICompatibleProviderAdapter = {
-  buildProviderOptions(input: ProviderAdapterBuildInput): { openai: Record<string, unknown> }
-}
-
-function shouldInjectWebSearch(policy: ClientPolicy, hasFunctionTools: boolean): boolean {
-  const webSearch = policy.openaiCompat?.webSearch
-  if (!webSearch?.enabled) return false
-  const onlyWhenNoTools = webSearch.onlyWhenNoFunctionTools ?? true
-  if (!onlyWhenNoTools) return true
-  return !hasFunctionTools
-}
-
-function createWebSearchTool(policy: ClientPolicy): Record<string, unknown> {
-  const webSearch = policy.openaiCompat?.webSearch
-  const tool: Record<string, unknown> = { type: 'web_search' }
-  if (!webSearch) return tool
-
-  if (typeof webSearch.maxKeyword === 'number') {
-    tool.max_keyword = webSearch.maxKeyword
-  }
-  if (typeof webSearch.limit === 'number') {
-    tool.limit = webSearch.limit
-  }
-  if (Array.isArray(webSearch.sources) && webSearch.sources.length > 0) {
-    tool.sources = webSearch.sources
-  }
-  return tool
+  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload
 }
 
 class OpenAIAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): { openai: Record<string, unknown> } {
+  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
     const payload: Record<string, unknown> = {}
 
     if (typeof input.policy.openaiCompat?.enableThinking === 'boolean') {
       payload.enable_thinking = input.policy.openaiCompat.enableThinking
     }
 
-    if (shouldInjectWebSearch(input.policy, input.hasFunctionTools)) {
-      payload.tools = [createWebSearchTool(input.policy)]
-    }
-
-    return { openai: payload }
+    return payload
   }
 }
 
 class BailianAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): { openai: Record<string, unknown> } {
+  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
     const payload: Record<string, unknown> = {}
 
     if (typeof input.policy.openaiCompat?.enableThinking === 'boolean') {
@@ -164,32 +137,17 @@ class BailianAdapter implements OpenAICompatibleProviderAdapter {
     }
 
     const providerPolicy = input.policy.provider?.bailian
-    const enableSearch = input.policy.openaiCompat?.webSearch?.enabled ?? false
-    payload.enable_search = enableSearch
 
     if (providerPolicy?.thinkingBudget && payload.enable_thinking === true) {
       payload.thinking_budget = providerPolicy.thinkingBudget
     }
 
-    if (enableSearch) {
-      const searchOptions: Record<string, unknown> = {}
-      if (typeof providerPolicy?.forcedSearch === 'boolean') {
-        searchOptions.forced_search = providerPolicy.forcedSearch
-      }
-      if (providerPolicy?.searchStrategy) {
-        searchOptions.search_strategy = providerPolicy.searchStrategy
-      }
-      if (Object.keys(searchOptions).length > 0) {
-        payload.search_options = searchOptions
-      }
-    }
-
-    return { openai: payload }
+    return payload
   }
 }
 
 class VolcengineAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): { openai: Record<string, unknown> } {
+  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
     const payload: Record<string, unknown> = {}
     const providerPolicy = input.policy.provider?.volcengine
 
@@ -205,11 +163,7 @@ class VolcengineAdapter implements OpenAICompatibleProviderAdapter {
       payload.reasoning_effort = providerPolicy.reasoningEffort
     }
 
-    if (shouldInjectWebSearch(input.policy, input.hasFunctionTools)) {
-      payload.tools = [createWebSearchTool(input.policy)]
-    }
-
-    return { openai: payload }
+    return payload
   }
 }
 
@@ -294,11 +248,13 @@ export class OpenAILLMClient implements LLMClient {
     return { profile, policy }
   }
 
-  #buildProviderOptions(input: { policy: ClientPolicy; hasFunctionTools: boolean }): { openai: Record<string, unknown> } {
-    return this.#adapters[this.provider].buildProviderOptions({
+  #buildProviderOptions(input: { policy: ClientPolicy }): OpenAICompatibleProviderOptions {
+    const payload = this.#adapters[this.provider].buildProviderOptions({
       policy: input.policy,
-      hasFunctionTools: input.hasFunctionTools,
     })
+    return {
+      [this.provider]: payload,
+    }
   }
 
   #logVerbose(message: string, data?: Record<string, unknown>): void {
@@ -316,7 +272,6 @@ export class OpenAILLMClient implements LLMClient {
     const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
     const providerOptions = this.#buildProviderOptions({
       policy: resolved.policy,
-      hasFunctionTools: (opts.tools?.length ?? 0) > 0,
     })
 
     this.#logVerbose('complete request', {
@@ -326,6 +281,7 @@ export class OpenAILLMClient implements LLMClient {
       toolsCount: opts.tools?.length ?? 0,
       maxTokens: opts.maxTokens ?? null,
       provider: this.provider,
+      providerOptions,
     })
 
     const result = await generateText({
@@ -373,7 +329,6 @@ export class OpenAILLMClient implements LLMClient {
     const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
     const providerOptions = this.#buildProviderOptions({
       policy: resolved.policy,
-      hasFunctionTools: (opts.tools?.length ?? 0) > 0,
     })
 
     this.#logVerbose('stream request', {

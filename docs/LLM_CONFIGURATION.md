@@ -47,19 +47,10 @@ Custom profile IDs are allowed.
 
 - `openaiCompat?: {`
   - `enableThinking?: boolean`
-  - `webSearch?: {`
-    - `enabled: boolean`
-    - `onlyWhenNoFunctionTools?: boolean` (default `true`)
-    - `maxKeyword?: number (1..50)`
-    - `limit?: number (1..50)`
-    - `sources?: string[]`
-  - `}`
 - `}`
 - `provider?: {`
   - `bailian?: {`
     - `thinkingBudget?: number`
-    - `forcedSearch?: boolean`
-    - `searchStrategy?: turbo|max|agent|agent_max`
   - `}`
   - `volcengine?: {`
     - `thinkingType?: enabled|disabled|auto`
@@ -77,21 +68,12 @@ Provider-specific policy knobs are validated against the active provider and rej
   "clientPolicies": {
     "balanced": {
       "openaiCompat": {
-        "enableThinking": true,
-        "webSearch": {
-          "enabled": false,
-          "onlyWhenNoFunctionTools": true
-        }
+        "enableThinking": true
       }
     },
     "web_research": {
       "openaiCompat": {
-        "enableThinking": true,
-        "webSearch": {
-          "enabled": true,
-          "onlyWhenNoFunctionTools": true,
-          "limit": 6
-        }
+        "enableThinking": true
       },
       "provider": {
         "volcengine": {

@@ -11,21 +11,11 @@ import type {
 
 export const BUILTIN_LLM_PROFILE_IDS: readonly LLMBuiltinProfile[] = ['fast', 'writer', 'reasoning']
 
-export type BailianSearchStrategy = 'turbo' | 'max' | 'agent' | 'agent_max'
 export type VolcengineThinkingType = 'enabled' | 'disabled' | 'auto'
 export type VolcengineReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
-export type WebSearchPolicy = {
-  enabled: boolean
-  onlyWhenNoFunctionTools?: boolean
-  maxKeyword?: number
-  limit?: number
-  sources?: string[]
-}
-
 export type OpenAICompatPolicy = {
   enableThinking?: boolean
-  webSearch?: WebSearchPolicy
 }
 
 export type ClientPolicy = {
@@ -33,8 +23,6 @@ export type ClientPolicy = {
   provider?: {
     bailian?: {
       thinkingBudget?: number
-      forcedSearch?: boolean
-      searchStrategy?: BailianSearchStrategy
     }
     volcengine?: {
       thinkingType?: VolcengineThinkingType
@@ -54,17 +42,8 @@ export type LLMProfileCatalogConfig = {
   profiles: Record<string, LLMProfileSpec>
 }
 
-const WebSearchPolicySchema = z.object({
-  enabled: z.boolean(),
-  onlyWhenNoFunctionTools: z.boolean().optional(),
-  maxKeyword: z.number().int().min(1).max(50).optional(),
-  limit: z.number().int().min(1).max(50).optional(),
-  sources: z.array(z.string().min(1)).optional(),
-}).strict()
-
 const OpenAICompatPolicySchema = z.object({
   enableThinking: z.boolean().optional(),
-  webSearch: WebSearchPolicySchema.optional(),
 }).strict()
 
 const ClientPolicySchema = z.object({
@@ -72,8 +51,6 @@ const ClientPolicySchema = z.object({
   provider: z.object({
     bailian: z.object({
       thinkingBudget: z.number().int().min(1).optional(),
-      forcedSearch: z.boolean().optional(),
-      searchStrategy: z.enum(['turbo', 'max', 'agent', 'agent_max']).optional(),
     }).strict().optional(),
     volcengine: z.object({
       thinkingType: z.enum(['enabled', 'disabled', 'auto']).optional(),
@@ -107,10 +84,6 @@ function createDefaultPolicy(): ClientPolicy {
   return {
     openaiCompat: {
       enableThinking: true,
-      webSearch: {
-        enabled: false,
-        onlyWhenNoFunctionTools: true,
-      },
     },
   }
 }

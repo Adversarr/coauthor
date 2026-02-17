@@ -36,10 +36,6 @@ function createProfileCatalog(models?: { fast?: string; writer?: string; reasoni
       default: {
         openaiCompat: {
           enableThinking: true,
-          webSearch: {
-            enabled: false,
-            onlyWhenNoFunctionTools: true,
-          },
         },
       },
     },

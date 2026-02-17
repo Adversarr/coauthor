@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+let lastOpenAICompatibleCreateOptions:
+  | { transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown> }
+  | undefined
 
 vi.mock('@ai-sdk/openai-compatible', () => ({
-  createOpenAICompatible: () => {
+  createOpenAICompatible: (options: { transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown> }) => {
+    lastOpenAICompatibleCreateOptions = options
     return (modelId: string) => ({ modelId })
   },
 }))
@@ -17,7 +22,14 @@ vi.mock('ai', () => ({
 }))
 
 describe('OpenAI-compatible provider adapters', () => {
-  it('maps Bailian policy options to providerOptions', async () => {
+  beforeEach(() => {
+    lastOpenAICompatibleCreateOptions = undefined
+    generateTextMock.mockReset()
+    streamTextMock.mockReset()
+    jsonSchemaMock.mockClear()
+  })
+
+  it('maps Bailian policy options to providerOptions without web-search fields', async () => {
     const { OpenAILLMClient } = await import('../src/infrastructure/llm/openaiLLMClient.js')
 
     generateTextMock.mockResolvedValueOnce({
@@ -36,16 +48,10 @@ describe('OpenAI-compatible provider adapters', () => {
           balanced: {
             openaiCompat: {
               enableThinking: true,
-              webSearch: {
-                enabled: true,
-                onlyWhenNoFunctionTools: true,
-              },
             },
             provider: {
               bailian: {
                 thinkingBudget: 128,
-                forcedSearch: true,
-                searchStrategy: 'max',
               },
             },
           },
@@ -59,6 +65,7 @@ describe('OpenAI-compatible provider adapters', () => {
     })
 
     expect(client.label).toBe('Bailian')
+    expect(lastOpenAICompatibleCreateOptions?.transformRequestBody).toBeUndefined()
 
     await client.complete({
       profile: 'fast',
@@ -67,19 +74,14 @@ describe('OpenAI-compatible provider adapters', () => {
 
     const callArgs = generateTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
     expect(callArgs?.providerOptions).toEqual({
-      openai: {
+      bailian: {
         enable_thinking: true,
         thinking_budget: 128,
-        enable_search: true,
-        search_options: {
-          forced_search: true,
-          search_strategy: 'max',
-        },
       },
     })
   })
 
-  it('maps Volcengine policy options and injects web_search only when no local tools', async () => {
+  it('maps Volcengine policy options without any web-search transform hook', async () => {
     const { OpenAILLMClient } = await import('../src/infrastructure/llm/openaiLLMClient.js')
 
     generateTextMock.mockResolvedValue({
@@ -95,15 +97,9 @@ describe('OpenAI-compatible provider adapters', () => {
       profileCatalog: {
         defaultProfile: 'fast',
         clientPolicies: {
-          web: {
+          strict: {
             openaiCompat: {
-              webSearch: {
-                enabled: true,
-                onlyWhenNoFunctionTools: true,
-                maxKeyword: 2,
-                limit: 6,
-                sources: ['toutiao', 'douyin'],
-              },
+              enableThinking: true,
             },
             provider: {
               volcengine: {
@@ -114,37 +110,19 @@ describe('OpenAI-compatible provider adapters', () => {
           },
         },
         profiles: {
-          fast: { model: 'doubao-seed', clientPolicy: 'web' },
-          writer: { model: 'doubao-seed', clientPolicy: 'web' },
-          reasoning: { model: 'doubao-seed', clientPolicy: 'web' },
+          fast: { model: 'doubao-seed', clientPolicy: 'strict' },
+          writer: { model: 'doubao-seed', clientPolicy: 'strict' },
+          reasoning: { model: 'doubao-seed', clientPolicy: 'strict' },
         },
       },
     })
 
     expect(client.label).toBe('Volcengine')
+    expect(lastOpenAICompatibleCreateOptions?.transformRequestBody).toBeUndefined()
 
     await client.complete({
       profile: 'fast',
       messages: [{ role: 'user', content: 'latest AI news' }],
-    })
-
-    let callArgs = generateTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
-    expect(callArgs?.providerOptions).toEqual({
-      openai: {
-        thinking: { type: 'auto' },
-        reasoning_effort: 'medium',
-        tools: [{
-          type: 'web_search',
-          max_keyword: 2,
-          limit: 6,
-          sources: ['toutiao', 'douyin'],
-        }],
-      },
-    })
-
-    await client.complete({
-      profile: 'fast',
-      messages: [{ role: 'user', content: 'use local tools' }],
       tools: [{
         name: 'local_tool',
         description: 'local',
@@ -152,11 +130,61 @@ describe('OpenAI-compatible provider adapters', () => {
       }],
     })
 
-    callArgs = generateTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
+    const callArgs = generateTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
     expect(callArgs?.providerOptions).toEqual({
-      openai: {
+      volcengine: {
         thinking: { type: 'auto' },
         reasoning_effort: 'medium',
+      },
+    })
+  })
+
+  it('does not inject tools for OpenAI provider', async () => {
+    const { OpenAILLMClient } = await import('../src/infrastructure/llm/openaiLLMClient.js')
+
+    generateTextMock.mockResolvedValue({
+      text: 'ok',
+      reasoningText: 'r',
+      toolCalls: [],
+      finishReason: 'stop',
+    })
+
+    const client = new OpenAILLMClient({
+      provider: 'openai',
+      apiKey: 'test',
+      profileCatalog: {
+        defaultProfile: 'fast',
+        clientPolicies: {
+          strict: {
+            openaiCompat: {
+              enableThinking: true,
+            },
+          },
+        },
+        profiles: {
+          fast: { model: 'gpt-4o-mini', clientPolicy: 'strict' },
+          writer: { model: 'gpt-4o-mini', clientPolicy: 'strict' },
+          reasoning: { model: 'gpt-4o-mini', clientPolicy: 'strict' },
+        },
+      },
+    })
+
+    expect(lastOpenAICompatibleCreateOptions?.transformRequestBody).toBeUndefined()
+
+    await client.complete({
+      profile: 'fast',
+      messages: [{ role: 'user', content: 'hello' }],
+      tools: [{
+        name: 'local_tool',
+        description: 'local',
+        parameters: { type: 'object', properties: {} },
+      }],
+    })
+
+    const callArgs = generateTextMock.mock.calls.at(-1)?.[0] as { providerOptions?: unknown } | undefined
+    expect(callArgs?.providerOptions).toEqual({
+      openai: {
+        enable_thinking: true,
       },
     })
   })

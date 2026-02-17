@@ -23,7 +23,6 @@ function profileCatalog() {
       default: {
         openaiCompat: {
           enableThinking: true,
-          webSearch: { enabled: false },
         },
       },
     },

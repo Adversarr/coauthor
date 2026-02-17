@@ -19,19 +19,11 @@ describe('loadAppConfig profile catalog parsing', () => {
           default: {
             openaiCompat: {
               enableThinking: true,
-              webSearch: {
-                enabled: false,
-              },
             },
           },
           web: {
             openaiCompat: {
               enableThinking: true,
-              webSearch: {
-                enabled: true,
-                onlyWhenNoFunctionTools: true,
-                limit: 6,
-              },
             },
           },
         },
@@ -97,7 +89,7 @@ describe('loadAppConfig profile catalog parsing', () => {
           default: {
             provider: {
               bailian: {
-                searchStrategy: 'max',
+                thinkingBudget: 64,
               },
             },
           },
@@ -109,6 +101,79 @@ describe('loadAppConfig profile catalog parsing', () => {
         },
       }),
     })).toThrow(/active provider is "openai"/)
+  })
+
+  it('fails when removed openaiCompat.webSearch field is present', () => {
+    expect(() => loadAppConfig({
+      SEED_LLM_PROVIDER: 'openai',
+      SEED_LLM_API_KEY: 'ok',
+      SEED_LLM_PROFILES_JSON: toJson({
+        defaultProfile: 'fast',
+        clientPolicies: {
+          default: {
+            openaiCompat: {
+              enableThinking: true,
+              webSearch: {
+                enabled: true,
+              },
+            },
+          },
+        },
+        profiles: {
+          fast: { model: 'm-fast', clientPolicy: 'default' },
+          writer: { model: 'm-writer', clientPolicy: 'default' },
+          reasoning: { model: 'm-reasoning', clientPolicy: 'default' },
+        },
+      }),
+    })).toThrow(/openaiCompat.*webSearch/)
+  })
+
+  it('fails when removed provider.bailian.forcedSearch field is present', () => {
+    expect(() => loadAppConfig({
+      SEED_LLM_PROVIDER: 'bailian',
+      SEED_LLM_API_KEY: 'ok',
+      SEED_LLM_PROFILES_JSON: toJson({
+        defaultProfile: 'fast',
+        clientPolicies: {
+          default: {
+            provider: {
+              bailian: {
+                forcedSearch: true,
+              },
+            },
+          },
+        },
+        profiles: {
+          fast: { model: 'm-fast', clientPolicy: 'default' },
+          writer: { model: 'm-writer', clientPolicy: 'default' },
+          reasoning: { model: 'm-reasoning', clientPolicy: 'default' },
+        },
+      }),
+    })).toThrow(/bailian.*forcedSearch/)
+  })
+
+  it('fails when removed provider.bailian.searchStrategy field is present', () => {
+    expect(() => loadAppConfig({
+      SEED_LLM_PROVIDER: 'bailian',
+      SEED_LLM_API_KEY: 'ok',
+      SEED_LLM_PROFILES_JSON: toJson({
+        defaultProfile: 'fast',
+        clientPolicies: {
+          default: {
+            provider: {
+              bailian: {
+                searchStrategy: 'max',
+              },
+            },
+          },
+        },
+        profiles: {
+          fast: { model: 'm-fast', clientPolicy: 'default' },
+          writer: { model: 'm-writer', clientPolicy: 'default' },
+          reasoning: { model: 'm-reasoning', clientPolicy: 'default' },
+        },
+      }),
+    })).toThrow(/bailian.*searchStrategy/)
   })
 
   it('loads profile catalog from a relative file path resolved against workspaceDir', () => {
