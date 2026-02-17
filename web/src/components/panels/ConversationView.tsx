@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/utils'
 import { useConversationStore, type ConversationMessage, type MessagePart } from '@/stores/conversationStore'
 import { useTaskStore } from '@/stores/taskStore'
+import {
+  formatToolInputHeaderSummary,
+  formatToolInputSummary,
+  formatToolOutputSummary,
+  getToolDisplayName,
+  isInternalTool
+} from '@/lib/toolPresentation'
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
@@ -39,10 +46,6 @@ function detectToolError(content: string, isError?: boolean): boolean {
   }
 }
 
-function isLegacySubtaskToolCall(toolName: string): boolean {
-  return toolName.startsWith('create_subtask_')
-}
-
 function TextPart({ content }: { content: string }) {
   return <MessageResponse>{content}</MessageResponse>
 }
@@ -56,10 +59,38 @@ function ReasoningPart({ content, defaultOpen = false }: { content: string; defa
   )
 }
 
-function ToolCallPart({ toolName, arguments: args, result }: {
+type ToolCallResult = { content: string; isError?: boolean }
+
+type ToolCallRenderModel = {
+  toolCallId: string
   toolName: string
   arguments: Record<string, unknown>
-  result?: { content: string; isError?: boolean }
+  result?: ToolCallResult
+}
+
+type AssistantRenderBlock =
+  | { kind: 'text'; key: string; content: string }
+  | { kind: 'reasoning'; key: string; content: string }
+  | { kind: 'tool_result'; key: string; toolName?: string; content: string }
+  | { kind: 'tool_call_single'; key: string; call: ToolCallRenderModel }
+  | { kind: 'tool_call_group'; key: string; toolName: string; calls: ToolCallRenderModel[] }
+
+function isSuccessfulInternalToolCall(call: ToolCallRenderModel): boolean {
+  if (!isInternalTool(call.toolName)) return false
+  if (!call.result) return false
+  return !detectToolError(call.result.content, call.result.isError)
+}
+
+function summarizeGroupedInput(toolName: string, calls: ToolCallRenderModel[]): string {
+  const previews = calls.slice(0, 2).map((call) => formatToolInputHeaderSummary(toolName, call.arguments))
+  if (calls.length <= 2) return previews.join(' | ')
+  return `${previews.join(' | ')} | +${calls.length - 2} more`
+}
+
+function GenericToolCallPart({ toolName, arguments: args, result }: {
+  toolName: string
+  arguments: Record<string, unknown>
+  result?: ToolCallResult
 }) {
   const hasResult = !!result
   const isError = result ? detectToolError(result.content, result.isError) : false
@@ -80,76 +111,101 @@ function ToolCallPart({ toolName, arguments: args, result }: {
   )
 }
 
-function LegacySubtaskToolCallPart({ toolName, arguments: args, result }: {
+function FriendlyInternalToolCallPart({ toolName, arguments: args, result }: {
   toolName: string
   arguments: Record<string, unknown>
-  result?: { content: string; isError?: boolean }
+  result?: ToolCallResult
 }) {
-  const agentId = toolName.replace('create_subtask_', '')
-  const taskTitle = (args.title as string) || (args.intent as string) || `Subtask (${agentId})`
-
-  let childTaskId: string | undefined
-  let childStatus: string | undefined
-  let childSummary: string | undefined
-
-  if (result) {
-    try {
-      const parsed = JSON.parse(result.content)
-      if (typeof parsed?.taskId === 'string') childTaskId = parsed.taskId
-      if (typeof parsed?.subTaskStatus === 'string') childStatus = parsed.subTaskStatus
-      const summary = parsed?.summary || parsed?.finalAssistantMessage
-      if (typeof summary === 'string') childSummary = summary
-    } catch {
-      // Ignore non-JSON tool output; render with the generic output display.
-    }
-  }
-
-  const childTask = useTaskStore(s =>
-    childTaskId ? s.tasks.find(t => t.taskId === childTaskId) : undefined,
-  )
-
-  const displayStatus = childTask?.status
-  const displaySummary = childTask?.summary || childSummary
+  const hasResult = !!result
+  const isError = result ? detectToolError(result.content, result.isError) : false
+  const state = hasResult
+    ? (isError ? 'output-error' : 'output-available')
+    : 'input-available'
+  const title = getToolDisplayName(toolName)
+  const headerSummary = formatToolInputHeaderSummary(toolName, args)
+  const inputSummary = formatToolInputSummary(toolName, args)
+  const outputSummary = result ? formatToolOutputSummary(toolName, result.content) : null
 
   return (
-    <Task>
-      <TaskTrigger title={taskTitle}>
-        <div className="flex w-full cursor-pointer items-center gap-2 text-sm transition-colors hover:text-foreground">
-          <GitBranch className="h-4 w-4 text-violet-400 shrink-0" />
-          <span className="flex-1 truncate">{taskTitle}</span>
-          {displayStatus && <StatusBadge status={displayStatus} />}
-          {!result && <span className="text-xs text-zinc-500">pending result</span>}
-          {childStatus === 'Error' && (
-            <span className="text-xs text-red-400">Failed</span>
+    <Tool>
+      <ToolHeader
+        type="dynamic-tool"
+        state={state}
+        toolName={toolName}
+        title={title}
+        summary={headerSummary}
+      />
+      <ToolContent>
+        <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2 space-y-1">
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">Input</p>
+          <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">{inputSummary}</p>
+          {!result && (
+            <p className="text-xs text-zinc-500">Status: Running...</p>
+          )}
+          {result && (
+            <p className="text-xs text-zinc-500 whitespace-pre-wrap break-words">
+              {isError ? 'Error' : 'Result'}: {outputSummary}
+            </p>
           )}
         </div>
-      </TaskTrigger>
-      <TaskContent>
-        {(args.intent || args.goal) ? (
-          <TaskItem>{String(args.intent || args.goal)}</TaskItem>
-        ) : null}
-        <TaskItem>
-          <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
-            <Bot size={12} /> Agent: {agentId}
-          </span>
-        </TaskItem>
-        {displaySummary && (
-          <TaskItem>
-            <div className="text-xs text-zinc-400 mt-1 whitespace-pre-wrap">{displaySummary}</div>
-          </TaskItem>
+        <ToolInput input={args} />
+        {result && (
+          <ToolOutput output={result.content} errorText={isError ? result.content : undefined} />
         )}
-        {childTaskId && (
-          <TaskItem>
-            <Link
-              to={`/tasks/${childTaskId}`}
-              className="text-xs text-violet-400 hover:text-violet-300 inline-flex items-center gap-1 mt-1"
-            >
-              View full details →
-            </Link>
-          </TaskItem>
-        )}
-      </TaskContent>
-    </Task>
+      </ToolContent>
+    </Tool>
+  )
+}
+
+function GroupedInternalToolCallPart({ toolName, calls }: { toolName: string; calls: ToolCallRenderModel[] }) {
+  const title = `${getToolDisplayName(toolName)} × ${calls.length}`
+  const headerSummary = summarizeGroupedInput(toolName, calls)
+
+  return (
+    <Tool>
+      <ToolHeader
+        type="dynamic-tool"
+        state="output-available"
+        toolName={toolName}
+        title={title}
+        summary={headerSummary}
+      />
+      <ToolContent>
+        <p className="text-xs text-zinc-500">
+          Grouped consecutive successful calls for readability.
+        </p>
+        <div className="space-y-3">
+          {calls.map((call, index) => {
+            const output = call.result?.content ?? ''
+            return (
+              <div
+                key={call.toolCallId}
+                className="rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2 space-y-1"
+              >
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Call {index + 1}
+                </p>
+                <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">
+                  {formatToolInputSummary(toolName, call.arguments)}
+                </p>
+                <p className="text-xs text-zinc-500 whitespace-pre-wrap break-words">
+                  Result: {formatToolOutputSummary(toolName, output)}
+                </p>
+                <details className="pt-1">
+                  <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">
+                    Raw input/output
+                  </summary>
+                  <div className="mt-2 space-y-3">
+                    <ToolInput input={call.arguments} />
+                    <ToolOutput output={output} errorText={undefined} />
+                  </div>
+                </details>
+              </div>
+            )
+          })}
+        </div>
+      </ToolContent>
+    </Tool>
   )
 }
 
@@ -278,13 +334,120 @@ function CreateSubtasksToolCallPart({ arguments: args, result }: {
   )
 }
 
+function buildAssistantRenderBlocks(parts: MessagePart[], followingToolResults: Map<string, MessagePart>): AssistantRenderBlock[] {
+  const blocks: AssistantRenderBlock[] = []
+
+  for (let index = 0; index < parts.length;) {
+    const part = parts[index]!
+
+    if (part.kind === 'text') {
+      blocks.push({ kind: 'text', key: `text-${index}`, content: part.content })
+      index++
+      continue
+    }
+
+    if (part.kind === 'reasoning') {
+      blocks.push({ kind: 'reasoning', key: `reasoning-${index}`, content: part.content })
+      index++
+      continue
+    }
+
+    if (part.kind === 'tool_result') {
+      blocks.push({
+        kind: 'tool_result',
+        key: `tool-result-${index}`,
+        toolName: part.toolName,
+        content: part.content,
+      })
+      index++
+      continue
+    }
+
+    const pairedResult = followingToolResults.get(part.toolCallId)
+    const result = pairedResult && pairedResult.kind === 'tool_result'
+      ? { content: pairedResult.content, isError: undefined }
+      : undefined
+
+    const call: ToolCallRenderModel = {
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      arguments: part.arguments,
+      result
+    }
+
+    // Group only consecutive successful internal tool calls (same turn + same tool name).
+    if (part.toolName !== 'createSubtasks' && isSuccessfulInternalToolCall(call)) {
+      const groupedCalls: ToolCallRenderModel[] = [call]
+      let cursor = index + 1
+
+      while (cursor < parts.length) {
+        const nextPart = parts[cursor]
+        if (!nextPart || nextPart.kind !== 'tool_call') break
+        if (nextPart.toolName !== part.toolName) break
+
+        const nextResultPart = followingToolResults.get(nextPart.toolCallId)
+        const nextResult = nextResultPart && nextResultPart.kind === 'tool_result'
+          ? { content: nextResultPart.content, isError: undefined }
+          : undefined
+        const nextCall: ToolCallRenderModel = {
+          toolCallId: nextPart.toolCallId,
+          toolName: nextPart.toolName,
+          arguments: nextPart.arguments,
+          result: nextResult,
+        }
+
+        if (!isSuccessfulInternalToolCall(nextCall)) break
+
+        groupedCalls.push(nextCall)
+        cursor++
+      }
+
+      if (groupedCalls.length > 1) {
+        blocks.push({
+          kind: 'tool_call_group',
+          key: `tool-group-${part.toolName}-${part.toolCallId}`,
+          toolName: part.toolName,
+          calls: groupedCalls,
+        })
+        index = cursor
+        continue
+      }
+    }
+
+    blocks.push({
+      kind: 'tool_call_single',
+      key: `tool-call-${part.toolCallId}`,
+      call,
+    })
+    index++
+  }
+
+  return blocks
+}
+
 function ToolResultPart({ toolName, content, isError }: { toolName?: string; content: string; isError?: boolean }) {
   const errorDetected = detectToolError(content, isError)
   const state = errorDetected ? 'output-error' : 'output-available'
+  const resolvedName = toolName ?? 'tool'
+  const showFriendlySummary = !!toolName && isInternalTool(toolName)
+  const outputSummary = showFriendlySummary ? formatToolOutputSummary(toolName, content) : null
+
   return (
     <Tool>
-      <ToolHeader type="dynamic-tool" state={state} toolName={toolName ?? 'tool'} />
+      <ToolHeader
+        type="dynamic-tool"
+        state={state}
+        toolName={resolvedName}
+        title={showFriendlySummary ? getToolDisplayName(toolName) : undefined}
+      />
       <ToolContent>
+        {showFriendlySummary && (
+          <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40 px-3 py-2">
+            <p className="text-xs text-zinc-500 whitespace-pre-wrap break-words">
+              {errorDetected ? 'Error' : 'Result'}: {outputSummary}
+            </p>
+          </div>
+        )}
         <ToolOutput output={content} errorText={errorDetected ? content : undefined} />
       </ToolContent>
     </Tool>
@@ -295,52 +458,65 @@ function AssistantPartsRenderer({ parts, followingToolResults }: {
   parts: MessagePart[]
   followingToolResults: Map<string, MessagePart>
 }) {
+  const blocks = useMemo(
+    () => buildAssistantRenderBlocks(parts, followingToolResults),
+    [parts, followingToolResults],
+  )
+
   return (
     <div className="space-y-3">
-      {parts.map((part, idx) => {
-        switch (part.kind) {
+      {blocks.map((block) => {
+        switch (block.kind) {
           case 'text':
-            return <TextPart key={idx} content={part.content} />
-          case 'reasoning':
-            return <ReasoningPart key={idx} content={part.content} />
-          case 'tool_call': {
-            const result = followingToolResults.get(part.toolCallId)
-            const resultData = result && result.kind === 'tool_result'
-              ? { content: result.content, isError: undefined }
-              : undefined
+            return <TextPart key={block.key} content={block.content} />
 
-            if (part.toolName === 'createSubtasks') {
+          case 'reasoning':
+            return <ReasoningPart key={block.key} content={block.content} />
+
+          case 'tool_result':
+            return <ToolResultPart key={block.key} toolName={block.toolName} content={block.content} />
+
+          case 'tool_call_group':
+            return (
+              <GroupedInternalToolCallPart
+                key={block.key}
+                toolName={block.toolName}
+                calls={block.calls}
+              />
+            )
+
+          case 'tool_call_single': {
+            const { call } = block
+            if (call.toolName === 'createSubtasks') {
               return (
                 <CreateSubtasksToolCallPart
-                  key={idx}
-                  arguments={part.arguments}
-                  result={resultData}
+                  key={block.key}
+                  arguments={call.arguments}
+                  result={call.result}
                 />
               )
             }
 
-            if (isLegacySubtaskToolCall(part.toolName)) {
+            if (isInternalTool(call.toolName)) {
               return (
-                <LegacySubtaskToolCallPart
-                  key={idx}
-                  toolName={part.toolName}
-                  arguments={part.arguments}
-                  result={resultData}
+                <FriendlyInternalToolCallPart
+                  key={block.key}
+                  toolName={call.toolName}
+                  arguments={call.arguments}
+                  result={call.result}
                 />
               )
             }
 
             return (
-              <ToolCallPart
-                key={idx}
-                toolName={part.toolName}
-                arguments={part.arguments}
-                result={resultData}
+              <GenericToolCallPart
+                key={block.key}
+                toolName={call.toolName}
+                arguments={call.arguments}
+                result={call.result}
               />
             )
           }
-          case 'tool_result':
-            return <ToolResultPart key={idx} toolName={part.toolName} content={part.content} />
         }
       })}
     </div>

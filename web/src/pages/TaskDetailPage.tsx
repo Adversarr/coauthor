@@ -88,7 +88,7 @@ export function TaskDetailPage() {
   const fetchTask = useTaskStore(s => s.fetchTask)
   const fetchTasks = useTaskStore(s => s.fetchTasks)
   const [interaction, setInteraction] = useState<PendingInteraction | null>(null)
-  const [tab, setTab] = useState<'conversation' | 'output' | 'events' | 'summary'>('conversation')
+  const [tab, setTab] = useState<'conversation' | 'cooperation' | 'output' | 'events' | 'summary'>('conversation')
   const [taskLoading, setTaskLoading] = useState(false)
   const [taskNotFound, setTaskNotFound] = useState(false)
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false)
@@ -224,20 +224,28 @@ export function TaskDetailPage() {
             {task.intent && (
               <p className="text-sm text-zinc-400 mt-1">{task.intent}</p>
             )}
-            <div className="flex items-center gap-4 mt-2 text-xs text-zinc-600">
-              <span className="inline-flex items-center gap-1"><Bot size={12} /> {task.agentId}</span>
-              <span className="inline-flex items-center gap-1"><Clock size={12} /> {formatTime(task.createdAt)}</span>
-              <span>Updated {timeAgo(task.updatedAt)}</span>
-              {task.parentTaskId && (
-                <Link to={`/tasks/${task.parentTaskId}`} className="text-violet-400 hover:text-violet-300">
-                  ↑ parent
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-zinc-600 flex-wrap">
+              <div className="flex items-center gap-4 min-w-0 flex-wrap">
+                <span className="inline-flex items-center gap-1"><Bot size={12} /> {task.agentId}</span>
+                <span className="inline-flex items-center gap-1"><Clock size={12} /> {formatTime(task.createdAt)}</span>
+                <span>Updated {timeAgo(task.updatedAt)}</span>
+                {task.parentTaskId && (
+                  <Link to={`/tasks/${task.parentTaskId}`} className="text-violet-400 hover:text-violet-300">
+                    ↑ parent
+                  </Link>
+                )}
+                {task.childTaskIds && task.childTaskIds.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-zinc-500">
+                    <GitBranch size={12} /> {task.childTaskIds.length} subtask{task.childTaskIds.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <p className="shrink-0">
+                Root task:{' '}
+                <Link to={`/tasks/${groupRootTaskId}`} className="text-violet-400 hover:text-violet-300">
+                  {groupRootTaskTitle}
                 </Link>
-              )}
-              {task.childTaskIds && task.childTaskIds.length > 0 && (
-                <span className="inline-flex items-center gap-1 text-zinc-500">
-                  <GitBranch size={12} /> {task.childTaskIds.length} subtask{task.childTaskIds.length > 1 ? 's' : ''}
-                </span>
-              )}
+              </p>
             </div>
           </div>
 
@@ -275,56 +283,6 @@ export function TaskDetailPage() {
         <TaskTodoQueue todos={task.todos} />
       </div>
 
-      {/* ── Agent Group ── */}
-      <div className="shrink-0 py-2 space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-zinc-500 flex items-center gap-1">
-            <GitBranch size={12} /> Agent Group
-          </p>
-          {isRootTask && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setShowCreateGroupDialog(true)}
-            >
-              Create Group Members
-            </Button>
-          )}
-        </div>
-
-        <p className="text-xs text-zinc-600">
-          Root task:{' '}
-          <Link to={`/tasks/${groupRootTaskId}`} className="text-violet-400 hover:text-violet-300">
-            {groupRootTaskTitle}
-          </Link>
-        </p>
-
-        {hasGroupMembers ? (
-          <div className="space-y-1">
-            {groupContext?.members.map((member) => (
-              <Link
-                key={member.taskId}
-                to={`/tasks/${member.taskId}`}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-900/40 hover:bg-accent/40 transition-colors"
-              >
-                <StatusBadge status={member.status} />
-                <span className="text-sm text-zinc-300 truncate flex-1">
-                  {member.title}
-                </span>
-                {member.taskId === groupRootTaskId ? (
-                  <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1">root</span>
-                ) : (
-                  <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1">member</span>
-                )}
-                <span className="text-[10px] text-zinc-600">{timeAgo(member.updatedAt)}</span>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-500 italic">No group members yet.</p>
-        )}
-      </div>
-
       {/* ── Interaction banner ── */}
       {interaction && (
         <div className="shrink-0 py-3">
@@ -337,6 +295,9 @@ export function TaskDetailPage() {
         <TabsList className="shrink-0 bg-zinc-900">
           <TabsTrigger value="conversation" className="gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" /> Conversation
+          </TabsTrigger>
+          <TabsTrigger value="cooperation" className="gap-1.5">
+            <GitBranch className="h-3.5 w-3.5" /> Cooperation
           </TabsTrigger>
           <TabsTrigger value="output" className="gap-1.5">
             <Terminal className="h-3.5 w-3.5" /> Output
@@ -354,6 +315,52 @@ export function TaskDetailPage() {
             <ConversationView taskId={task.taskId} className="flex-1 min-h-0" />
             <div className="shrink-0 pt-3">
               <PromptBar taskId={task.taskId} disabled={!isActive} />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cooperation" className="flex-1 min-h-0 overflow-hidden mt-0 pt-2">
+          <div className="h-full overflow-auto">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-zinc-500 flex items-center gap-1">
+                  <GitBranch size={12} /> Agent Group
+                </p>
+                {isRootTask && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowCreateGroupDialog(true)}
+                  >
+                    Create Group Members
+                  </Button>
+                )}
+              </div>
+
+              {hasGroupMembers ? (
+                <div className="space-y-1">
+                  {groupContext?.members.map((member) => (
+                    <Link
+                      key={member.taskId}
+                      to={`/tasks/${member.taskId}`}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-900/40 hover:bg-accent/40 transition-colors"
+                    >
+                      <StatusBadge status={member.status} />
+                      <span className="text-sm text-zinc-300 truncate flex-1">
+                        {member.title}
+                      </span>
+                      {member.taskId === groupRootTaskId ? (
+                        <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1">root</span>
+                      ) : (
+                        <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1">member</span>
+                      )}
+                      <span className="text-[10px] text-zinc-600">{timeAgo(member.updatedAt)}</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500 italic">No group members yet.</p>
+              )}
             </div>
           </div>
         </TabsContent>

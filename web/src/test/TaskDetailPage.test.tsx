@@ -197,16 +197,35 @@ describe('TaskDetailPage replay-only tabs', () => {
     mockTasks = [makeTask({ summary: 'Final summary from agent output.' })]
   })
 
-  it('defaults to conversation tab and renders summary tab trigger', async () => {
+  it('defaults to conversation tab and renders tab order with cooperation', async () => {
     render(<TaskDetailPage />)
 
+    const tabs = screen.getAllByRole('tab').map(tab => tab.textContent?.trim())
+    expect(tabs).toEqual([
+      'Conversation',
+      'Cooperation',
+      'Output',
+      'Events',
+      'Summary',
+    ])
     expect(screen.getByRole('tab', { name: /Conversation/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /Cooperation/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Output/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Events/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Summary/i })).toBeInTheDocument()
 
     expect(screen.getByTestId('conversation-view')).toBeInTheDocument()
     expect(screen.getByTestId('prompt-bar')).toBeInTheDocument()
+  })
+
+  it('always shows root task link in header metadata', async () => {
+    mockTasks = [makeTask({ taskId: 'task-1', title: 'Root Task' })]
+
+    render(<TaskDetailPage />)
+
+    const rootLink = screen.getByText('Root Task', { selector: 'a' })
+    expect(rootLink).toHaveAttribute('to', '/tasks/task-1')
+    expect(screen.getByText('Root task:')).toBeInTheDocument()
   })
 
   it('shows replay output panel in output tab', async () => {
@@ -332,8 +351,10 @@ describe('TaskDetailPage replay-only tabs', () => {
 
     render(<TaskDetailPage />)
 
+    expect(screen.queryByText('Agent Group')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /Cooperation/i }))
+
     expect(screen.getByText('Agent Group')).toBeInTheDocument()
-    expect(screen.getByText('Root task:')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create Group Members/i })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Create Group Members/i }))
@@ -368,7 +389,11 @@ describe('TaskDetailPage replay-only tabs', () => {
 
     render(<TaskDetailPage />)
 
+    fireEvent.click(screen.getByRole('tab', { name: /Cooperation/i }))
+
     expect(screen.getByText('Agent Group')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Create Group Members/i })).not.toBeInTheDocument()
+    const rootLinks = screen.getAllByText('Root Task', { selector: 'a' })
+    expect(rootLinks.some((link) => link.getAttribute('to') === '/tasks/task-1')).toBe(true)
   })
 })

@@ -70,7 +70,22 @@ vi.mock('@/components/ai-elements/reasoning', () => ({
 
 vi.mock('@/components/ai-elements/tool', () => ({
   Tool: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  ToolHeader: ({ toolName, state }: { toolName: string; state: string }) => <div>{`tool-header:${toolName}:${state}`}</div>,
+  ToolHeader: ({
+    toolName,
+    state,
+    title,
+    summary,
+  }: {
+    toolName: string
+    state: string
+    title?: string
+    summary?: string
+  }) => (
+    <div>
+      <div>{`tool-header:${title ?? toolName}:${state}`}</div>
+      {summary ? <div>{`tool-summary:${summary}`}</div> : null}
+    </div>
+  ),
   ToolContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ToolInput: ({ input }: { input: unknown }) => <pre>{`tool-input:${JSON.stringify(input)}`}</pre>,
   ToolOutput: ({ output }: { output: string }) => <pre>{`tool-output:${output}`}</pre>,
@@ -161,5 +176,157 @@ describe('ConversationView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
     expect(screen.getByText(longSystemText)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument()
+  })
+
+  it('renders friendly internal tool states for running, success, and failure', () => {
+    mockMessages = [
+      {
+        id: 'm-assistant-tools',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        parts: [
+          { kind: 'tool_call', toolCallId: 'tc-running', toolName: 'runCommand', arguments: { command: 'npm test' } },
+          { kind: 'tool_call', toolCallId: 'tc-success', toolName: 'readFile', arguments: { path: 'private:/README.md' } },
+          { kind: 'tool_call', toolCallId: 'tc-error', toolName: 'runCommand', arguments: { command: 'exit 1' } },
+        ],
+      },
+      {
+        id: 'm-tool-success',
+        role: 'tool',
+        timestamp: new Date().toISOString(),
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: 'tc-success',
+          toolName: 'readFile',
+          content: JSON.stringify({ path: 'private:/README.md', lineCount: 42 }),
+        }],
+      },
+      {
+        id: 'm-tool-error',
+        role: 'tool',
+        timestamp: new Date().toISOString(),
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: 'tc-error',
+          toolName: 'runCommand',
+          content: JSON.stringify({ error: 'Command failed', exitCode: 1 }),
+        }],
+      },
+    ]
+
+    render(<ConversationView taskId="task-1" />)
+
+    expect(screen.getByText('tool-header:Run Command:input-available')).toBeInTheDocument()
+    expect(screen.getByText('tool-header:Read File:output-available')).toBeInTheDocument()
+    expect(screen.getByText('tool-header:Run Command:output-error')).toBeInTheDocument()
+    expect(screen.getByText('tool-summary:"npm test"')).toBeInTheDocument()
+    expect(screen.getByText('tool-summary:private:/README.md')).toBeInTheDocument()
+    expect(screen.getByText('Result: Read private:/README.md (42 lines)')).toBeInTheDocument()
+  })
+
+  it('shows compact collapsed summary for web search without duplicating tool name', () => {
+    mockMessages = [
+      {
+        id: 'm-assistant-web-search',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        parts: [
+          {
+            kind: 'tool_call',
+            toolCallId: 'tc-web-search',
+            toolName: 'web_search',
+            arguments: { query: 'Qwen 3.5 发布时间 参数规模 性能跑分 能力特性 适用场景 相比主流模型优势' },
+          },
+        ],
+      },
+    ]
+
+    render(<ConversationView taskId="task-1" />)
+
+    expect(screen.getByText('tool-header:Web Search:input-available')).toBeInTheDocument()
+    expect(
+      screen.getByText('tool-summary:Qwen 3.5 发布时间 参数规模 性能跑分 能力特性 适用场景 相比主流模型优势')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/tool-summary:Web search/i)).not.toBeInTheDocument()
+  })
+
+  it('groups consecutive successful same internal tool calls in one assistant turn', () => {
+    mockMessages = [
+      {
+        id: 'm-assistant-grouped',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        parts: [
+          { kind: 'tool_call', toolCallId: 'tc-1', toolName: 'readFile', arguments: { path: 'private:/a.ts' } },
+          { kind: 'tool_call', toolCallId: 'tc-2', toolName: 'readFile', arguments: { path: 'private:/b.ts' } },
+          { kind: 'text', content: 'done' },
+        ],
+      },
+      {
+        id: 'm-tool-1',
+        role: 'tool',
+        timestamp: new Date().toISOString(),
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: 'tc-1',
+          toolName: 'readFile',
+          content: JSON.stringify({ path: 'private:/a.ts', lineCount: 10 }),
+        }],
+      },
+      {
+        id: 'm-tool-2',
+        role: 'tool',
+        timestamp: new Date().toISOString(),
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: 'tc-2',
+          toolName: 'readFile',
+          content: JSON.stringify({ path: 'private:/b.ts', lineCount: 12 }),
+        }],
+      },
+    ]
+
+    render(<ConversationView taskId="task-1" />)
+
+    expect(screen.getByText('tool-header:Read File × 2:output-available')).toBeInTheDocument()
+    expect(screen.getByText('tool-summary:private:/a.ts | private:/b.ts')).toBeInTheDocument()
+    expect(screen.getByText('Call 1')).toBeInTheDocument()
+    expect(screen.getByText('Call 2')).toBeInTheDocument()
+    expect(screen.getByText('done')).toBeInTheDocument()
+  })
+
+  it('falls back to generic rendering for legacy create_subtask tool names', () => {
+    mockMessages = [
+      {
+        id: 'm-assistant-legacy',
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+        parts: [
+          {
+            kind: 'tool_call',
+            toolCallId: 'tc-legacy',
+            toolName: 'create_subtask_agent_research',
+            arguments: { title: 'Legacy subtask title' }
+          },
+        ],
+      },
+      {
+        id: 'm-tool-legacy',
+        role: 'tool',
+        timestamp: new Date().toISOString(),
+        parts: [{
+          kind: 'tool_result',
+          toolCallId: 'tc-legacy',
+          toolName: 'create_subtask_agent_research',
+          content: JSON.stringify({ taskId: 'child-1', summary: 'legacy output' }),
+        }],
+      },
+    ]
+
+    render(<ConversationView taskId="task-1" />)
+
+    expect(screen.getByText('tool-header:create_subtask_agent_research:output-available')).toBeInTheDocument()
+    expect(screen.queryByText(/Agent: agent_research/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/View full details/i)).not.toBeInTheDocument()
   })
 })
