@@ -134,13 +134,17 @@ export class BailianLLMClient extends OpenAILLMClient {
   }
 
   async nativeWebSearch(request: NativeWebRequest): Promise<NativeWebResult> {
-    const model = this.#resolveModel(request.profile)
-    return this.#postChatCompletion({
-      model,
-      messages: [{ role: 'user', content: request.prompt }],
-      enable_search: true,
-      ...this.#maybeQwen3MaxSearchOptions(model),
-    }, request.signal)
+    // const model = this.#resolveModel(request.profile)
+    // return this.#postChatCompletion({
+    //   model,
+    //   messages: [{ role: 'user', content: request.prompt }],
+    //   enable_search: true,
+    //   ...this.#maybeQwen3MaxSearchOptions(model),
+    // }, request.signal)
+
+    // NOTE: The bailian doc recommends to use web_search web_extractor code_interpreter
+    // in one request for better performance, so we directly call responses endpoint here.
+    return this.nativeWebFetch(request)
   }
 
   async nativeWebFetch(request: NativeWebRequest): Promise<NativeWebResult> {
@@ -151,7 +155,7 @@ export class BailianLLMClient extends OpenAILLMClient {
       tools: [
         { type: 'web_search' },
         { type: 'web_extractor' },
-        // { type: 'code_interpreter' },
+        { type: 'code_interpreter' },
       ],
       enable_thinking: true,
     }, request.signal)

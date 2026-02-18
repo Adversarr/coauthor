@@ -14,7 +14,8 @@ import { DefaultSeedAgent } from '../../src/agents/implementations/defaultAgent.
 import { FakeLLMClient } from '../../src/infrastructure/llm/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../../src/infrastructure/tools/toolExecutor.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import type { LLMClient } from '../../src/core/ports/llmClient.js'
 
 async function createTestInfra(dir: string, opts?: { llm?: LLMClient }) {

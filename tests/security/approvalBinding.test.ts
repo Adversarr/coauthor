@@ -10,7 +10,8 @@ import { describe, expect, test, afterEach } from 'vitest'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 import { InteractionService } from '../../src/application/services/interactionService.js'
 import { TaskService } from '../../src/application/services/taskService.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { buildConfirmInteraction } from '../../src/agents/display/displayBuilder.js'
 
 // ---------------------------------------------------------------------------

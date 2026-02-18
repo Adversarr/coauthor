@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TaskService } from '../../src/application/services/taskService.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { createTodoUpdateTool } from '../../src/infrastructure/tools/todoUpdate.js'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 

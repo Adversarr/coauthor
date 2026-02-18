@@ -22,10 +22,11 @@ import { FakeLLMClient } from '../src/infrastructure/llm/fakeLLMClient.js'
 import { DefaultToolRegistry } from '../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../src/infrastructure/tools/toolExecutor.js'
 import { registerAgentGroupTools } from '../src/infrastructure/tools/agentGroupTools.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from './helpers/actorIds.js'
 import type { Agent, AgentOutput } from '../src/agents/core/agent.js'
-import type { EventStore } from '../src/core/index.js'
 import type { ArtifactStore } from '../src/core/ports/artifactStore.js'
+import type { EventStore } from '../src/core/ports/eventStore.js'
 import { InMemoryEventStore } from './helpers/inMemoryEventStore.js'
 
 const mockArtifactStore: ArtifactStore = {

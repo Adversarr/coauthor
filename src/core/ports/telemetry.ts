@@ -1,4 +1,4 @@
-export type TelemetryEvent =
+type TelemetryEvent =
   | {
       type: 'tool_result_persisted'
       payload: { taskId: string; toolCallId: string; toolName: string; isError: boolean }
@@ -21,4 +21,3 @@ export class ConsoleTelemetrySink implements TelemetrySink {
     console.log(JSON.stringify({ ts: Date.now(), ...event }))
   }
 }
-

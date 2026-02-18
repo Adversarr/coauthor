@@ -14,7 +14,7 @@ import type { Subscribable } from './subscribable.js'
 // Audit Log Entry Types
 // ============================================================================
 
-export const ToolCallRequestedPayloadSchema = z.object({
+const ToolCallRequestedPayloadSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   authorActorId: z.string().min(1),
@@ -23,7 +23,7 @@ export const ToolCallRequestedPayloadSchema = z.object({
   timestamp: z.number()
 })
 
-export const ToolCallCompletedPayloadSchema = z.object({
+const ToolCallCompletedPayloadSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   authorActorId: z.string().min(1),
@@ -34,8 +34,8 @@ export const ToolCallCompletedPayloadSchema = z.object({
   timestamp: z.number()
 })
 
-export type ToolCallRequestedPayload = z.infer<typeof ToolCallRequestedPayloadSchema>
-export type ToolCallCompletedPayload = z.infer<typeof ToolCallCompletedPayloadSchema>
+type ToolCallRequestedPayload = z.infer<typeof ToolCallRequestedPayloadSchema>
+type ToolCallCompletedPayload = z.infer<typeof ToolCallCompletedPayloadSchema>
 
 // ============================================================================
 // Audit Log Entry Union

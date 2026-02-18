@@ -33,7 +33,8 @@ async function waitForPendingInteraction(
 }
 import { DefaultToolRegistry } from '../src/infrastructure/tools/toolRegistry.js'
 import { DefaultToolExecutor } from '../src/infrastructure/tools/toolExecutor.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from './helpers/actorIds.js'
 import type { LLMClient, LLMResponse } from '../src/core/ports/llmClient.js'
 import type { ToolCallRequest, ToolResult, ToolExecutor } from '../src/core/ports/tool.js'
 

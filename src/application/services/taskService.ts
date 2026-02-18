@@ -2,8 +2,10 @@
 // Adapters should call services, not EventStore directly
 
 import { nanoid } from 'nanoid'
-import type { EventStore, StoredEvent, TaskPriority, ArtifactRef, TaskTodoItem, TaskTodoStatus } from '../../core/index.js'
+import type { ArtifactRef, TaskPriority, TaskTodoItem, TaskTodoStatus } from '../../core/entities/task.js'
 import { DEFAULT_USER_ACTOR_ID } from '../../core/entities/actor.js'
+import type { StoredEvent } from '../../core/events/events.js'
+import type { EventStore } from '../../core/ports/eventStore.js'
 import { runProjection } from '../projections/projector.js'
 
 // ============================================================================

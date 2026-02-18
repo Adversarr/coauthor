@@ -5,27 +5,23 @@
  * Tools are the mechanism by which Agents interact with the external world.
  */
 
-import { z } from 'zod'
 import type { ArtifactStore } from './artifactStore.js'
 
 // ============================================================================
 // Tool Call Types
 // ============================================================================
 
-export const ToolCallRequestSchema = z.object({
-  toolCallId: z.string().min(1),
-  toolName: z.string().min(1),
-  arguments: z.record(z.unknown())
-})
+export type ToolCallRequest = {
+  toolCallId: string
+  toolName: string
+  arguments: Record<string, unknown>
+}
 
-export const ToolResultSchema = z.object({
-  toolCallId: z.string().min(1),
-  output: z.unknown(),
-  isError: z.boolean()
-})
-
-export type ToolCallRequest = z.infer<typeof ToolCallRequestSchema>
-export type ToolResult = z.infer<typeof ToolResultSchema>
+export type ToolResult = {
+  toolCallId: string
+  output: unknown
+  isError: boolean
+}
 
 // ============================================================================
 // Tool Definition (for LLM)

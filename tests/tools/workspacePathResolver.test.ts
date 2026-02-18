@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import { TaskService } from '../../src/application/services/taskService.js'
 import { DefaultWorkspacePathResolver } from '../../src/infrastructure/workspace/workspacePathResolver.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 
 describe('DefaultWorkspacePathResolver', () => {

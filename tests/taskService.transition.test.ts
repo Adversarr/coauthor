@@ -1,9 +1,11 @@
 
 import { describe, expect, test } from 'vitest'
 import { TaskService } from '../src/application/services/taskService.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
-import { EventStore, DomainEvent, StoredEvent } from '../src/core/index.js'
+import { DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from './helpers/actorIds.js'
 import { Subject } from 'rxjs'
+import type { DomainEvent, StoredEvent } from '../src/core/events/events.js'
+import type { EventStore } from '../src/core/ports/eventStore.js'
 
 // Simple InMemory EventStore for testing
 class InMemoryEventStore implements EventStore {

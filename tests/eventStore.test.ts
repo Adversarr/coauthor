@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { JsonlEventStore } from '../src/infrastructure/persistence/jsonlEventStore.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from './helpers/actorIds.js'
 import type { StoredEvent } from '../src/core/events/events.js'
 
 describe('EventStore', () => {

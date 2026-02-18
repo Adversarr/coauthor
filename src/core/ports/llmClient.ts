@@ -31,7 +31,7 @@ export type LLMMessage =
 // LLM Response Types
 // ============================================================================
 
-export type LLMStopReason = 'end_turn' | 'tool_use' | 'max_tokens'
+type LLMStopReason = 'end_turn' | 'tool_use' | 'max_tokens'
 
 export type LLMResponse = {
   content?: string

@@ -1,5 +1,33 @@
 import { z } from 'zod'
-import { ArtifactRefSchema, TaskPrioritySchema, TaskTodoItemSchema } from '../entities/task.js'
+import { TaskPrioritySchema } from '../entities/task.js'
+
+const TaskTodoItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  status: z.enum(['pending', 'completed'])
+})
+
+const ArtifactRefSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('file_range'),
+    path: z.string().min(1),
+    lineStart: z.number().int().positive(),
+    lineEnd: z.number().int().positive()
+  }),
+  z.object({
+    kind: z.literal('outline_anchor'),
+    sectionId: z.string().min(1)
+  }),
+  z.object({
+    kind: z.literal('asset'),
+    assetId: z.string().min(1)
+  }),
+  z.object({
+    kind: z.literal('citation'),
+    citeKey: z.string().min(1)
+  })
+])
 
 // ============================================================================
 // Shared Payload Components
@@ -14,7 +42,7 @@ const withAuthor = {
 // Task Lifecycle Events
 // ============================================================================
 
-export const TaskCreatedPayloadSchema = z.object({
+const TaskCreatedPayloadSchema = z.object({
   taskId: z.string().min(1),
   title: z.string().min(1),
   intent: z.string().default(''),
@@ -25,49 +53,49 @@ export const TaskCreatedPayloadSchema = z.object({
   ...withAuthor
 })
 
-export const TaskStartedPayloadSchema = z.object({
+const TaskStartedPayloadSchema = z.object({
   taskId: z.string().min(1),
   agentId: z.string().min(1),
   ...withAuthor
 })
 
-export const TaskCompletedPayloadSchema = z.object({
+const TaskCompletedPayloadSchema = z.object({
   taskId: z.string().min(1),
   summary: z.string().optional(),
   ...withAuthor
 })
 
-export const TaskFailedPayloadSchema = z.object({
+const TaskFailedPayloadSchema = z.object({
   taskId: z.string().min(1),
   reason: z.string().min(1),
   ...withAuthor
 })
 
-export const TaskCanceledPayloadSchema = z.object({
+const TaskCanceledPayloadSchema = z.object({
   taskId: z.string().min(1),
   reason: z.string().optional(),
   ...withAuthor
 })
 
-export const TaskPausedPayloadSchema = z.object({
+const TaskPausedPayloadSchema = z.object({
   taskId: z.string().min(1),
   reason: z.string().optional(),
   ...withAuthor
 })
 
-export const TaskResumedPayloadSchema = z.object({
+const TaskResumedPayloadSchema = z.object({
   taskId: z.string().min(1),
   reason: z.string().optional(),
   ...withAuthor
 })
 
-export const TaskInstructionAddedPayloadSchema = z.object({
+const TaskInstructionAddedPayloadSchema = z.object({
   taskId: z.string().min(1),
   instruction: z.string().min(1),
   ...withAuthor
 })
 
-export const TaskTodoUpdatedPayloadSchema = z.object({
+const TaskTodoUpdatedPayloadSchema = z.object({
   taskId: z.string().min(1),
   todos: z.array(TaskTodoItemSchema),
   ...withAuthor
@@ -77,9 +105,9 @@ export const TaskTodoUpdatedPayloadSchema = z.object({
 // UIP (Universal Interaction Protocol) Events
 // ============================================================================
 
-export const InteractionKindSchema = z.enum(['Select', 'Confirm', 'Input', 'Composite'])
+const InteractionKindSchema = z.enum(['Select', 'Confirm', 'Input', 'Composite'])
 
-export const InteractionPurposeSchema = z.enum([
+const InteractionPurposeSchema = z.enum([
   'choose_strategy',
   'request_info',
   'confirm_risky_action',
@@ -87,16 +115,16 @@ export const InteractionPurposeSchema = z.enum([
   'generic'
 ])
 
-export const ContentKindSchema = z.enum(['PlainText', 'Json', 'Diff', 'Table'])
+const ContentKindSchema = z.enum(['PlainText', 'Json', 'Diff', 'Table'])
 
-export const InteractionOptionSchema = z.object({
+const InteractionOptionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   style: z.enum(['primary', 'danger', 'default']).optional(),
   isDefault: z.boolean().optional()
 })
 
-export const InteractionDisplaySchema = z.object({
+const InteractionDisplaySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   content: z.unknown().optional(),
@@ -105,12 +133,12 @@ export const InteractionDisplaySchema = z.object({
   metadata: z.record(z.string()).optional()
 })
 
-export const InteractionValidationSchema = z.object({
+const InteractionValidationSchema = z.object({
   regex: z.string().optional(),
   required: z.boolean().optional()
 })
 
-export const UserInteractionRequestedPayloadSchema = z.object({
+const UserInteractionRequestedPayloadSchema = z.object({
   interactionId: z.string().min(1),
   taskId: z.string().min(1),
   kind: InteractionKindSchema,
@@ -121,7 +149,7 @@ export const UserInteractionRequestedPayloadSchema = z.object({
   ...withAuthor
 })
 
-export const UserInteractionRespondedPayloadSchema = z.object({
+const UserInteractionRespondedPayloadSchema = z.object({
   interactionId: z.string().min(1),
   taskId: z.string().min(1),
   selectedOptionId: z.string().optional(),
@@ -131,47 +159,24 @@ export const UserInteractionRespondedPayloadSchema = z.object({
 })
 
 // ============================================================================
-// Event Type Enum
-// ============================================================================
-
-export const EventTypeSchema = z.enum([
-  // Task lifecycle
-  'TaskCreated',
-  'TaskStarted',
-  'TaskCompleted',
-  'TaskFailed',
-  'TaskCanceled',
-  'TaskPaused',
-  'TaskResumed',
-  'TaskInstructionAdded',
-  'TaskTodoUpdated',
-  // UIP
-  'UserInteractionRequested',
-  'UserInteractionResponded'
-])
-
-export type EventType = z.infer<typeof EventTypeSchema>
-
-// ============================================================================
 // Payload Type Exports
 // ============================================================================
 
-export type TaskCreatedPayload = z.infer<typeof TaskCreatedPayloadSchema>
-export type TaskStartedPayload = z.infer<typeof TaskStartedPayloadSchema>
-export type TaskCompletedPayload = z.infer<typeof TaskCompletedPayloadSchema>
-export type TaskFailedPayload = z.infer<typeof TaskFailedPayloadSchema>
-export type TaskCanceledPayload = z.infer<typeof TaskCanceledPayloadSchema>
-export type TaskPausedPayload = z.infer<typeof TaskPausedPayloadSchema>
-export type TaskResumedPayload = z.infer<typeof TaskResumedPayloadSchema>
-export type TaskInstructionAddedPayload = z.infer<typeof TaskInstructionAddedPayloadSchema>
-export type TaskTodoUpdatedPayload = z.infer<typeof TaskTodoUpdatedPayloadSchema>
+type TaskCreatedPayload = z.infer<typeof TaskCreatedPayloadSchema>
+type TaskStartedPayload = z.infer<typeof TaskStartedPayloadSchema>
+type TaskCompletedPayload = z.infer<typeof TaskCompletedPayloadSchema>
+type TaskFailedPayload = z.infer<typeof TaskFailedPayloadSchema>
+type TaskCanceledPayload = z.infer<typeof TaskCanceledPayloadSchema>
+type TaskPausedPayload = z.infer<typeof TaskPausedPayloadSchema>
+type TaskResumedPayload = z.infer<typeof TaskResumedPayloadSchema>
+type TaskInstructionAddedPayload = z.infer<typeof TaskInstructionAddedPayloadSchema>
+type TaskTodoUpdatedPayload = z.infer<typeof TaskTodoUpdatedPayloadSchema>
 export type UserInteractionRequestedPayload = z.infer<typeof UserInteractionRequestedPayloadSchema>
 export type UserInteractionRespondedPayload = z.infer<typeof UserInteractionRespondedPayloadSchema>
 
 // UIP sub-types
 export type InteractionKind = z.infer<typeof InteractionKindSchema>
 export type InteractionPurpose = z.infer<typeof InteractionPurposeSchema>
-export type ContentKind = z.infer<typeof ContentKindSchema>
 export type InteractionOption = z.infer<typeof InteractionOptionSchema>
 export type InteractionDisplay = z.infer<typeof InteractionDisplaySchema>
 export type InteractionValidation = z.infer<typeof InteractionValidationSchema>
@@ -213,7 +218,7 @@ export type StoredEvent = DomainEvent & {
 // ============================================================================
 
 // Runtime validation schema for events - ensures type safety on deserialization
-export const DomainEventSchema = z.discriminatedUnion('type', [
+const DomainEventSchema = z.discriminatedUnion('type', [
   // Task lifecycle
   z.object({ type: z.literal('TaskCreated'), payload: TaskCreatedPayloadSchema }),
   z.object({ type: z.literal('TaskStarted'), payload: TaskStartedPayloadSchema }),

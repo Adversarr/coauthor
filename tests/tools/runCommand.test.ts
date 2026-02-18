@@ -3,7 +3,8 @@ import { runCommandTool } from '../../src/infrastructure/tools/runCommand.js'
 import { EventEmitter } from 'node:events'
 import { TaskService } from '../../src/application/services/taskService.js'
 import { DefaultWorkspacePathResolver } from '../../src/infrastructure/workspace/workspacePathResolver.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 
 // Helper: create a minimal mock ChildProcess (EventEmitter with .kill())

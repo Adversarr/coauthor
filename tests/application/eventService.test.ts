@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EventService } from '../../src/application/services/eventService.js'
-import type { EventStore, StoredEvent } from '../../src/core/index.js'
+import type { StoredEvent } from '../../src/core/events/events.js'
+import type { EventStore } from '../../src/core/ports/eventStore.js'
 
 describe('EventService', () => {
   const mockEvents: StoredEvent[] = [

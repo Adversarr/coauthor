@@ -22,7 +22,7 @@ import type { LLMMessage } from './llmClient.js'
  * Schema for validating stored LLM messages.
  * Matches the LLMMessage union type from llmClient.ts.
  */
-export const LLMMessageSchema = z.discriminatedUnion('role', [
+const LLMMessageSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('system'), content: z.string() }),
   z.object({ role: z.literal('user'), content: z.string() }),
   z.object({
@@ -52,7 +52,7 @@ export const ConversationEntrySchema = z.object({
   message: LLMMessageSchema
 })
 
-export type ConversationEntry = z.infer<typeof ConversationEntrySchema>
+type ConversationEntry = z.infer<typeof ConversationEntrySchema>
 
 /**
  * Stored conversation entry with persistence metadata.

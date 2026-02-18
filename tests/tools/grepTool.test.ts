@@ -4,7 +4,8 @@ import { grepTool } from '../../src/infrastructure/tools/grepTool.js'
 import { MemFsArtifactStore } from '../../src/infrastructure/filesystem/memFsArtifactStore.js'
 import { TaskService } from '../../src/application/services/taskService.js'
 import { DefaultWorkspacePathResolver } from '../../src/infrastructure/workspace/workspacePathResolver.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 
 // Mock execFile (B2: switched from exec to execFile for safety)

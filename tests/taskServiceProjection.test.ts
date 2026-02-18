@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { JsonlEventStore } from '../src/infrastructure/persistence/jsonlEventStore.js'
 import { TaskService } from '../src/application/services/taskService.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from './helpers/actorIds.js'
 
 describe('TaskService projection checkpoint', () => {
   test('listTasks uses and advances projection cursor', async () => {

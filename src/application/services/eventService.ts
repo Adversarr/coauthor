@@ -4,7 +4,8 @@
  * Encapsulates event replay and query use cases.
  */
 
-import type { EventStore, StoredEvent } from '../../core/index.js'
+import type { StoredEvent } from '../../core/events/events.js'
+import type { EventStore } from '../../core/ports/eventStore.js'
 
 export class EventService {
   readonly #store: EventStore

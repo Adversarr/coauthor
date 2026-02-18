@@ -7,7 +7,8 @@ import { editFileTool } from '../../src/infrastructure/tools/editFile.js'
 import { listFilesTool } from '../../src/infrastructure/tools/listFiles.js'
 import { globTool } from '../../src/infrastructure/tools/globTool.js'
 import { DefaultWorkspacePathResolver } from '../../src/infrastructure/workspace/workspacePathResolver.js'
-import { DEFAULT_AGENT_ACTOR_ID, DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_USER_ACTOR_ID } from '../../src/core/entities/actor.js'
+import { DEFAULT_AGENT_ACTOR_ID } from '../helpers/actorIds.js'
 import { InMemoryEventStore } from '../helpers/inMemoryEventStore.js'
 
 describe('Scoped workspace tool behavior', () => {

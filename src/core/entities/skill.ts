@@ -10,7 +10,7 @@
  * Metadata visible before activation.
  * This is intentionally lightweight for progressive disclosure.
  */
-export type SkillMetadata = {
+type SkillMetadata = {
   /**
    * Stable skill identifier used by runtime/tool calls.
    * Derived from frontmatter `name` and sanitized for safety.
