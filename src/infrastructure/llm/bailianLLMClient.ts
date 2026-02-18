@@ -26,6 +26,9 @@ function parseUnknownText(value: unknown): string {
   }
 
   const record = value as Record<string, unknown>
+  if (typeof record.output_text === 'string') {
+    return record.output_text.trim()
+  }
   if (typeof record.text === 'string') {
     return record.text.trim()
   }
@@ -34,6 +37,9 @@ function parseUnknownText(value: unknown): string {
   }
   if (Array.isArray(record.content)) {
     return parseUnknownText(record.content)
+  }
+  if (Array.isArray(record.output)) {
+    return parseUnknownText(record.output)
   }
 
   return ''
@@ -99,23 +105,40 @@ export class BailianLLMClient extends OpenAILLMClient {
   }
 
   async nativeWebSearch(request: NativeWebRequest): Promise<NativeWebResult> {
+    const model = this.#resolveModel(request.profile)
     return this.#postChatCompletion({
-      model: this.#resolveModel(request.profile),
+      model,
       messages: [{ role: 'user', content: request.prompt }],
       enable_search: true,
+      ...this.#maybeQwen3MaxSearchOptions(model),
     }, request.signal)
   }
 
   async nativeWebFetch(request: NativeWebRequest): Promise<NativeWebResult> {
-    return this.#postChatCompletion({
-      model: this.#resolveModel(request.profile),
-      messages: [{ role: 'user', content: request.prompt }],
-      enable_search: true,
-      search_options: {
-        forced_search: true,
-        search_strategy: 'agent_max',
-      },
+    const model = this.#resolveModel(request.profile)
+    return this.#postResponses({
+      model,
+      input: request.prompt,
+      tools: [
+        { type: 'web_search' },
+        { type: 'web_extractor' },
+        { type: 'code_interpreter' },
+      ],
+      enable_thinking: true,
     }, request.signal)
+  }
+
+  #maybeQwen3MaxSearchOptions(model: string): Record<string, unknown> {
+    // Bailian docs: for qwen3-max* in non-thinking mode, search_strategy must be "agent".
+    const lowerModel = model.toLowerCase()
+    if (!lowerModel.startsWith('qwen3-max')) {
+      return {}
+    }
+    return {
+      search_options: {
+        search_strategy: 'agent',
+      },
+    }
   }
 
   #resolveModel(profileId: LLMProfile): string {
@@ -160,6 +183,54 @@ export class BailianLLMClient extends OpenAILLMClient {
     }
 
     const content = extractChatCompletionText(parsed)
+    if (content.length === 0) {
+      return {
+        status: 'error',
+        provider: 'bailian',
+        message: 'Bailian web response did not contain readable content',
+      }
+    }
+
+    return {
+      status: 'success',
+      provider: 'bailian',
+      content,
+    }
+  }
+
+  async #postResponses(payload: Record<string, unknown>, signal?: AbortSignal): Promise<NativeWebResult> {
+    const response = await fetch(`${this.#baseURL}/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.#apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal,
+    })
+
+    if (!response.ok) {
+      const raw = await response.text().catch(() => '')
+      return {
+        status: 'error',
+        provider: 'bailian',
+        statusCode: response.status,
+        message: toErrorMessage(response.status, raw),
+      }
+    }
+
+    let parsed: unknown
+    try {
+      parsed = await response.json()
+    } catch (error) {
+      return {
+        status: 'error',
+        provider: 'bailian',
+        message: `Failed to parse Bailian JSON response: ${error instanceof Error ? error.message : String(error)}`,
+      }
+    }
+
+    const content = parseUnknownText(parsed)
     if (content.length === 0) {
       return {
         status: 'error',

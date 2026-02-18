@@ -88,10 +88,43 @@ describe('webSubagentClient', () => {
     })
   })
 
-  test('builds Bailian fetch payload with forced search options', async () => {
+  test('adds qwen3-max search strategy in non-thinking native web search', async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({
-        choices: [{ message: { content: 'bailian fetch content' } }],
+        choices: [{ message: { content: 'bailian search content' } }],
+      }), { status: 200 })
+    })
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const llm = new BailianLLMClient({
+      apiKey: 'bailian-key',
+      profileCatalog: createProfileCatalog('qwen3-max-2026-01-23'),
+    })
+
+    const result = await executeWebSearchSubagent({
+      llm,
+      profile: 'research_web',
+      prompt: 'latest AI updates',
+    })
+
+    expect(result.status).toBe('success')
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const payload = JSON.parse(String(init.body))
+    expect(payload).toEqual({
+      model: 'qwen3-max-2026-01-23',
+      messages: [{ role: 'user', content: 'latest AI updates' }],
+      enable_search: true,
+      search_options: {
+        search_strategy: 'agent',
+      },
+    })
+  })
+
+  test('builds Bailian fetch payload with responses web extractor tools', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({
+        output_text: 'bailian fetch content',
       }), { status: 200 })
     })
     globalThis.fetch = fetchMock as unknown as typeof fetch
@@ -109,16 +142,18 @@ describe('webSubagentClient', () => {
 
     expect(result.status).toBe('success')
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/responses')
     const payload = JSON.parse(String(init.body))
     expect(payload).toEqual({
       model: 'qwen-web',
-      messages: [{ role: 'user', content: 'Summarize https://example.com/page' }],
-      enable_search: true,
-      search_options: {
-        forced_search: true,
-        search_strategy: 'agent_max',
-      },
+      input: 'Summarize https://example.com/page',
+      tools: [
+        { type: 'web_search' },
+        { type: 'web_extractor' },
+        { type: 'code_interpreter' },
+      ],
+      enable_thinking: true,
     })
   })
 

@@ -71,7 +71,7 @@ describe('web_fetch tool', () => {
   test('returns successful content for Bailian native fetch', async () => {
     globalThis.fetch = (async () => {
       return new Response(JSON.stringify({
-        choices: [{ message: { content: 'fetched page summary' } }],
+        output_text: 'fetched page summary',
       }), { status: 200 })
     }) as typeof fetch
 
