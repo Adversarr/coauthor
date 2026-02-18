@@ -23,6 +23,7 @@
     "@ai-sdk/openai": "^3.0.25",
     "@ai-sdk/openai-compatible": "^2.0.26",
     "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/glob": "^8.1.0",
     "@types/minimatch": "^5.1.2",
     "ai": "^6.0.69",
