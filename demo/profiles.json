@@ -26,6 +26,27 @@
     }
   },
   "mcp": {
-    "servers": {}
+    "servers": {
+      "arxiv": {
+        "enabled": true,
+        "transport": {
+          "type": "stdio",
+          "command": "uv",
+          "args": ["tool", "run", "arxiv-mcp-server"],
+          "env": {
+            "ARXIV_STORAGE_PATH": "./.tmp/arxiv_storage"
+          }
+        },
+        "startupTimeoutMs": 30000,
+        "toolTimeoutMs": 60000,
+        "includeTools": [],
+        "excludeTools": [],
+        "risk": {
+          "default": "risky",
+          "safeReadOnlyHint": false,
+          "safeTools": ["search_papers", "list_papers", "read_paper"]
+        }
+      }
+    }
   }
 }
