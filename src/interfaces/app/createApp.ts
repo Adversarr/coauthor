@@ -7,6 +7,7 @@ import type { ConversationStore } from '../../core/ports/conversationStore.js'
 import type { LLMClient } from '../../core/ports/llmClient.js'
 import type { UiBus } from '../../core/ports/uiBus.js'
 import type { SkillSessionManager } from '../../core/ports/skill.js'
+import type { Subscription } from '../../core/ports/subscribable.js'
 import type { Agent } from '../../agents/core/agent.js'
 import { RuntimeManager } from '../../agents/orchestration/runtimeManager.js'
 import { JsonlEventStore } from '../../infrastructure/persistence/jsonlEventStore.js'
@@ -87,6 +88,9 @@ export type App = {
   
   // Agent
   runtimeManager: RuntimeManager
+
+  // Lifecycle
+  dispose: () => Promise<void>
 }
 
 // ============================================================================
@@ -186,7 +190,7 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
   }
 
   const uiBus = createUiBus()
-  auditLog.entries$.subscribe((entry) => {
+  const auditEntrySubscription: Subscription = auditLog.entries$.subscribe((entry) => {
     uiBus.emit({ type: 'audit_entry', payload: entry })
   })
 
@@ -277,6 +281,17 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
     runtimeManager
   })
 
+  let disposed = false
+  const dispose = async (): Promise<void> => {
+    if (disposed) return
+    disposed = true
+
+    runtimeManager.stop()
+    workspaceDirectoryProvisioner.stop()
+    auditEntrySubscription.unsubscribe()
+    await mcpToolExtension?.stop()
+  }
+
   return {
     baseDir,
     storePath: eventsPath,
@@ -300,6 +315,8 @@ export async function createApp(opts: CreateAppOptions): Promise<App> {
     auditService,
     contextBuilder,
     // Agent
-    runtimeManager
+    runtimeManager,
+    // Lifecycle
+    dispose
   }
 }

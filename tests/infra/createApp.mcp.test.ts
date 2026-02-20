@@ -50,8 +50,12 @@ describe('createApp MCP wiring', () => {
       config,
     })
 
-    expect(app.toolRegistry.get('readFile')).toBeDefined()
-    expect(app.toolRegistry.get('runCommand')).toBeDefined()
-    expect(app.mcpToolExtension).not.toBeNull()
+    try {
+      expect(app.toolRegistry.get('readFile')).toBeDefined()
+      expect(app.toolRegistry.get('runCommand')).toBeDefined()
+      expect(app.mcpToolExtension).not.toBeNull()
+    } finally {
+      await app.dispose()
+    }
   })
 })

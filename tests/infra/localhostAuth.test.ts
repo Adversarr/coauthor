@@ -32,6 +32,7 @@ describeLocalhostAuth('Localhost Auth Bypass', () => {
 
   afterEach(async () => {
     await server.stop()
+    await app.dispose()
     rmSync(tmpDir, { recursive: true, force: true })
   })
 

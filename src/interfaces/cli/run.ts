@@ -98,7 +98,11 @@ export async function runCli(opts: {
     } else {
       io.stdout(`Web UI: http://${addr.host}:${addr.port}\n`)
     }
-    cleanup = () => { removeLockFile(lockPath); server.stop().catch(() => {}) }
+    cleanup = () => {
+      removeLockFile(lockPath)
+      server.stop().catch(() => {})
+      localApp.dispose().catch(() => {})
+    }
     process.on('SIGINT', () => { cleanup?.(); process.exit(0) })
     process.on('SIGTERM', () => { cleanup?.(); process.exit(0) })
     return { started: true, url: `http://${addr.host}:${addr.port}`, token: authToken }
@@ -228,9 +232,15 @@ export async function runCli(opts: {
   try {
     await parser.parseAsync()
     cleanup?.()
+    if (app) {
+      await app.dispose()
+    }
     return commandExitCode
   } catch (err) {
     cleanup?.()
+    if (app) {
+      await app.dispose()
+    }
     io.stderr(`${err instanceof Error ? err.message : String(err)}\n`)
     return 1
   }

@@ -300,6 +300,13 @@ export async function createRemoteApp(opts: CreateRemoteAppOptions): Promise<App
   // Connect WebSocket
   ws.connect()
 
+  let disposed = false
+  const dispose = async (): Promise<void> => {
+    if (disposed) return
+    disposed = true
+    ws.disconnect()
+  }
+
   // Placeholder stubs for fields that client mode doesn't use
   const noop = () => { throw new Error('Not available in client mode') }
   const noopAsync = async () => { throw new Error('Not available in client mode') }
@@ -335,5 +342,6 @@ export async function createRemoteApp(opts: CreateRemoteAppOptions): Promise<App
     auditService,
     contextBuilder: { build: noopAsync } as unknown as App['contextBuilder'],
     runtimeManager,
+    dispose,
   }
 }
