@@ -68,4 +68,17 @@ describe('MemFsArtifactStore', () => {
     // memfs uses absolute paths, so /outside is outside /workspace
     await expect(store.readFile('../outside')).rejects.toThrow('Access denied')
   })
+
+  it('should glob files with memfs fs adapter', async () => {
+    vol.fromJSON({
+      'src/a.ts': 'a',
+      'src/b.ts': 'b',
+      'src/c.js': 'c',
+      'src/skip/ignored.ts': 'ignored'
+    }, baseDir)
+
+    const matches = await store.glob('src/**/*.ts', { ignore: ['src/skip/**'] })
+    expect(matches).toHaveLength(2)
+    expect(matches).toEqual(expect.arrayContaining(['src/a.ts', 'src/b.ts']))
+  })
 })

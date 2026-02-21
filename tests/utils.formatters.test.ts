@@ -149,6 +149,19 @@ describe('toolFormatters.runCommand', () => {
   it('returns null for invalid output', () => {
     expect(toolFormatters.runCommand({})).toBeNull()
   })
+
+  it('handles malformed stdout/stderr payloads without throwing', () => {
+    expect(() => toolFormatters.runCommand({
+      exitCode: 0,
+      stdout: { lines: ['not-a-string'] },
+      stderr: 123,
+    })).not.toThrow()
+    expect(toolFormatters.runCommand({
+      exitCode: 0,
+      stdout: { lines: ['not-a-string'] },
+      stderr: 123,
+    })).toBe('Success')
+  })
 })
 
 describe('toolFormatters.createSubtasks', () => {
@@ -293,6 +306,17 @@ describe('formatToolInput', () => {
     })).toBe('Update todos (1 pending, 1 completed)')
   })
 
+  it('counts completed todos safely when payload contains malformed items', () => {
+    expect(formatToolInput('TodoUpdate', {
+      todos: [
+        { title: 'One', status: 'completed' },
+        null,
+        'bad-entry',
+        { title: 'Two', status: 'pending' },
+      ]
+    })).toBe('Update todos (3 pending, 1 completed)')
+  })
+
   it('formats legacy create_subtask_* input for historical messages', () => {
     expect(formatToolInput('create_subtask_coder', { title: 'Implement feature' }))
       .toBe('Subtask (coder): Implement feature')
@@ -303,5 +327,10 @@ describe('formatToolInput', () => {
   it('fallbacks to default formatting for unknown tools', () => {
     expect(formatToolInput('unknownTool', { some: 'arg' }))
       .toBe('{\n  "some": "arg"\n}')
+  })
+
+  it('falls back safely when known tool input is malformed', () => {
+    expect(formatToolInput('readFile', { path: 123 }))
+      .toBe('{\n  "path": 123\n}')
   })
 })

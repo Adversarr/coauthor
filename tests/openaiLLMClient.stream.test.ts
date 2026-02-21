@@ -125,4 +125,44 @@ describe('OpenAILLMClient.stream', () => {
     expect(response.content).toBe('answer')
     expect(response.stopReason).toBe('end_turn')
   })
+
+  it('should handle direct tool-call stream parts and unknown types', async () => {
+    const { OpenAILLMClient } = await import('../src/infrastructure/llm/openaiLLMClient.js')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    streamTextMock.mockResolvedValueOnce({
+      fullStream: createStreamParts([
+        { type: 'tool-call', toolCallId: 'call_1', toolName: 'myTool', input: '{"a":1}' },
+        { type: 'weird-part', payload: true },
+        { type: 'finish', finishReason: 'tool-calls' },
+      ]),
+    })
+
+    const client = new OpenAILLMClient({
+      apiKey: 'test',
+      profileCatalog: defaultCatalog(),
+    })
+
+    const chunks: Array<Record<string, unknown>> = []
+    const response = await client.stream({
+      profile: 'fast',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, (chunk) => {
+      chunks.push(chunk as unknown as Record<string, unknown>)
+    })
+
+    expect(chunks).toEqual([
+      { type: 'tool_call_start', toolCallId: 'call_1', toolName: 'myTool' },
+      { type: 'tool_call_delta', toolCallId: 'call_1', argumentsDelta: '{"a":1}' },
+      { type: 'tool_call_end', toolCallId: 'call_1' },
+      { type: 'done', stopReason: 'tool_use' },
+    ])
+
+    expect(response.stopReason).toBe('tool_use')
+    expect(response.toolCalls).toEqual([
+      { toolCallId: 'call_1', toolName: 'myTool', arguments: { a: 1 } },
+    ])
+    expect(warnSpy).toHaveBeenCalledWith('Unknown stream part type: weird-part')
+    warnSpy.mockRestore()
+  })
 })

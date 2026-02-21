@@ -38,6 +38,24 @@ describe('DisplayBuilder', () => {
       expect(display.content).toContain('CWD: /tmp')
     })
 
+    it('should keep runCommand display stable for malformed argument types', () => {
+      const toolCall: ToolCallRequest = {
+        toolCallId: '1',
+        toolName: 'runCommand',
+        arguments: {
+          command: { unexpected: true },
+          cwd: 42,
+          timeout: '5000'
+        }
+      }
+
+      const display = buildRiskyToolDisplay(toolCall)
+      expect(display.contentKind).toBe('PlainText')
+      expect(display.content).toContain('Command: (unknown command)')
+      expect(display.content).toContain('CWD: (workspace root)')
+      expect(display.content).toContain('Timeout: 30000ms')
+    })
+
     it('should fallback to JSON for unknown tools', () => {
       const toolCall: ToolCallRequest = {
         toolCallId: '1',

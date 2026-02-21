@@ -1,7 +1,10 @@
 import { fs } from 'memfs'
 import { resolve, sep } from 'node:path'
 import { glob } from 'glob'
+import type { GlobOptions } from 'glob'
 import type { ArtifactStore } from '../../core/ports/artifactStore.js'
+
+type GlobFsAdapter = NonNullable<GlobOptions['fs']>
 
 export class MemFsArtifactStore implements ArtifactStore {
   readonly #baseDir: string
@@ -38,9 +41,15 @@ export class MemFsArtifactStore implements ArtifactStore {
 
   async listDir(path: string): Promise<string[]> {
     const resolved = this._resolve(path)
-    // memfs readdir returns generic types, casting to match
     const entries = await fs.promises.readdir(resolved, { withFileTypes: true })
-    return entries.map((e: any) => e.name.toString())
+    return entries.map((entry) => {
+      if (typeof entry === 'string') return entry
+      if (Buffer.isBuffer(entry)) return entry.toString()
+      if (entry && typeof entry === 'object' && 'name' in entry) {
+        return String(entry.name)
+      }
+      return String(entry)
+    })
   }
 
   async writeFile(path: string, content: string): Promise<void> {
@@ -67,9 +76,10 @@ export class MemFsArtifactStore implements ArtifactStore {
     // memfs volume is at this.#baseDir usually if configured right, or root.
     // memfs.fs usually works on a global volume or we need to pass the volume?
     // glob accepts 'fs' option.
+    const globFs = fs as unknown as GlobFsAdapter
     const matches = await glob(pattern, {
       cwd: this.#baseDir,
-      fs: fs as any, // Cast to any because types might mismatch slightly but runtime is compatible
+      fs: globFs,
       ignore: options?.ignore
     })
     return matches

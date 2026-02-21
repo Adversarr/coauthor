@@ -3,6 +3,39 @@
  * Used by TUI and potentially browser interfaces.
  */
 
+type UnknownRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+function getStringField(value: UnknownRecord, key: string): string | undefined {
+  const field = value[key]
+  return typeof field === 'string' ? field : undefined
+}
+
+function getNumberField(value: UnknownRecord, key: string): number | undefined {
+  const field = value[key]
+  return typeof field === 'number' ? field : undefined
+}
+
+function getBooleanField(value: UnknownRecord, key: string): boolean | undefined {
+  const field = value[key]
+  return typeof field === 'boolean' ? field : undefined
+}
+
+function getRecordField(value: UnknownRecord, key: string): UnknownRecord | undefined {
+  const field = value[key]
+  return isRecord(field) ? field : undefined
+}
+
+function getStringArrayField(value: UnknownRecord, key: string): string[] | undefined {
+  const field = value[key]
+  if (!Array.isArray(field)) return undefined
+  if (!field.every((item) => typeof item === 'string')) return undefined
+  return field
+}
+
 function truncateLongString(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value
   const suffix = '...(truncated)'
@@ -27,127 +60,160 @@ export function formatToolPayload(value: unknown, maxLength: number): string {
   }
 }
 
-export const toolFormatters: Record<string, (output: any) => string | null> = {
-  readFile: (output: any) => {
-    if (output && typeof output.path === 'string' && typeof output.lineCount === 'number') {
-      return `Read ${output.path} (${output.lineCount} lines)`
+export const toolFormatters: Record<string, (output: unknown) => string | null> = {
+  readFile: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const path = getStringField(output, 'path')
+    const lineCount = getNumberField(output, 'lineCount')
+    if (path && typeof lineCount === 'number') {
+      return `Read ${path} (${lineCount} lines)`
     }
     return null
   },
-  listFiles: (output: any) => {
-    if (output && typeof output.path === 'string' && typeof output.count === 'number') {
-      return `List ${output.path} (${output.count} entries)`
+  listFiles: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const path = getStringField(output, 'path')
+    const count = getNumberField(output, 'count')
+    if (path && typeof count === 'number') {
+      return `List ${path} (${count} entries)`
     }
-    if (output && typeof output.content === 'string' && typeof output.count === 'number') {
-      const match = output.content.match(/Directory listing for ([^:\n]+):/)
+    const content = getStringField(output, 'content')
+    if (content && typeof count === 'number') {
+      const match = content.match(/Directory listing for ([^:\n]+):/)
       const inferredPath = match ? match[1] : undefined
       if (inferredPath) {
-        return `List ${inferredPath} (${output.count} entries)`
+        return `List ${inferredPath} (${count} entries)`
       }
-      return `List ${output.count} entries`
+      return `List ${count} entries`
     }
     return null
   },
-  ls: (output: any) => {
+  ls: (output: unknown) => {
     // Alias for listFiles formatter
     if (Array.isArray(output)) return `List ${output.length} entries`
     return null
   },
-  globTool: (output: any) => {
+  globTool: (output: unknown) => {
     // Tool returns { matches: string[], count: number, content: string }
-    if (output && Array.isArray(output.matches) && typeof output.count === 'number') {
-      return `Found ${output.count} matching files`
+    if (!isRecord(output)) return null
+    const matches = output.matches
+    const count = getNumberField(output, 'count')
+    if (Array.isArray(matches) && typeof count === 'number') {
+      return `Found ${count} matching files`
     }
     return null
   },
-  grepTool: (output: any) => {
+  grepTool: (output: unknown) => {
     // Tool returns { content: string, count: number, strategy: string }
-    if (output && typeof output.content === 'string' && typeof output.count === 'number') {
-      return `Found ${output.count} matches`
+    if (!isRecord(output)) return null
+    const content = getStringField(output, 'content')
+    const count = getNumberField(output, 'count')
+    if (content && typeof count === 'number') {
+      return `Found ${count} matches`
     }
     return null
   },
-  web_search: (output: any) => {
-    if (
-      output
-      && typeof output.provider === 'string'
-      && typeof output.query === 'string'
-      && typeof output.content === 'string'
-    ) {
-      return `Web search (${output.provider}): ${output.query}`
+  web_search: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const provider = getStringField(output, 'provider')
+    const query = getStringField(output, 'query')
+    const content = getStringField(output, 'content')
+    if (provider && query && content) {
+      return `Web search (${provider}): ${query}`
     }
     return null
   },
-  web_fetch: (output: any) => {
-    if (
-      output
-      && typeof output.provider === 'string'
-      && Array.isArray(output.urls)
-      && typeof output.content === 'string'
-    ) {
-      return `Web fetch (${output.provider}): ${output.urls.length} URL(s)`
+  web_fetch: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const provider = getStringField(output, 'provider')
+    const urls = output.urls
+    const content = getStringField(output, 'content')
+    if (provider && Array.isArray(urls) && content) {
+      return `Web fetch (${provider}): ${urls.length} URL(s)`
     }
     return null
   },
-  search: (output: any) => {
+  search: (output: unknown) => {
     // Alias for grepTool - Tool returns { content: string, count: number, strategy: string }
-    if (output && typeof output.count === 'number') {
-      return `Found ${output.count} matches`
+    if (!isRecord(output)) return null
+    const count = getNumberField(output, 'count')
+    if (typeof count === 'number') {
+      return `Found ${count} matches`
     }
     return null
   },
-  runCommand: (output: any) => {
-    if (output && typeof output.exitCode === 'number') {
-      const status = output.exitCode === 0 ? 'Success' : `Exit ${output.exitCode}`
-      const preview = output.stdout ? output.stdout.trim().slice(0, 50) : (output.stderr ? output.stderr.trim().slice(0, 50) : '')
+  runCommand: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const exitCode = getNumberField(output, 'exitCode')
+    if (typeof exitCode === 'number') {
+      const status = exitCode === 0 ? 'Success' : `Exit ${exitCode}`
+      const stdout = getStringField(output, 'stdout')
+      const stderr = getStringField(output, 'stderr')
+      const preview = stdout
+        ? stdout.trim().slice(0, 50)
+        : (stderr ? stderr.trim().slice(0, 50) : '')
       const suffix = preview ? ` | ${preview.replace(/\n/g, ' ')}...` : ''
       return `${status}${suffix}`
     }
     return null
   },
-  editFile: (output: any) => {
+  editFile: (output: unknown) => {
     if (typeof output === 'string') return output
-    if (output && output.success && typeof output.path === 'string') {
-      const action = output.action === 'created' ? 'Created' : 'Edited'
-      const strategy = output.strategy ? ` (${output.strategy})` : ''
-      return `${action} ${output.path}${strategy}`
-    }
-    return null
+    if (!isRecord(output) || !output.success) return null
+    const path = getStringField(output, 'path')
+    if (typeof path !== 'string') return null
+    const action = output.action === 'created' ? 'Created' : 'Edited'
+    const strategyValue = getStringField(output, 'strategy')
+    const strategy = strategyValue ? ` (${strategyValue})` : ''
+    return `${action} ${path}${strategy}`
   },
-  createSubtasks: (output: any) => {
-    if (!output || !Array.isArray(output.tasks)) return null
+  createSubtasks: (output: unknown) => {
+    if (!isRecord(output) || !Array.isArray(output.tasks)) return null
     const total = output.tasks.length
-    const summary = output.summary
-    if (summary && typeof summary.success === 'number' && typeof summary.error === 'number' && typeof summary.cancel === 'number') {
-      return `Subtasks: ${summary.success} success, ${summary.error} error, ${summary.cancel} canceled`
+    const summary = getRecordField(output, 'summary')
+    if (summary) {
+      const success = getNumberField(summary, 'success')
+      const error = getNumberField(summary, 'error')
+      const cancel = getNumberField(summary, 'cancel')
+      if (typeof success === 'number' && typeof error === 'number' && typeof cancel === 'number') {
+        return `Subtasks: ${success} success, ${error} error, ${cancel} canceled`
+      }
     }
     return `Created ${total} subtasks`
   },
-  listSubtask: (output: any) => {
-    if (output && typeof output.total === 'number') {
-      return `List ${output.total} sub-agents`
+  listSubtask: (output: unknown) => {
+    if (!isRecord(output)) return null
+    const total = getNumberField(output, 'total')
+    if (typeof total === 'number') {
+      return `List ${total} sub-agents`
     }
     return null
   },
-  activateSkill: (output: any) => {
-    if (output && output.success && output.skill && typeof output.skill.name === 'string') {
-      const status = output.alreadyActivated ? 'already active' : 'activated'
-      return `Skill ${output.skill.name} ${status}`
-    }
-    return null
+  activateSkill: (output: unknown) => {
+    if (!isRecord(output) || !output.success) return null
+    const skill = getRecordField(output, 'skill')
+    if (!skill) return null
+    const skillName = getStringField(skill, 'name')
+    if (!skillName) return null
+    const alreadyActivated = getBooleanField(output, 'alreadyActivated')
+    const status = alreadyActivated ? 'already active' : 'activated'
+    return `Skill ${skillName} ${status}`
   },
-  TodoUpdate: (output: any) => {
+  TodoUpdate: (output: unknown) => {
     if (output === 'All todo complete') {
       return 'All todo complete'
     }
-    if (output && typeof output === 'object' && typeof output.title === 'string') {
-      return `Next todo: ${output.title}`
+    if (isRecord(output)) {
+      const title = getStringField(output, 'title')
+      if (title) {
+        return `Next todo: ${title}`
+      }
     }
     return null
-  }
+  },
 }
 
-export function formatToolOutput(toolName: string, output: any): string {
+export function formatToolOutput(toolName: string, output: unknown): string {
   const formatter = toolFormatters[toolName]
   const formattedCustom = formatter ? formatter(output) : null
   if (formattedCustom) {
@@ -156,95 +222,120 @@ export function formatToolOutput(toolName: string, output: any): string {
   return formatToolPayload(output, 200)
 }
 
-export const toolInputFormatters: Record<string, (input: any) => string | null> = {
-  readFile: (input: any) => {
-    if (input && typeof input.path === 'string') {
+export const toolInputFormatters: Record<string, (input: unknown) => string | null> = {
+  readFile: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const path = getStringField(input, 'path')
+    if (path) {
       let suffix = ''
-      if (typeof input.offset === 'number' && typeof input.limit === 'number') {
-        suffix = ` (lines ${input.offset + 1}-${input.offset + input.limit})`
+      const offset = getNumberField(input, 'offset')
+      const limit = getNumberField(input, 'limit')
+      if (typeof offset === 'number' && typeof limit === 'number') {
+        suffix = ` (lines ${offset + 1}-${offset + limit})`
       }
-      return `Read ${input.path}${suffix}`
+      return `Read ${path}${suffix}`
     }
     return null
   },
-  editFile: (input: any) => {
-    if (input && typeof input.path === 'string') {
+  editFile: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const path = getStringField(input, 'path')
+    if (path) {
       const isCreate = input.oldString === ''
-      if (isCreate) return `Create ${input.path}`
+      if (isCreate) return `Create ${path}`
       const suffix = input.regex ? ' (regex)' : ''
-      return `Edit ${input.path}${suffix}`
+      return `Edit ${path}${suffix}`
     }
     return null
   },
-  listFiles: (input: any) => {
-    if (input && typeof input.path === 'string') {
-      const ignore = Array.isArray(input.ignore) && input.ignore.length > 0
-        ? ` (ignoring: ${input.ignore.join(', ')})`
+  listFiles: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const path = getStringField(input, 'path')
+    if (path) {
+      const ignoredPaths = getStringArrayField(input, 'ignore')
+      const ignore = ignoredPaths && ignoredPaths.length > 0
+        ? ` (ignoring: ${ignoredPaths.join(', ')})`
         : ''
-      return `List ${input.path}${ignore}`
+      return `List ${path}${ignore}`
     }
     return null
   },
-  runCommand: (input: any) => {
-    if (input && typeof input.command === 'string') {
+  runCommand: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const command = getStringField(input, 'command')
+    if (command) {
       const suffix = input.isBackground ? ' (background)' : ''
-      return `Run "${input.command}"${suffix}`
+      return `Run "${command}"${suffix}`
     }
     return null
   },
-  globTool: (input: any) => {
-    if (input && typeof input.pattern === 'string') {
-      const ignore = Array.isArray(input.ignore) && input.ignore.length > 0
-        ? ` (ignoring: ${input.ignore.join(', ')})`
+  globTool: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const pattern = getStringField(input, 'pattern')
+    if (pattern) {
+      const ignoredPaths = getStringArrayField(input, 'ignore')
+      const ignore = ignoredPaths && ignoredPaths.length > 0
+        ? ` (ignoring: ${ignoredPaths.join(', ')})`
         : ''
-      return `Glob "${input.pattern}"${ignore}`
+      return `Glob "${pattern}"${ignore}`
     }
     return null
   },
-  grepTool: (input: any) => {
-    if (input && typeof input.pattern === 'string') {
-      const path = input.path ? ` in ${input.path}` : ''
-      const include = input.include ? ` (include: ${input.include})` : ''
-      return `Grep "${input.pattern}"${path}${include}`
+  grepTool: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const pattern = getStringField(input, 'pattern')
+    if (pattern) {
+      const pathValue = getStringField(input, 'path')
+      const includeValue = getStringField(input, 'include')
+      const path = pathValue ? ` in ${pathValue}` : ''
+      const include = includeValue ? ` (include: ${includeValue})` : ''
+      return `Grep "${pattern}"${path}${include}`
     }
     return null
   },
-  web_search: (input: any) => {
-    if (input && typeof input.query === 'string') {
-      return `Web search "${input.query}"`
+  web_search: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const query = getStringField(input, 'query')
+    if (query) {
+      return `Web search "${query}"`
     }
     return null
   },
-  web_fetch: (input: any) => {
-    if (input && typeof input.prompt === 'string') {
+  web_fetch: (input: unknown) => {
+    if (isRecord(input) && typeof getStringField(input, 'prompt') === 'string') {
       return 'Web fetch prompt'
     }
     return null
   },
-  createSubtasks: (input: any) => {
-    if (!input || !Array.isArray(input.tasks)) return null
+  createSubtasks: (input: unknown) => {
+    if (!isRecord(input) || !Array.isArray(input.tasks)) return null
     const total = input.tasks.length
     return `Create ${total} subtasks`
   },
   listSubtask: () => {
     return 'List sub-agents'
   },
-  activateSkill: (input: any) => {
-    if (input && typeof input.name === 'string') {
-      return `Activate skill "${input.name}"`
+  activateSkill: (input: unknown) => {
+    if (!isRecord(input)) return null
+    const name = getStringField(input, 'name')
+    if (name) {
+      return `Activate skill "${name}"`
     }
     return null
   },
-  TodoUpdate: (input: any) => {
-    if (!input || !Array.isArray(input.todos)) return null
+  TodoUpdate: (input: unknown) => {
+    if (!isRecord(input) || !Array.isArray(input.todos)) return null
     const total = input.todos.length
-    const completed = input.todos.filter((todo: any) => todo?.status === 'completed').length
+    const completed = input.todos.filter((todo) => {
+      if (!isRecord(todo)) return false
+      return todo.status === 'completed'
+    }).length
     const pending = total - completed
     return `Update todos (${pending} pending, ${completed} completed)`
   }
 }
 
-export function formatToolInput(toolName: string, input: any): string {
+export function formatToolInput(toolName: string, input: unknown): string {
   // 1. Check specific formatters
   const formatter = toolInputFormatters[toolName]
   if (formatter) {
@@ -255,9 +346,13 @@ export function formatToolInput(toolName: string, input: any): string {
   // 2. Legacy subtask special case (pre-createSubtasks history)
   if (toolName.startsWith('create_subtask_')) {
     const agentId = toolName.replace('create_subtask_', '')
-    if (input && typeof input.title === 'string') {
-      const priority = input.priority ? ` (priority: ${input.priority})` : ''
-      return `Subtask (${agentId}): ${input.title}${priority}`
+    if (isRecord(input)) {
+      const title = getStringField(input, 'title')
+      if (title) {
+        const priorityValue = input.priority
+        const priority = priorityValue ? ` (priority: ${String(priorityValue)})` : ''
+        return `Subtask (${agentId}): ${title}${priority}`
+      }
     }
   }
 

@@ -100,5 +100,13 @@ describe('OpenAILLMClient.complete', () => {
         ],
       },
     ])
+
+    expect(callArgs).toMatchObject({
+      providerOptions: {
+        openai: {
+          enable_thinking: true,
+        },
+      },
+    })
   })
 })

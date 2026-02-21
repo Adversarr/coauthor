@@ -1,21 +1,25 @@
-import { jsonSchema } from 'ai'
+import { jsonSchema, type ToolSet } from 'ai'
 import { z } from 'zod'
 import type { ToolDefinition } from '../../core/ports/tool.js'
 
 export type ToolSchemaStrategy = 'zod' | 'jsonschema' | 'auto'
+export type AISDKToolSet = ToolSet
+type AISDKToolEntry = AISDKToolSet[string]
+type AISDKInputSchema = AISDKToolEntry['inputSchema']
 
 export function convertToolDefinitionsToAISDKTools(
   tools: ToolDefinition[] | undefined,
   strategy: ToolSchemaStrategy = 'auto'
-): Record<string, any> | undefined {
+): AISDKToolSet | undefined {
   if (!tools || tools.length === 0) return undefined
 
-  const result: Record<string, any> = {}
-  for (const tool of tools) {
-    result[tool.name] = {
-      description: tool.description,
-      inputSchema: selectInputSchema(tool.parameters, strategy),
+  const result: AISDKToolSet = {}
+  for (const toolDef of tools) {
+    const entry: AISDKToolEntry = {
+      description: toolDef.description,
+      inputSchema: selectInputSchema(toolDef.parameters, strategy),
     }
+    result[toolDef.name] = entry
   }
   return result
 }
@@ -108,7 +112,7 @@ export function jsonSchemaToZod(schema: ToolDefinition['parameters']): z.ZodType
   return z.object(shape)
 }
 
-function selectInputSchema(schema: ToolDefinition['parameters'], strategy: ToolSchemaStrategy): unknown {
+function selectInputSchema(schema: ToolDefinition['parameters'], strategy: ToolSchemaStrategy): AISDKInputSchema {
   if (strategy === 'jsonschema') return jsonSchema(schema)
 
   if (strategy === 'zod') {

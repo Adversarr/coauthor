@@ -1,12 +1,10 @@
 import React from 'react'
 import { Text } from 'ink'
 import { DiffView } from '../DiffView.js'
+import type { InteractionDisplay } from '../../../../core/events/events.js'
 
 export type ContentDisplayProps = {
-  display: {
-    contentKind?: string
-    content?: any
-  }
+  display: InteractionDisplay
 }
 
 export const ContentDisplay: React.FC<ContentDisplayProps> = ({ display }) => {

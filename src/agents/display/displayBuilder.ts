@@ -39,10 +39,10 @@ export function buildRiskyToolDisplay(toolCall: ToolCallRequest): InteractionDis
   }
 
   if (toolCall.toolName === 'runCommand') {
-    const args = toolCall.arguments as Record<string, any>
-    const command = args.command
-    const cwd = args.cwd || '(workspace root)'
-    const timeout = args.timeout || 30000
+    const args = toolCall.arguments as Record<string, unknown>
+    const command = typeof args.command === 'string' ? args.command : '(unknown command)'
+    const cwd = typeof args.cwd === 'string' ? args.cwd : '(workspace root)'
+    const timeout = typeof args.timeout === 'number' ? args.timeout : 30000
 
     const content = [
       `Command: ${command}`,

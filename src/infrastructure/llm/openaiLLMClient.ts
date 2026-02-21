@@ -16,7 +16,6 @@ import type {
   LLMClient,
   LLMCompleteOptions,
   LLMMessage,
-  LLMProvider,
   LLMProfile,
   LLMProfileCatalog,
   LLMResponse,
@@ -31,8 +30,23 @@ import {
   type ClientPolicy,
   type LLMProfileCatalogConfig,
   type LLMProfileSpec,
-  type VolcengineThinkingType,
 } from '../../config/llmProfileCatalog.js'
+import {
+  buildOpenAICompatibleProviderOptions,
+  providerDefaultBaseURL,
+  type OpenAICompatibleProvider,
+} from './openaiProviderOptions.js'
+import {
+  getStreamPartField,
+  getStreamPartId,
+  getStreamPartText,
+  getStreamPartToolName,
+  getStreamPartType,
+  getStreamToolCallId,
+  isIgnoredStreamPartType,
+  parseStreamToolInput,
+  type StreamToolCallBuffer,
+} from './streamPartParsers.js'
 
 // Convert our LLMMessage to ai-sdk ModelMessage format
 function toModelMessages(messages: LLMMessage[]): ModelMessage[] {
@@ -103,76 +117,6 @@ export function toToolCallRequests(toolCalls?: Array<{ toolCallId?: string; tool
   })) ?? []
 }
 
-type OpenAICompatibleProvider = Exclude<LLMProvider, 'fake'>
-
-type ProviderAdapterBuildInput = {
-  policy: ClientPolicy
-}
-
-type OpenAICompatibleProviderPayload = Record<string, unknown>
-type OpenAICompatibleProviderOptions = Record<string, OpenAICompatibleProviderPayload>
-
-type OpenAICompatibleProviderAdapter = {
-  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload
-}
-
-class OpenAIAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
-    const payload: Record<string, unknown> = {}
-
-    if (typeof input.policy.openaiCompat?.enableThinking === 'boolean') {
-      payload.enable_thinking = input.policy.openaiCompat.enableThinking
-    }
-
-    return payload
-  }
-}
-
-class BailianAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
-    const payload: Record<string, unknown> = {}
-
-    if (typeof input.policy.openaiCompat?.enableThinking === 'boolean') {
-      payload.enable_thinking = input.policy.openaiCompat.enableThinking
-    }
-
-    const providerPolicy = input.policy.provider?.bailian
-
-    if (providerPolicy?.thinkingBudget && payload.enable_thinking === true) {
-      payload.thinking_budget = providerPolicy.thinkingBudget
-    }
-
-    return payload
-  }
-}
-
-class VolcengineAdapter implements OpenAICompatibleProviderAdapter {
-  buildProviderOptions(input: ProviderAdapterBuildInput): OpenAICompatibleProviderPayload {
-    const payload: Record<string, unknown> = {}
-    const providerPolicy = input.policy.provider?.volcengine
-
-    let thinkingType: VolcengineThinkingType | undefined = providerPolicy?.thinkingType
-    if (!thinkingType && typeof input.policy.openaiCompat?.enableThinking === 'boolean') {
-      thinkingType = input.policy.openaiCompat.enableThinking ? 'enabled' : 'disabled'
-    }
-    if (thinkingType) {
-      payload.thinking = { type: thinkingType }
-    }
-
-    if (providerPolicy?.reasoningEffort) {
-      payload.reasoning_effort = providerPolicy.reasoningEffort
-    }
-
-    return payload
-  }
-}
-
-function providerDefaultBaseURL(provider: OpenAICompatibleProvider): string {
-  if (provider === 'bailian') return 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-  if (provider === 'volcengine') return 'https://ark.cn-beijing.volces.com/api/v3'
-  return 'https://api.openai.com/v1'
-}
-
 export class OpenAILLMClient implements LLMClient {
   readonly provider: OpenAICompatibleProvider
   readonly label: string
@@ -182,7 +126,6 @@ export class OpenAILLMClient implements LLMClient {
   readonly #toolSchemaStrategy: ToolSchemaStrategy
   readonly #verboseEnabled: boolean
   readonly #profileCatalogConfig: LLMProfileCatalogConfig
-  readonly #adapters: Record<OpenAICompatibleProvider, OpenAICompatibleProviderAdapter>
 
   constructor(opts: {
     provider?: OpenAICompatibleProvider
@@ -224,12 +167,6 @@ export class OpenAILLMClient implements LLMClient {
     const envVerboseEnabled = envVerbose === '1' || envVerbose === 'true'
     this.#verboseEnabled = opts.verbose ?? envVerboseEnabled
 
-    this.#adapters = {
-      openai: new OpenAIAdapter(),
-      bailian: new BailianAdapter(),
-      volcengine: new VolcengineAdapter(),
-    }
-
     this.description = this.profileCatalog.profiles.map((profile) => `${profile.id}=${profile.model}`).join(', ')
   }
 
@@ -248,13 +185,11 @@ export class OpenAILLMClient implements LLMClient {
     return { profile, policy }
   }
 
-  #buildProviderOptions(input: { policy: ClientPolicy }): OpenAICompatibleProviderOptions {
-    const payload = this.#adapters[this.provider].buildProviderOptions({
+  #buildProviderOptions(input: { policy: ClientPolicy }): ReturnType<typeof buildOpenAICompatibleProviderOptions> {
+    return buildOpenAICompatibleProviderOptions({
+      provider: this.provider,
       policy: input.policy,
     })
-    return {
-      [this.provider]: payload,
-    }
   }
 
   #logVerbose(message: string, data?: Record<string, unknown>): void {
@@ -268,8 +203,7 @@ export class OpenAILLMClient implements LLMClient {
 
   async complete(opts: LLMCompleteOptions): Promise<LLMResponse> {
     const resolved = this.#resolveProfile(opts.profile)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
+    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy)
     const providerOptions = this.#buildProviderOptions({
       policy: resolved.policy,
     })
@@ -291,8 +225,7 @@ export class OpenAILLMClient implements LLMClient {
       maxOutputTokens: opts.maxTokens,
       abortSignal: opts.signal,
       // Provider payloads include non-standard fields on compatible gateways.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      providerOptions: providerOptions as any,
+      providerOptions,
     })
 
     const toolCalls = toToolCallRequests(result.toolCalls)
@@ -325,8 +258,7 @@ export class OpenAILLMClient implements LLMClient {
     if (!onChunk) return this.complete(opts)
 
     const resolved = this.#resolveProfile(opts.profile)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy) as any
+    const tools = convertToolDefinitionsToAISDKTools(opts.tools, this.#toolSchemaStrategy)
     const providerOptions = this.#buildProviderOptions({
       policy: resolved.policy,
     })
@@ -347,60 +279,30 @@ export class OpenAILLMClient implements LLMClient {
       maxOutputTokens: opts.maxTokens,
       abortSignal: opts.signal,
       // Provider payloads include non-standard fields on compatible gateways.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      providerOptions: providerOptions as any,
+      providerOptions,
     })
 
     // Accumulators for assembling the final LLMResponse
     let textContent = ''
     let reasoningContent = ''
-    const toolCallBuffers = new Map<string, { toolName: string; args: string }>()
+    const toolCallBuffers = new Map<string, StreamToolCallBuffer>()
     let stopReason: LLMResponse['stopReason'] = 'end_turn'
 
-    const getPartText = (part: unknown): string => {
-      if (!part || typeof part !== 'object') return ''
-      const record = part as Record<string, unknown>
-      if (typeof record.text === 'string') return record.text
-      if (typeof record.delta === 'string') return record.delta
-      return ''
-    }
-    const getPartId = (part: unknown): string | undefined => {
-      if (!part || typeof part !== 'object') return undefined
-      const record = part as Record<string, unknown>
-      return typeof record.id === 'string' ? record.id : undefined
-    }
-    const parseToolInput = (input: unknown): Record<string, unknown> => {
-      if (input && typeof input === 'object') return input as Record<string, unknown>
-      if (typeof input === 'string') {
-        try {
-          const parsed = JSON.parse(input) as unknown
-          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
-        } catch {
-          return { input }
-        }
-      }
-      return {}
-    }
-
     for await (const part of res.fullStream) {
-      const partType = (part as { type: string }).type
+      const partType = getStreamPartType(part)
       this.#logVerbose('stream part', {
-        type: partType,
-        id: getPartId(part) ?? null,
-        toolName: (part as { toolName?: string }).toolName ?? null,
+        type: partType ?? 'unknown',
+        id: getStreamPartId(part) ?? null,
+        toolName: getStreamPartToolName(part) ?? null,
       })
 
+      if (!partType) continue
+
       // Skip lifecycle / metadata events
-      if (
-        partType === 'start' || partType === 'start-step'
-        || partType === 'text-start' || partType === 'text-end'
-        || partType === 'finish-step' || partType === 'stream-start'
-        || partType === 'response-metadata' || partType === 'source'
-        || partType === 'file' || partType === 'raw'
-      ) continue
+      if (isIgnoredStreamPartType(partType)) continue
 
       if (partType === 'text-delta') {
-        const delta = getPartText(part)
+        const delta = getStreamPartText(part)
         if (delta) {
           textContent += delta
           onChunk({ type: 'text', content: delta })
@@ -408,7 +310,7 @@ export class OpenAILLMClient implements LLMClient {
       } else if (partType === 'reasoning-start') {
         // no-op
       } else if (partType === 'reasoning-delta') {
-        const delta = getPartText(part)
+        const delta = getStreamPartText(part)
         if (delta) {
           reasoningContent += delta
           onChunk({ type: 'reasoning', content: delta })
@@ -416,14 +318,14 @@ export class OpenAILLMClient implements LLMClient {
       } else if (partType === 'reasoning-end') {
         // no-op
       } else if (partType === 'tool-input-start') {
-        const toolCallId = getPartId(part) ?? `tool_${nanoid(12)}`
-        const toolName = (part as { toolName?: string }).toolName ?? 'unknown'
+        const toolCallId = getStreamPartId(part) ?? `tool_${nanoid(12)}`
+        const toolName = getStreamPartToolName(part) ?? 'unknown'
         toolCallBuffers.set(toolCallId, { toolName, args: '' })
         onChunk({ type: 'tool_call_start', toolCallId, toolName })
       } else if (partType === 'tool-input-delta') {
-        const toolCallId = getPartId(part)
+        const toolCallId = getStreamPartId(part)
         if (toolCallId) {
-          const delta = getPartText(part)
+          const delta = getStreamPartText(part)
           if (!delta) continue
           const buffer = toolCallBuffers.get(toolCallId)
           if (buffer) {
@@ -436,31 +338,34 @@ export class OpenAILLMClient implements LLMClient {
           }
         }
       } else if (partType === 'tool-input-end') {
-        const toolCallId = getPartId(part)
+        const toolCallId = getStreamPartId(part)
         if (toolCallId) onChunk({ type: 'tool_call_end', toolCallId })
       } else if (partType === 'tool-call') {
-        const tc = part as { type: 'tool-call'; toolCallId?: string; toolName: string; args?: unknown; input?: unknown }
-        const toolCallId = tc.toolCallId ?? `tool_${nanoid(12)}`
-        const parsedInput = parseToolInput(tc.args ?? tc.input)
+        const toolCallId = getStreamToolCallId(part) ?? `tool_${nanoid(12)}`
+        const toolName = getStreamPartToolName(part) ?? 'unknown'
+        const parsedInput = parseStreamToolInput(getStreamPartField(part, 'args') ?? getStreamPartField(part, 'input'))
         const argsStr = JSON.stringify(parsedInput)
-        toolCallBuffers.set(toolCallId, { toolName: tc.toolName, args: argsStr })
-        onChunk({ type: 'tool_call_start', toolCallId, toolName: tc.toolName })
+        toolCallBuffers.set(toolCallId, { toolName, args: argsStr })
+        onChunk({ type: 'tool_call_start', toolCallId, toolName })
         onChunk({ type: 'tool_call_delta', toolCallId, argumentsDelta: argsStr })
         onChunk({ type: 'tool_call_end', toolCallId })
       } else if (partType === 'tool-result' || partType === 'tool-error') {
-        const errorValue = (part as { error?: unknown }).error
+        const errorValue = getStreamPartField(part, 'error')
         if (errorValue) throw errorValue instanceof Error ? errorValue : new Error(String(errorValue))
       } else if (partType === 'error') {
-        const errorValue = (part as { error?: unknown }).error
+        const errorValue = getStreamPartField(part, 'error')
         throw errorValue instanceof Error ? errorValue : new Error(String(errorValue ?? 'Stream error'))
       } else if (partType === 'finish') {
-        const finishPart = part as { type: 'finish'; finishReason?: string }
-        if (finishPart.finishReason === 'tool-calls') stopReason = 'tool_use'
-        else if (finishPart.finishReason === 'length') stopReason = 'max_tokens'
-        this.#logVerbose('stream finish', { finishReason: finishPart.finishReason ?? null, stopReason })
+        const finishReason = getStreamPartField(part, 'finishReason')
+        if (finishReason === 'tool-calls') stopReason = 'tool_use'
+        else if (finishReason === 'length') stopReason = 'max_tokens'
+        this.#logVerbose('stream finish', {
+          finishReason: typeof finishReason === 'string' ? finishReason : null,
+          stopReason,
+        })
         onChunk({ type: 'done', stopReason })
       } else {
-        console.warn(`Unknown stream part type: ${(part as { type: string }).type}`)
+        console.warn(`Unknown stream part type: ${partType}`)
       }
     }
 
